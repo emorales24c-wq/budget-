@@ -1,0 +1,417 @@
+//@version=5
+// Estrategia basada en Smart Money Concepts (estructura BOS/CHoCH + Order Blocks + Premium/Discount)
+// Lógica de pivotes y order blocks derivada de "Smart Money Concepts [LuxAlgo]" (CC BY-NC-SA 4.0)
+strategy('SMC Strategy [OB + CHoCH]', 'SMC Strat', overlay = true,
+     initial_capital = 10000, currency = currency.USD,
+     default_qty_type = strategy.fixed, default_qty_value = 1,
+     pyramiding = 0, commission_type = strategy.commission.percent, commission_value = 0.04, slippage = 2,
+     max_boxes_count = 500, max_labels_count = 500, max_lines_count = 500, max_bars_back = 5000)
+
+//---------------------------------------------------------------------------------------------------------------------}
+//CONSTANTES & INPUTS
+//---------------------------------------------------------------------------------------------------------------------{
+BULL        = +1
+BEAR        = -1
+
+BULL_COL    = #089981
+BEAR_COL    = #F23645
+GRAY_COL    = #878b94
+
+G_STR       = 'Estructura'
+G_ENT       = 'Entradas'
+G_OB        = 'Order Blocks'
+G_RISK      = 'Riesgo / SL / TP'
+G_FIL       = 'Filtros'
+G_VIS       = 'Visual'
+
+swingLen        = input.int(    50,     'Longitud swing',                           group = G_STR, minval = 10)
+intLen          = input.int(    5,      'Longitud interna',                         group = G_STR, minval = 2)
+showStruct      = input.bool(   true,   'Mostrar estructura swing (BOS/CHoCH)',     group = G_STR)
+showInternal    = input.bool(   false,  'Mostrar estructura interna',               group = G_STR)
+
+entryMode       = input.string( 'Ambas', 'Modelo de entrada',                       group = G_ENT, options = ['Retesteo de OB', 'CHoCH interno', 'Ambas'],
+     tooltip = 'Retesteo de OB: entra cuando el precio vuelve a un order block a favor de la tendencia.\nCHoCH interno: entra cuando la estructura interna gira a favor de la tendencia swing (fin del retroceso).')
+direction       = input.string( 'Ambas', 'Dirección',                               group = G_ENT, options = ['Ambas', 'Solo largos', 'Solo cortos'])
+useTrend        = input.bool(   true,   'Solo a favor de la tendencia swing',       group = G_ENT)
+usePD           = input.bool(   true,   'Largos en descuento / cortos en premium',  group = G_ENT)
+needConfirm     = input.bool(   true,   'Vela de confirmación en el OB',            group = G_ENT, tooltip = 'Exige que la vela que toca el OB cierre a favor (alcista para largos, bajista para cortos)')
+oneTradePerOB   = input.bool(   true,   'Una sola operación por OB',                group = G_ENT)
+
+obSource        = input.string( 'Interno', 'OBs de estructura',                     group = G_OB, options = ['Interno', 'Swing', 'Ambos'])
+obMitig         = input.string( 'Cierre', 'Invalidación del OB',                    group = G_OB, options = ['Cierre', 'Mecha'])
+obMax           = input.int(    5,      'Máx. OBs activos por lado',                group = G_OB, minval = 1, maxval = 20)
+obMaxAge        = input.int(    300,    'Edad máxima del OB (velas)',               group = G_OB, minval = 10)
+showOB          = input.bool(   true,   'Dibujar OBs',                              group = G_OB)
+bullObCol       = input.color(  color.new(#2157f3, 80), 'OB alcista',               group = G_OB)
+bearObCol       = input.color(  color.new(#f23645, 80), 'OB bajista',               group = G_OB)
+
+riskPct         = input.float(  1.0,    'Riesgo por operación (% capital)',         group = G_RISK, minval = 0.1, maxval = 10, step = 0.1)
+qtyDec          = input.int(    2,      'Decimales de la cantidad',                 group = G_RISK, minval = 0, maxval = 8, tooltip = '0 para acciones/futuros, 2-4 para cripto o forex en unidades')
+slMode          = input.string( 'Estructura', 'Tipo de SL',                         group = G_RISK, options = ['Estructura', 'ATR'], tooltip = 'Estructura: SL detrás del OB o del último swing interno.\nATR: SL a N x ATR del cierre.')
+atrLen          = input.int(    14,     'Periodo ATR',                              group = G_RISK, minval = 1)
+slBuffer        = input.float(  0.2,    'Colchón del SL (x ATR)',                   group = G_RISK, minval = 0, step = 0.05)
+slAtrMult       = input.float(  1.5,    'SL modo ATR (x ATR)',                      group = G_RISK, minval = 0.1, step = 0.1)
+minSlAtr        = input.float(  0.3,    'SL mínimo (x ATR)',                        group = G_RISK, minval = 0, step = 0.1, tooltip = 'Si el SL queda más cerca, se aleja hasta este mínimo')
+maxSlAtr        = input.float(  4.0,    'SL máximo (x ATR)',                        group = G_RISK, minval = 0.5, step = 0.1, tooltip = 'Si el SL queda más lejos, la operación se descarta')
+rr1             = input.float(  1.5,    'TP1 (R)',                                  group = G_RISK, minval = 0.1, step = 0.1)
+tp1Pct          = input.int(    50,     '% a cerrar en TP1',                        group = G_RISK, minval = 1, maxval = 100, tooltip = '100 = una sola salida en TP1')
+rr2             = input.float(  3.0,    'TP2 (R)',                                  group = G_RISK, minval = 0.1, step = 0.1)
+moveBE          = input.bool(   true,   'SL a breakeven tras TP1',                  group = G_RISK)
+useTrail        = input.bool(   false,  'Trailing stop tras TP1',                   group = G_RISK)
+trailMult       = input.float(  2.0,    'Trailing (x ATR)',                         group = G_RISK, minval = 0.1, step = 0.1)
+closeOnFlip     = input.bool(   true,   'Cerrar con CHoCH swing en contra',         group = G_RISK)
+
+startDate       = input.time(   timestamp(2020, 1, 1, 0, 0), 'Backtest desde',     group = G_FIL)
+useSession      = input.bool(   false,  'Filtro de sesión',                         group = G_FIL)
+sess            = input.session('0800-1700', 'Sesión',                              group = G_FIL)
+tz              = input.string( 'America/New_York', 'Zona horaria',                 group = G_FIL)
+maxTradesDay    = input.int(    3,      'Máx. operaciones por día (0 = sin límite)', group = G_FIL, minval = 0)
+
+showLevels      = input.bool(   true,   'Mostrar entrada / SL / TP',                group = G_VIS)
+showEq          = input.bool(   true,   'Mostrar equilibrio (50%)',                 group = G_VIS)
+showPanel       = input.bool(   true,   'Panel de resultados',                      group = G_VIS)
+
+//---------------------------------------------------------------------------------------------------------------------}
+//TIPOS & VARIABLES
+//---------------------------------------------------------------------------------------------------------------------{
+// @type            pivote (swing point)
+type Pivot
+    float level     = na
+    bool crossed    = false
+    int idx         = na
+
+// @type            order block
+// @field born      barra en la que se creó (no se opera antes)
+// @field used      true si ya se operó
+type OB
+    float top
+    float btm
+    int idx
+    int born
+    int bias
+    bool used       = false
+    box bx          = na
+
+var Pivot swingHigh     = Pivot.new()
+var Pivot swingLow      = Pivot.new()
+var Pivot intHigh       = Pivot.new()
+var Pivot intLow        = Pivot.new()
+var int swingTrend      = 0
+var int intTrend        = 0
+
+var array<OB> bullOBs   = array.new<OB>()
+var array<OB> bearOBs   = array.new<OB>()
+
+// precios "parseados": las velas de alta volatilidad se invierten para no elegirlas como OB
+var array<float> parsedHighs = array.new<float>()
+var array<float> parsedLows  = array.new<float>()
+
+atrVal          = ta.atr(atrLen)
+atr200          = ta.atr(200)
+highVolBar      = not na(atr200) and (high - low) >= 2 * atr200
+parsedHighs.push(highVolBar ? low : high)
+parsedLows.push( highVolBar ? high : low)
+
+mitBullSrc      = obMitig == 'Cierre' ? close : low
+mitBearSrc      = obMitig == 'Cierre' ? close : high
+
+//---------------------------------------------------------------------------------------------------------------------}
+//FUNCIONES
+//---------------------------------------------------------------------------------------------------------------------{
+// @function        pierna actual: 0 bajista, 1 alcista
+leg(int size) =>
+    var int l   = 0
+    float hh    = ta.highest(size)
+    float ll    = ta.lowest(size)
+    if high[size] > hh
+        l := 0
+    else if low[size] < ll
+        l := 1
+    l
+
+// @function        actualiza los pivotes alto/bajo para una longitud dada
+updatePivots(int size, Pivot ph, Pivot pl) =>
+    int ch = ta.change(leg(size))
+    if ch == -1
+        ph.level    := high[size]
+        ph.crossed  := false
+        ph.idx      := bar_index - size
+    if ch == 1
+        pl.level    := low[size]
+        pl.crossed  := false
+        pl.idx      := bar_index - size
+    [ch == -1, ch == 1]
+
+// @function        detecta ruptura de estructura
+// @returns         [señal, nueva tendencia]; señal: +1 BOS alcista, +2 CHoCH alcista, -1 BOS bajista, -2 CHoCH bajista
+checkBreak(Pivot ph, Pivot pl, int trend, bool extraBull, bool extraBear) =>
+    int sig         = 0
+    int newTrend    = trend
+    if not na(ph.level) and not ph.crossed and close > ph.level and extraBull
+        ph.crossed  := true
+        sig         := trend == BEAR ? 2 : 1
+        newTrend    := BULL
+    else if not na(pl.level) and not pl.crossed and close < pl.level and extraBear
+        pl.crossed  := true
+        sig         := trend == BULL ? -2 : -1
+        newTrend    := BEAR
+    [sig, newTrend]
+
+// @function        dibuja línea + etiqueta de BOS/CHoCH
+drawBreak(Pivot p, int sig, bool internal) =>
+    color c         = sig > 0 ? BULL_COL : BEAR_COL
+    string txt      = math.abs(sig) == 2 ? 'CHoCH' : 'BOS'
+    line.new(p.idx, p.level, bar_index, p.level, color = c, style = internal ? line.style_dashed : line.style_solid)
+    label.new(math.round(0.5 * (p.idx + bar_index)), p.level, txt, color = color(na), textcolor = c,
+         style = sig > 0 ? label.style_label_down : label.style_label_up, size = internal ? size.tiny : size.small)
+
+// @function        crea un OB: vela extrema entre el pivote roto y la barra anterior
+addOB(array<OB> arr, int fromIdx, int bias) =>
+    int toIdx = bar_index - 1
+    if not na(fromIdx) and fromIdx <= toIdx
+        int best = fromIdx
+        for i = fromIdx to toIdx
+            if bias == BULL ? parsedLows.get(i) < parsedLows.get(best) : parsedHighs.get(i) > parsedHighs.get(best)
+                best := i
+        float top   = math.max(parsedHighs.get(best), parsedLows.get(best))
+        float btm   = math.min(parsedHighs.get(best), parsedLows.get(best))
+        box b       = na
+        if showOB
+            b := box.new(best, top, bar_index, btm, border_color = color(na), bgcolor = bias == BULL ? bullObCol : bearObCol, extend = extend.right)
+        arr.unshift(OB.new(top, btm, best, bar_index, bias, false, b))
+        if arr.size() > obMax
+            OB old = arr.pop()
+            if not na(old.bx)
+                old.bx.delete()
+
+// @function        deja de extender la caja de un OB invalidado
+retireBox(box b) =>
+    if not na(b)
+        b.set_right(bar_index)
+        b.set_extend(extend.none)
+        b.set_bgcolor(color.new(GRAY_COL, 92))
+
+// @function        invalida OBs y devuelve el OB más reciente tocado en esta vela (o na)
+scanOBs(array<OB> arr, int bias) =>
+    OB chosen = na
+    int n = arr.size()
+    if n > 0
+        // recorrido inverso: se puede borrar sin saltar elementos, y el más reciente (índice 0) gana
+        for i = n - 1 to 0
+            OB ob           = arr.get(i)
+            bool invalid    = bias == BULL ? mitBullSrc < ob.btm : mitBearSrc > ob.top
+            if invalid or bar_index - ob.born > obMaxAge
+                retireBox(ob.bx)
+                arr.remove(i)
+            else if bar_index > ob.born and not (oneTradePerOB and ob.used)
+                bool touch      = bias == BULL ? low <= ob.top : high >= ob.btm
+                bool confirm    = not needConfirm or (bias == BULL ? close > open : close < open)
+                if touch and confirm
+                    chosen := ob
+    chosen
+
+// @function        cantidad según riesgo fijo en % del capital
+calcQty(float dist) =>
+    float q = strategy.equity * riskPct / 100 / (dist * syminfo.pointvalue)
+    float f = math.pow(10, qtyDec)
+    math.floor(q * f) / f
+
+// @function        mensaje JSON para alertas/webhooks
+alertMsg(string side, float sl, float tp1, float tp2) =>
+    '{"accion":"' + side + '","ticker":"' + syminfo.ticker + '","sl":' + str.tostring(sl, format.mintick) +
+     ',"tp1":' + str.tostring(tp1, format.mintick) + ',"tp2":' + str.tostring(tp2, format.mintick) + '}'
+
+//---------------------------------------------------------------------------------------------------------------------}
+//ESTRUCTURA
+//---------------------------------------------------------------------------------------------------------------------{
+[swingNewHigh, swingNewLow] = updatePivots(swingLen, swingHigh, swingLow)
+[intNewHigh, intNewLow] = updatePivots(intLen, intHigh, intLow)
+
+// extremos desde el último swing -> rango premium/discount
+var float trailTop = na
+var float trailBtm = na
+if swingNewHigh
+    trailTop := swingHigh.level
+if swingNewLow
+    trailBtm := swingLow.level
+trailTop    := math.max(high, nz(trailTop, high))
+trailBtm    := math.min(low,  nz(trailBtm, low))
+equilibrium = math.avg(trailTop, trailBtm)
+
+// interna: se ignoran rupturas de un pivote interno que coincide con el swing
+[intSig, intTrendNew] = checkBreak(intHigh, intLow, intTrend,
+     na(swingHigh.level) or intHigh.level != swingHigh.level,
+     na(swingLow.level)  or intLow.level  != swingLow.level)
+intTrend := intTrendNew
+
+[swingSig, swingTrendNew] = checkBreak(swingHigh, swingLow, swingTrend, true, true)
+swingTrend := swingTrendNew
+
+if intSig != 0 and showInternal
+    drawBreak(intSig > 0 ? intHigh : intLow, intSig, true)
+if swingSig != 0 and showStruct
+    drawBreak(swingSig > 0 ? swingHigh : swingLow, swingSig, false)
+
+// OB alcista = vela más baja entre el máximo roto y la ruptura; OB bajista = la más alta
+if obSource != 'Swing' and intSig != 0
+    addOB(intSig > 0 ? bullOBs : bearOBs, intSig > 0 ? intHigh.idx : intLow.idx, intSig > 0 ? BULL : BEAR)
+if obSource != 'Interno' and swingSig != 0
+    addOB(swingSig > 0 ? bullOBs : bearOBs, swingSig > 0 ? swingHigh.idx : swingLow.idx, swingSig > 0 ? BULL : BEAR)
+
+OB bullHit = scanOBs(bullOBs, BULL)
+OB bearHit = scanOBs(bearOBs, BEAR)
+
+//---------------------------------------------------------------------------------------------------------------------}
+//GESTIÓN DE LA POSICIÓN
+//---------------------------------------------------------------------------------------------------------------------{
+var int     tradeDir    = 0
+var int     sigBar      = na
+var float   sl          = na
+var float   tp1         = na
+var float   tp2         = na
+var float   fullQty     = na
+var bool    tp1Done     = false
+var int     tradesToday = 0
+
+if timeframe.change('D')
+    tradesToday := 0
+
+posSize     = strategy.position_size
+justOpened  = posSize != 0 and posSize[1] == 0
+
+// recalcula los TP con el precio real de entrada (la orden se llena en la apertura siguiente)
+if justOpened and tradeDir != 0
+    float entry = strategy.position_avg_price
+    float r     = math.abs(entry - sl)
+    tp1 := math.round_to_mintick(entry + tradeDir * rr1 * r)
+    tp2 := math.round_to_mintick(entry + tradeDir * rr2 * r)
+
+// TP1 ejecutado -> breakeven
+if tradeDir != 0 and not tp1Done and posSize != 0 and math.abs(posSize) < fullQty * 0.999
+    tp1Done := true
+    if moveBE
+        sl := strategy.position_avg_price
+
+if tradeDir != 0 and tp1Done and useTrail and posSize != 0
+    sl := tradeDir == 1 ? math.max(sl, close - trailMult * atrVal) : math.min(sl, close + trailMult * atrVal)
+
+// cierre por CHoCH swing en contra
+if closeOnFlip and posSize > 0 and swingSig == -2
+    strategy.close('L', comment = 'CHoCH en contra')
+if closeOnFlip and posSize < 0 and swingSig == 2
+    strategy.close('S', comment = 'CHoCH en contra')
+
+// posición cerrada -> limpiar
+if tradeDir != 0 and posSize == 0 and bar_index > sigBar
+    for id in array.from('L-TP1', 'L-TP2', 'L-TP', 'S-TP1', 'S-TP2', 'S-TP')
+        strategy.cancel(id)
+    tradeDir := 0
+
+//---------------------------------------------------------------------------------------------------------------------}
+//SEÑALES & ENTRADAS
+//---------------------------------------------------------------------------------------------------------------------{
+inDate      = time >= startDate
+inSession   = not useSession or not na(time(timeframe.period, sess, tz))
+dayOk       = maxTradesDay == 0 or tradesToday < maxTradesDay
+canTrade    = inDate and inSession and dayOk and posSize == 0 and tradeDir == 0 and not na(atrVal)
+
+allowLong   = canTrade and direction != 'Solo cortos' and (not useTrend or swingTrend == BULL) and (not usePD or close < equilibrium)
+allowShort  = canTrade and direction != 'Solo largos' and (not useTrend or swingTrend == BEAR) and (not usePD or close > equilibrium)
+
+useOBEntry      = entryMode != 'CHoCH interno'
+useChochEntry   = entryMode != 'Retesteo de OB'
+
+// candidato: [nivel estructural del SL, etiqueta, OB usado]
+float   candSL  = na
+string  candTag = ''
+OB      candOB  = na
+int     candDir = 0
+
+if allowLong and useOBEntry and not na(bullHit)
+    candDir := 1
+    candSL  := bullHit.btm
+    candTag := 'OB'
+    candOB  := bullHit
+if candDir == 0 and allowLong and useChochEntry and intSig == 2 and not na(intLow.level)
+    candDir := 1
+    candSL  := intLow.level
+    candTag := 'CHoCH'
+if candDir == 0 and allowShort and useOBEntry and not na(bearHit)
+    candDir := -1
+    candSL  := bearHit.top
+    candTag := 'OB'
+    candOB  := bearHit
+if candDir == 0 and allowShort and useChochEntry and intSig == -2 and not na(intHigh.level)
+    candDir := -1
+    candSL  := intHigh.level
+    candTag := 'CHoCH'
+
+if candDir != 0
+    float stopPx = slMode == 'ATR' ? close - candDir * slAtrMult * atrVal : candSL - candDir * slBuffer * atrVal
+    float dist   = candDir * (close - stopPx)
+    // SL demasiado cerca -> se aleja al mínimo; demasiado lejos -> se descarta
+    if dist < minSlAtr * atrVal
+        dist   := minSlAtr * atrVal
+        stopPx := close - candDir * dist
+    float qty = dist > 0 and dist <= maxSlAtr * atrVal ? calcQty(dist) : 0
+    if qty > 0
+        tradeDir    := candDir
+        sigBar      := bar_index
+        sl          := math.round_to_mintick(stopPx)
+        tp1         := math.round_to_mintick(close + candDir * rr1 * dist)
+        tp2         := math.round_to_mintick(close + candDir * rr2 * dist)
+        fullQty     := qty
+        tp1Done     := false
+        tradesToday += 1
+        if not na(candOB)
+            candOB.used := true
+        if candDir == 1
+            strategy.entry('L', strategy.long, qty = qty, comment = 'L ' + candTag, alert_message = alertMsg('buy', sl, tp1, tp2))
+        else
+            strategy.entry('S', strategy.short, qty = qty, comment = 'S ' + candTag, alert_message = alertMsg('sell', sl, tp1, tp2))
+
+//---------------------------------------------------------------------------------------------------------------------}
+//SALIDAS
+//---------------------------------------------------------------------------------------------------------------------{
+// se reenvían en cada vela para que BE / trailing / TPs recalculados tengan efecto
+if tradeDir != 0
+    string id = tradeDir == 1 ? 'L' : 'S'
+    if tp1Pct < 100
+        if not tp1Done
+            strategy.exit(id + '-TP1', id, qty_percent = tp1Pct, limit = tp1, stop = sl, comment_profit = 'TP1', comment_loss = 'SL')
+        strategy.exit(id + '-TP2', id, limit = tp2, stop = sl, comment_profit = 'TP2', comment_loss = tp1Done ? 'BE/Trail' : 'SL')
+    else
+        strategy.exit(id + '-TP', id, limit = tp1, stop = sl, comment_profit = 'TP', comment_loss = 'SL')
+
+//---------------------------------------------------------------------------------------------------------------------}
+//VISUAL
+//---------------------------------------------------------------------------------------------------------------------{
+inPos   = posSize != 0 and tradeDir != 0
+finalTP = tp1Pct < 100 ? tp2 : tp1
+
+plot(showEq ? equilibrium : na, 'Equilibrio', color.new(GRAY_COL, 50), 1, plot.style_linebr)
+plot(showLevels and inPos ? strategy.position_avg_price : na, 'Entrada', color.new(GRAY_COL, 0), 1, plot.style_linebr)
+plot(showLevels and inPos ? sl : na, 'SL', BEAR_COL, 2, plot.style_linebr)
+plot(showLevels and inPos and tp1Pct < 100 and not tp1Done ? tp1 : na, 'TP1', color.new(BULL_COL, 40), 1, plot.style_linebr)
+plot(showLevels and inPos ? finalTP : na, 'TP final', BULL_COL, 2, plot.style_linebr)
+
+var table panel = table.new(position.top_right, 2, 7, bgcolor = color.new(#131722, 15), border_width = 1)
+
+panelRow(int row, string k, string v, color c) =>
+    table.cell(panel, 0, row, k, text_color = color.silver, text_size = size.small, text_halign = text.align_left)
+    table.cell(panel, 1, row, v, text_color = c,            text_size = size.small, text_halign = text.align_right)
+
+if showPanel and barstate.islast
+    int     total   = strategy.closedtrades
+    float   winRate = total > 0 ? 100.0 * strategy.wintrades / total : na
+    float   pf      = strategy.grossloss > 0 ? strategy.grossprofit / strategy.grossloss : na
+    string  trendTx = swingTrend == BULL ? 'Alcista' : swingTrend == BEAR ? 'Bajista' : '—'
+    panelRow(0, 'Tendencia swing',  trendTx, swingTrend == BULL ? BULL_COL : swingTrend == BEAR ? BEAR_COL : color.white)
+    panelRow(1, 'Zona',             close > equilibrium ? 'Premium' : 'Descuento', close > equilibrium ? BEAR_COL : BULL_COL)
+    panelRow(2, 'Operaciones',      str.tostring(total), color.white)
+    panelRow(3, 'Win rate',         na(winRate) ? '—' : str.tostring(winRate, '#.#') + '%', color.white)
+    panelRow(4, 'Profit factor',    na(pf) ? '—' : str.tostring(pf, '#.##'), na(pf) ? color.white : pf >= 1 ? BULL_COL : BEAR_COL)
+    panelRow(5, 'Beneficio neto',   str.tostring(strategy.netprofit, '#,###.##'), strategy.netprofit >= 0 ? BULL_COL : BEAR_COL)
+    panelRow(6, 'Máx. drawdown',    str.tostring(strategy.max_drawdown, '#,###.##'), BEAR_COL)
+
+//---------------------------------------------------------------------------------------------------------------------}
