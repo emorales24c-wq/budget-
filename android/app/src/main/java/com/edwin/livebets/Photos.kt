@@ -14,21 +14,36 @@ import java.net.URL
 /** ESPN player headshots, cropped to a circle and cached in memory. */
 object Photos {
     private const val SIZE = 160
+    private const val RETRY_MS = 5 * 60_000L
     private val cache = mutableMapOf<String, Bitmap>()
-    private val failed = mutableSetOf<String>()
+    private val failedAt = mutableMapOf<String, Long>()
 
-    fun get(id: String): Bitmap? {
-        if (id.isEmpty() || id in failed) return null
-        cache[id]?.let { return it }
+    fun url(photo: String, id: String): String = when {
+        photo.isNotEmpty() -> photo
+        id.isNotEmpty() -> "https://a.espncdn.com/i/headshots/nba/players/full/$id.png"
+        else -> ""
+    }
+
+    fun get(url: String): Bitmap? {
+        if (url.isEmpty()) return null
+        cache[url]?.let { return it }
+        // Don't hammer a failing URL every poll, but do try again later
+        failedAt[url]?.let { if (System.currentTimeMillis() - it < RETRY_MS) return null }
         return try {
-            val c = URL("https://a.espncdn.com/i/headshots/nba/players/full/$id.png").openConnection() as HttpURLConnection
+            val c = URL(url).openConnection() as HttpURLConnection
             c.connectTimeout = 8000
             c.readTimeout = 8000
-            val src = c.inputStream.use { BitmapFactory.decodeStream(it) } ?: throw RuntimeException("decode")
-            c.disconnect()
-            circle(src).also { cache[id] = it }
+            c.instanceFollowRedirects = true
+            c.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) LiveBets")
+            val src = try {
+                if (c.responseCode != 200) throw RuntimeException("HTTP ${c.responseCode}")
+                c.inputStream.use { BitmapFactory.decodeStream(it) } ?: throw RuntimeException("decode")
+            } finally {
+                c.disconnect()
+            }
+            circle(src).also { cache[url] = it; failedAt.remove(url) }
         } catch (e: Exception) {
-            failed.add(id)
+            failedAt[url] = System.currentTimeMillis()
             null
         }
     }

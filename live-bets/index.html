@@ -96,6 +96,7 @@ async function loadGames(){
     });
     if (!S.form.game && S.games.length) S.form.game = S.games[0].id;
     loadRoster(S.form.game);
+    for (const id of new Set(S.bets.flatMap(legsOf).map(l => l.game))) loadRoster(id);
     S.err = "";
   } catch (e) { S.err = "No pude cargar los juegos (" + e.message + ")"; }
   render();
@@ -112,11 +113,12 @@ async function loadRoster(gameId){
       // Some responses group athletes by position: [{items:[...]}]
       const flat = list.flatMap(a => a.items || [a]);
       const players = flat.filter(a => a.displayName || a.fullName)
-        .map(a => ({name: a.displayName || a.fullName, id: String(a.id || "")}))
+        .map(a => ({name: a.displayName || a.fullName, id: String(a.id || ""), photo: a.headshot?.href || headshot(a.id)}))
         .sort((x, y) => x.name.localeCompare(y.name));
       return {abbr:t.abbr, logo:t.logo, color:t.color, players, names:players.map(x => x.name)};
     }));
   } catch (e) { S.err = "No pude cargar los jugadores (" + e.message + ")"; }
+  backfill();
   render();
 }
 
@@ -146,7 +148,8 @@ function parseSummary(d){
           const i = idx(k);
           stats[k] = i < 0 ? 0 : parseInt(String(a.stats[i]).split("-")[0], 10) || 0;
         }
-        players[norm(a.athlete.displayName)] = {name:a.athlete.displayName, id:String(a.athlete.id || ""), team:abbr, stats};
+        players[norm(a.athlete.displayName)] = {name:a.athlete.displayName, id:String(a.athlete.id || ""),
+          photo:a.athlete.headshot?.href || headshot(a.athlete.id), team:abbr, stats};
       }
     }
   }
@@ -187,16 +190,26 @@ const logoUrl = abbr => abbr ? `https://a.espncdn.com/i/teamlogos/nba/500/${abbr
 function playerMeta(gameId, name){
   for (const t of S.rosters[gameId] || []) {
     const p = t.players.find(x => x.name === name);
-    if (p) return {playerId: p.id, team: t.abbr, logo: t.logo || logoUrl(t.abbr), color: t.color};
+    if (p) return {playerId: p.id, photo: p.photo, team: t.abbr, logo: t.logo || logoUrl(t.abbr), color: t.color};
   }
   const live = S.live[gameId], p = live && findPlayer(live, name);
   if (!p) return {};
   const t = S.games.find(g => g.id === gameId)?.teams?.find(x => x.abbr === p.team);
-  return {playerId: p.id, team: p.team, logo: t?.logo || logoUrl(p.team), color: t?.color || ""};
+  return {playerId: p.id, photo: p.photo, team: p.team, logo: t?.logo || logoUrl(p.team), color: t?.color || ""};
 }
 
-// Older bets were saved without ids: fill in from live data
-const legPhoto = (l, r) => headshot(l.playerId || r.p?.id);
+const legPhoto = (l, r) => l.photo || r.p?.photo || headshot(l.playerId || r.p?.id);
+
+// Bets saved before photos existed: fill in id/photo/team once their game's roster is loaded
+function backfill(){
+  let changed = false;
+  for (const l of S.bets.flatMap(legsOf)) {
+    if (l.photo || !S.rosters[l.game]) continue;
+    const m = playerMeta(l.game, l.player);
+    if (m.playerId) { Object.assign(l, m); changed = true; }
+  }
+  if (changed) save();
+}
 
 function avatar(l, r, size){
   const src = legPhoto(l, r);
@@ -336,7 +349,7 @@ async function notifyParlay(b){
   const icon = {won:"✅", lost:"❌", push:"➖"}[pr.status] || "🔴";
   const reg = await navigator.serviceWorker?.ready;
   if (!reg) return;
-  reg.showNotification(`${icon} Parlay ${pr.hits}/${b.legs.length} ✅`, {
+  reg.showNotification(`${icon} Parlay ${pr.hits}/${b.legs.length} piernas`, {
     body: b.legs.map((l, i) => `${{won:"✅", lost:"❌"}[pr.rs[i].status] || "•"} ${lastName(l.player)} ${pr.rs[i].cur}/${l.line} ${l.stat}`).join("\n"),
     tag: "bet-" + b.id, renotify: !!changed, silent: !changed, requireInteraction: true, icon: "icon.svg"
   });
@@ -381,7 +394,8 @@ async function toggleLock(){
 }
 
 const COLORS = {won:"#3ecf8e", lost:"#f87171", push:"#a0998a", void:"#a0998a", live:"#e07b54", pending:"#7a7060"};
-const lastName = n => n.trim().split(/\s+/).slice(-1)[0];
+// "Jaren Jackson Jr." -> "Jackson"
+const lastName = n => n.trim().split(/\s+/).filter((w, i, a) => i === 0 || !/^(jr|sr|ii|iii|iv)\.?$/i.test(w)).slice(-1)[0];
 
 // Lock screen card image: one row per bet with a big number and a progress bar
 function drawArt(items){
@@ -590,7 +604,7 @@ function parlayCard(b){
       <div style="display:flex;gap:6px"><button class="btns" style="padding:4px 10px" onclick="editBet(${b.id})">✏️</button><button class="btnd" onclick="delBet(${b.id})">✕</button></div>
     </div>
     <div style="display:flex;align-items:baseline;gap:8px;margin:10px 0 4px">
-      <span class="big" style="color:${COLORS[pr.status]}">${pr.hits}</span><span class="muted">/ ${b.legs.length} ✅</span>
+      <span class="big" style="color:${COLORS[pr.status]}">${pr.hits}</span><span class="muted">/ ${b.legs.length} piernas</span>
       <span style="margin-left:auto;font-size:11px">${label}</span>
     </div>
     ${b.legs.map((l, i) => {

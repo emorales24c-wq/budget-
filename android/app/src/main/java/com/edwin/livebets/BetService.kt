@@ -142,8 +142,10 @@ class BetService : Service() {
             g?.state == "in" -> "live"
             else -> "pending"
         }
-        val name = (p?.name ?: l.player).trim().split(Regex("\\s+")).last()
-        return LegResult(l, g, name, cur, status, l.playerId.ifEmpty { p?.id ?: "" })
+        // "Jaren Jackson Jr." -> "Jackson"
+        val words = (p?.name ?: l.player).trim().split(Regex("\\s+"))
+        val name = words.filterIndexed { i, w -> i == 0 || !SUFFIX.matches(w) }.last()
+        return LegResult(l, g, name, cur, status, Photos.url(l.photo, l.playerId.ifEmpty { p?.id ?: "" }))
     }
 
     private fun icon(status: String) = when (status) {
@@ -159,6 +161,7 @@ class BetService : Service() {
     }
 
     private val DONE = setOf("won", "lost", "push", "void")
+    private val SUFFIX = Regex("(?i)^(jr|sr|ii|iii|iv)\\.?$")
     private val GREEN = Color.parseColor("#3ECF8E")
     private val RED = Color.parseColor("#F87171")
     private val ACCENT = Color.parseColor("#E07B54")
@@ -247,7 +250,7 @@ class BetService : Service() {
             big.setTextViewText(R.id.info, text)
         } else {
             color = when (status) { "won" -> GREEN; "lost" -> RED; else -> ACCENT }
-            title = "${icon(status)} Parlay  $hits / ${rs.size} ✅"
+            title = "${icon(status)} Parlay  $hits / ${rs.size} piernas"
             // Collapsed view follows the first leg still in play
             val next = rs.firstOrNull { it.status !in DONE }
             text = (next?.let { "${it.name} ${it.cur}/${lineTxt(it.leg)} ${it.leg.stat} · ${gameTxt(it)}" }
@@ -255,14 +258,14 @@ class BetService : Service() {
 
             small.photo(R.id.photo, (next ?: rs.first()).photoId)
             small.setTextViewText(R.id.name, "${icon(status)} Parlay")
-            small.setTextViewText(R.id.count, "$hits / ${rs.size} ✅")
+            small.setTextViewText(R.id.count, "$hits / ${rs.size}")
             small.setTextColor(R.id.count, color)
             small.bar(R.id.bar, rs.size, hits, color)
             small.setTextViewText(R.id.info, text)
 
             big = RemoteViews(packageName, R.layout.notif_parlay_big)
             big.setTextViewText(R.id.name, "${icon(status)} Parlay · ${rs.size} piernas$money")
-            big.setTextViewText(R.id.count, "$hits / ${rs.size} ✅")
+            big.setTextViewText(R.id.count, "$hits / ${rs.size} piernas")
             big.setTextColor(R.id.count, color)
             big.bar(R.id.bar, rs.size, hits, color)
             big.removeAllViews(R.id.legs)

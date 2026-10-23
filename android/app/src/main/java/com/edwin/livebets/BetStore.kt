@@ -12,6 +12,7 @@ data class Leg(
     val side: String,
     val line: Double,
     val playerId: String,
+    val photo: String,       // headshot URL from ESPN, may be ""
     val color: String,       // team color, "#RRGGBB" or ""
 )
 
@@ -60,6 +61,7 @@ object BetStore {
         side = o.optString("side", "over"),
         line = o.optDouble("line", 0.0),
         playerId = o.optString("playerId", ""),
+        photo = o.optString("photo", ""),
         color = o.optString("color", ""),
     )
 }
