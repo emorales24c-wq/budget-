@@ -81,6 +81,10 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
 .lines input{width:90px}
 .lines .res{font-size:.82rem;font-variant-numeric:tabular-nums;display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px}
 @media (max-width:760px){.game{grid-template-columns:1fr}}
+.upd{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.upd-btn{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.upd-btn:hover{filter:brightness(1.08)}
+.upd-btn[disabled]{opacity:.6;cursor:default}
 .foot{color:var(--muted);font-size:.8rem;margin-top:14px;max-width:75ch;display:grid;gap:6px}
 .count{color:var(--muted);font-size:.85rem;margin-left:auto}
 @media (max-width:640px){.controls{position:static} h1{font-size:1.8rem} #q{width:100%} .f.grow{flex:1 1 100%}}
@@ -91,6 +95,10 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
 <header>
   <div>
     <h1>Proyecciones <span>NBA</span> 2026-27</h1>
+  </div>
+  <div class="upd">
+    <button type="button" class="btn upd-btn" id="upd" hidden>Actualizar datos</button>
+    <span class="meta" id="updmsg">Datos del 23-oct-2026</span>
   </div>
   <p class="meta">Pon los minutos esperados (xMP) y el rival de cada jugador, y la tabla calcula sus stats proyectados. Toca ▸ en una fila para meter la línea y las cuotas de un prop.</p>
 </header>
@@ -334,4 +342,29 @@ $("home").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)
 $("minmp").addEventListener("input",e=>{const v=parseFloat(e.target.value);G.minmp=isNaN(v)?0:v;render()});
 $("reset").addEventListener("click",()=>{S={};save();open.clear();render()});
 render();
+
+// Botón de actualizar: arranca la tarea "Actualizar stats NBA", que baja los datos y vuelve a publicar esta página
+const TRIGGER_ID="trig_011R5cg6nKcyhBjfDa2o8H4W", CCR="Claude Code Remote";
+(async()=>{
+  const mcp=window.claude&&window.claude.use?await window.claude.use("mcp"):null;
+  if(!mcp) return;
+  const btn=$("upd"),msg=$("updmsg"); btn.hidden=false;
+  btn.addEventListener("click",async()=>{
+    btn.disabled=true; msg.textContent="Iniciando la actualización…";
+    try{
+      await mcp.callTool(CCR,"fire_trigger",{trigger_id:TRIGGER_ID},{cache:false});
+      msg.textContent="Actualización en marcha. Tarda unos minutos; la página se recarga sola con los datos nuevos.";
+    }catch(e){
+      btn.disabled=false;
+      const c=e&&e.code;
+      msg.textContent=
+        c==="server_not_connected"?"Agrega Claude Code Remote en claude.ai → Settings → Connectors y vuelve a intentar.":
+        c==="needs_reauth"?"Vuelve a conectar Claude Code Remote en claude.ai → Settings → Connectors.":
+        c==="not_in_manifest"||c==="approval_required"||c==="consent_required"?"Hace falta tu permiso para actualizar. Toca el botón otra vez y elige Permitir.":
+        c==="blocked_by_policy"?"Tu organización no permite esta acción.":
+        c==="tool_error"?"La tarea no arrancó: "+(e.message||"error de la tarea")+". Pídele a Claude \"actualiza los stats\".":
+        "No se pudo confirmar el inicio. Espera unos minutos antes de intentar de nuevo, por si ya arrancó.";
+    }
+  });
+})();
 </script>
