@@ -196,7 +196,7 @@ class BetService : Service() {
         val final = g?.state == "post"
         val status = when {
             final && p == null -> "void"
-            l.side == "over" && cur > l.line -> "won"
+            l.side == "over" && cur >= target(l) -> "won"
             l.side == "under" && cur > l.line -> "lost"
             final && cur.toDouble() == l.line -> "push"
             final -> if (l.side == "over") "lost" else "won"
@@ -235,8 +235,12 @@ class BetService : Service() {
         else -> ACCENT
     }
 
-    private fun sideTxt(l: Leg) = "${if (l.side == "over") "O" else "U"}${lineTxt(l)} ${l.stat}"
-    private fun target(l: Leg) = floor(l.line).toInt() + 1    // what the over needs to hit
+    // A whole-number over line is a sportsbook milestone: "2" means 2 or more (no push)
+    private fun atLeast(l: Leg) = l.side == "over" && l.line % 1.0 == 0.0
+    private fun sideTxt(l: Leg) =
+        if (atLeast(l)) "${lineTxt(l)}+ ${l.stat}" else "${if (l.side == "over") "O" else "U"}${lineTxt(l)} ${l.stat}"
+    // Over: what it needs to hit. Under: the count that loses it.
+    private fun target(l: Leg) = if (atLeast(l)) l.line.toInt() else floor(l.line).toInt() + 1
 
     private fun RemoteViews.bar(id: Int, max: Int, progress: Int, color: Int) {
         setProgressBar(id, max, progress, false)

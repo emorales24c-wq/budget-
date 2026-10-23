@@ -164,6 +164,11 @@ function findPlayer(live, q){
 }
 
 // ---------- bets ----------
+// A whole-number over line is a sportsbook milestone: "2" means 2 or more (no push)
+const atLeast = l => l.side === "over" && l.line % 1 === 0;
+const needOf = l => atLeast(l) ? l.line : Math.floor(l.line) + 1;
+const sideLabel = l => atLeast(l) ? `${l.line}+` : `${l.side === "over" ? "O" : "U"}${l.line}`;
+
 function evalBet(b){
   const live = S.live[b.game];
   if (!live) return {cur:0, status:"pending", live:null, p:null};
@@ -172,8 +177,8 @@ function evalBet(b){
   const final = live.state === "post";
   let status = live.state === "pre" ? "pending" : "live";
   if (b.side === "over") {
-    if (cur > b.line) status = "won";
-    else if (final) status = cur === b.line ? "push" : "lost";
+    if (cur >= needOf(b)) status = "won";
+    else if (final) status = "lost";
   } else {
     if (cur > b.line) status = "lost";
     else if (final) status = cur === b.line ? "push" : "won";
@@ -221,7 +226,7 @@ function avatar(l, r, size){
 
 // Progress ring around the player's photo; full ring = line hit
 function ring(l, r, size, color){
-  const target = Math.floor(l.line) + 1;
+  const target = needOf(l);
   const pct = Math.min(1, r.cur / target);
   const sw = Math.max(4, size * 0.07), rad = (size - sw) / 2, C = 2 * Math.PI * rad;
   return `<div style="position:relative;width:${size}px;height:${size}px;flex:0 0 ${size}px">
@@ -263,7 +268,7 @@ function evalParlay(b){
 const statusOf = b => (b.parlay ? evalParlay(b) : evalBet(b)).status;
 
 const FINAL = ["won", "lost", "push", "void"];
-const legTxt = l => `${l.player} ${l.side === "over" ? "O" : "U"}${l.line} ${l.stat}`;
+const legTxt = l => `${l.player} ${sideLabel(l)} ${l.stat}`;
 
 // Move bets to the P&L history once they're decided and their games have ended
 function archiveSettled(){
@@ -570,7 +575,7 @@ function betCard(b){
         <div style="display:flex;align-items:flex-start;gap:6px">
           <div style="min-width:0">
             <div style="font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.p?.name || b.player)}</div>
-            <div class="muted">${b.side === "over" ? "Over" : "Under"} ${b.line} ${b.stat}</div>
+            <div class="muted">${atLeast(b) ? `${b.line}+` : `${b.side === "over" ? "Over" : "Under"} ${b.line}`} ${b.stat}</div>
           </div>
           <div style="display:flex;gap:6px;margin-left:auto"><button class="btns" style="padding:4px 8px" onclick="editBet(${b.id})">✏️</button><button class="btnd" onclick="delBet(${b.id})">✕</button></div>
         </div>
@@ -609,7 +614,7 @@ function parlayCard(b){
         ${ring(l, r, 50, col)}
         <div style="flex:1;min-width:0">
           <div style="display:flex;font-size:12px;gap:6px"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.p?.name || l.player)}</span>
-            <span style="margin-left:auto;white-space:nowrap"><b style="color:${col};font-size:15px">${r.cur}</b> <span class="muted">/ ${l.side === "over" ? "O" : "U"}${l.line} ${l.stat}</span> ${ic}</span></div>
+            <span style="margin-left:auto;white-space:nowrap"><b style="color:${col};font-size:15px">${r.cur}</b> <span class="muted">/ ${sideLabel(l)} ${l.stat}</span> ${ic}</span></div>
           <div class="muted" style="font-size:10px;margin-top:3px">${r.live ? esc(r.live.state === "pre" ? r.live.detail : r.live.detail + " · " + r.live.score) : esc(l.gameName)}</div>
         </div>
       </div>`;
@@ -767,7 +772,7 @@ function formCard(f, g, roster, liveNames){
     </div>`}
     ${parlay && S.draft.length ? `<div style="margin-bottom:12px">${S.draft.map((l, i) => `
       <div style="display:flex;align-items:center;font-size:12px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)">
-        <span>${i + 1}. ${esc(l.player)} ${l.side === "over" ? "O" : "U"}${l.line} ${l.stat}</span>
+        <span>${i + 1}. ${esc(l.player)} ${sideLabel(l)} ${l.stat}</span>
         <button class="btns" style="margin-left:auto;padding:3px 8px" onclick="editLeg(${i})">✏️</button>
         <button class="btnd" style="margin-left:6px" onclick="delLeg(${i})">✕</button>
       </div>`).join("")}</div>` : ""}
