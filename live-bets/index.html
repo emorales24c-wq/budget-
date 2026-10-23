@@ -53,7 +53,8 @@ const COLS = {
 const S = {
   bets: load("lb_bets", []),
   games: [],
-  live: {},          // eventId -> {state, detail, score, players:{normName:{name,stats}}}
+  live: {},
+  rosters: {},       // gameId -> [{abbr, names}]          // eventId -> {state, detail, score, players:{normName:{name,stats}}}
   form: {game:"", player:"", stat:"REB", side:"over", line:"", stake:"", odds:""},
   lockMode: false,
   err: ""
@@ -77,11 +78,29 @@ async function loadGames(){
     S.games = (d.events||[]).map(e => {
       const c = e.competitions[0];
       const t = c.competitors.map(x => x.team.abbreviation);
-      return {id:e.id, name:e.shortName || t.join(" vs "), detail:c.status.type.shortDetail, state:c.status.type.state};
+      return {id:e.id, name:e.shortName || t.join(" vs "), detail:c.status.type.shortDetail, state:c.status.type.state,
+        teams:c.competitors.map(x => ({id:x.team.id, abbr:x.team.abbreviation}))};
     });
     if (!S.form.game && S.games.length) S.form.game = S.games[0].id;
+    loadRoster(S.form.game);
     S.err = "";
   } catch (e) { S.err = "No pude cargar los juegos (" + e.message + ")"; }
+  render();
+}
+
+// Team rosters so players can be picked before the game starts
+async function loadRoster(gameId){
+  const g = S.games.find(x => x.id === gameId);
+  if (!g || S.rosters[gameId]) return;
+  try {
+    S.rosters[gameId] = await Promise.all(g.teams.map(async t => {
+      const d = await getJSON(`${API}/teams/${t.id}/roster`);
+      const list = d.athletes || [];
+      // Some responses group athletes by position: [{items:[...]}]
+      const flat = list.flatMap(a => a.items || [a]);
+      return {abbr:t.abbr, names:flat.map(a => a.displayName || a.fullName).filter(Boolean).sort()};
+    }));
+  } catch (e) { S.err = "No pude cargar los jugadores (" + e.message + ")"; }
   render();
 }
 
@@ -225,17 +244,51 @@ async function toggleLock(){
   render();
 }
 
+const COLORS = {won:"#3ecf8e", lost:"#f87171", push:"#a0998a", void:"#a0998a", live:"#e07b54", pending:"#7a7060"};
+const lastName = n => n.trim().split(/\s+/).slice(-1)[0];
+
+// Lock screen card image: one row per bet with a big number and a progress bar
+function drawArt(items){
+  const W = 512, c = document.createElement("canvas"); c.width = c.height = W;
+  const x = c.getContext("2d");
+  x.fillStyle = "#0a0a0f"; x.fillRect(0, 0, W, W);
+  const shown = items.slice(0, 4), rowH = W / Math.max(shown.length, 2), pad = 28;
+  shown.forEach(({b, r}, i) => {
+    const y = i * rowH, col = COLORS[r.status] || "#e07b54";
+    const big = Math.min(rowH * 0.42, 110);
+    x.fillStyle = col; x.font = `900 ${big}px sans-serif`; x.textBaseline = "alphabetic";
+    x.fillText(String(r.cur), pad, y + rowH * 0.55);
+    const w = x.measureText(String(r.cur)).width;
+    x.fillStyle = "#a0998a"; x.font = `500 ${big * 0.4}px sans-serif`;
+    x.fillText(`/ ${b.line} ${b.stat}`, pad + w + 10, y + rowH * 0.55);
+    x.fillStyle = "#e8e0d0"; x.font = `600 ${Math.min(rowH * 0.13, 30)}px sans-serif`;
+    const tag = {won:"✅", lost:"❌", push:"➖", void:"⚪"}[r.status] || (b.side === "over" ? "O" : "U");
+    x.fillText(`${lastName(r.p?.name || b.player)}  ${tag}`, pad, y + rowH * 0.2 + 6);
+    // bar with line marker
+    const bx = pad, by = y + rowH * 0.68, bw = W - pad * 2, bh = Math.min(rowH * 0.1, 22);
+    const max = Math.max(b.line, r.cur) * 1.25 || 1;
+    x.fillStyle = "#26262e"; x.beginPath(); x.roundRect(bx, by, bw, bh, bh / 2); x.fill();
+    x.fillStyle = col; x.beginPath(); x.roundRect(bx, by, Math.max(bh, bw * r.cur / max), bh, bh / 2); x.fill();
+    x.fillStyle = "#e8e0d0"; x.fillRect(bx + bw * b.line / max - 2, by - 6, 4, bh + 12);
+    if (i < shown.length - 1) { x.fillStyle = "#1c1c24"; x.fillRect(pad, y + rowH - 1, W - pad * 2, 2); }
+  });
+  return c.toDataURL("image/png");
+}
+
 function updateMediaSession(){
   if (!S.lockMode || !("mediaSession" in navigator)) return;
-  const open = S.bets.map(b => ({b, r: evalBet(b)}));
-  const first = open.find(x => x.r.status === "live") || open[0];
-  if (!first) return;
+  const items = S.bets.map(b => ({b, r: evalBet(b)}));
+  const first = items.find(x => x.r.status === "live") || items[0];
+  if (!first) {
+    navigator.mediaSession.metadata = new MediaMetadata({title:"Sin apuestas", artist:"Agrega una en Live Bets"});
+    return;
+  }
   const {b, r} = first;
   navigator.mediaSession.metadata = new MediaMetadata({
-    title: `${b.player} ${r.cur}/${b.line} ${b.stat} ${barText(r.cur, b.line)}`,
-    artist: r.live ? `${r.live.detail} · ${r.live.score}` : "Esperando juego",
-    album: open.length > 1 ? `+${open.length - 1} apuestas más` : "Live Bets",
-    artwork: [{src:"icon.svg", sizes:"512x512", type:"image/svg+xml"}]
+    title: `${lastName(r.p?.name || b.player)} ${r.cur}/${b.line} ${b.stat}`,
+    artist: r.live ? `${r.live.state === "pre" ? r.live.detail : r.live.detail + " · " + r.live.score}` : "Esperando juego",
+    album: items.length > 1 ? `+${items.length - 1} más` : "Live Bets",
+    artwork: [{src: drawArt(items), sizes:"512x512", type:"image/png"}]
   });
 }
 
@@ -251,12 +304,14 @@ function addBet(){
 }
 
 function delBet(id){ S.bets = S.bets.filter(b => b.id !== id); save(); render(); }
-function setF(k, v){ S.form[k] = v; if (k === "game" || k === "stat" || k === "side") render(); }
+function setF(k, v){ S.form[k] = v; if (k === "game") S.form.player = "";
+  if (k !== "line" && k !== "stake" && k !== "odds") render(); }
 
 function render(){
   const f = S.form;
   const g = S.live[f.game];
-  const names = g ? Object.values(g.players).map(p => p.name) : [];
+  const roster = S.rosters[f.game] || [];
+  const liveNames = g ? Object.values(g.players).map(p => p.name) : [];
   const pnl = S.bets.reduce((s,b) => {
     const st = evalBet(b).status;
     return s + (st === "won" ? payout(b) : st === "lost" ? -b.stake : 0);
@@ -298,11 +353,14 @@ function render(){
 
   h += `<div class="card">
     <div class="tag" style="margin-bottom:12px">nueva apuesta</div>
-    <select class="inp" onchange="setF('game',this.value);poll()">
+    <select class="inp" onchange="setF('game',this.value);loadRoster(this.value);poll()">
       ${S.games.length ? S.games.map(x => `<option value="${x.id}" ${x.id === f.game ? "selected" : ""}>${esc(x.name)} · ${esc(x.detail)}</option>`).join("") : `<option>Cargando juegos…</option>`}
     </select>
-    <input class="inp" list="plist" placeholder="Jugador (ej. Paolo Banchero)" value="${esc(f.player)}" oninput="setF('player',this.value)"/>
-    <datalist id="plist">${names.map(n => `<option value="${esc(n)}">`).join("")}</datalist>
+    ${roster.length || liveNames.length ? `<select class="inp" onchange="setF('player',this.value)">
+      <option value="">— Escoge jugador —</option>
+      ${roster.length ? roster.map(t => `<optgroup label="${esc(t.abbr)}">${t.names.map(n => `<option ${n === f.player ? "selected" : ""}>${esc(n)}</option>`).join("")}</optgroup>`).join("")
+        : liveNames.map(n => `<option ${n === f.player ? "selected" : ""}>${esc(n)}</option>`).join("")}
+    </select>` : `<input class="inp" placeholder="Jugador (ej. Paolo Banchero)" value="${esc(f.player)}" oninput="setF('player',this.value)"/>`}
     <div class="row">
       <select class="inp" onchange="setF('stat',this.value)">${Object.keys(STATS).map(k => `<option ${k === f.stat ? "selected" : ""}>${k}</option>`).join("")}</select>
       <select class="inp" onchange="setF('side',this.value)">
