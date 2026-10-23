@@ -35,6 +35,9 @@ class BetService : Service() {
         private const val LIVE_MS = 20_000L
         private const val PREGAME_MS = 5 * 60_000L
 
+        /** The running service, so a cleared notification can ask it to post again. */
+        @Volatile var running: BetService? = null
+
         fun start(ctx: Context) {
             val i = Intent(ctx, BetService::class.java)
             if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(i) else ctx.startService(i)
@@ -64,6 +67,13 @@ class BetService : Service() {
         createChannels()
         thread = HandlerThread("bets").apply { start() }
         handler = Handler(thread.looper)
+        running = this
+    }
+
+    /** A bet notification was swiped away while the bet is still open: put it back. */
+    fun repostSoon() {
+        handler.removeCallbacks(tick)
+        handler.postDelayed(tick, 1000)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -94,6 +104,7 @@ class BetService : Service() {
     }
 
     override fun onDestroy() {
+        running = null
         handler.removeCallbacks(tick)
         thread.quitSafely()
         wakeLock?.let { if (it.isHeld) it.release() }
@@ -294,12 +305,18 @@ class BetService : Service() {
             .setAutoCancel(settledNow)
             .setSortKey(b.id.toString())
 
+        val id = notifId(b)
         if (settledNow) {
             settled.add(b.id)
-            finalIds.add(notifId(b))
+            finalIds.add(id)
+        } else {
+            nb.setDeleteIntent(
+                PendingIntent.getBroadcast(
+                    this, id, Intent(this, ClearedReceiver::class.java), PendingIntent.FLAG_IMMUTABLE
+                )
+            )
         }
 
-        val id = notifId(b)
         nm.notify(id, nb.build())
         posted.add(id)
     }
