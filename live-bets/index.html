@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="theme-color" content="#0a0a0f"/>
+<link rel="manifest" href="manifest.json"/>
+<link rel="icon" href="icon.svg"/>
+<title>Live Bets</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#0a0a0f;min-height:100%}
+#app{padding:20px 16px 48px;max-width:480px;margin:0 auto;color:#e8e0d0;font-family:'DM Mono',monospace}
+.card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;margin-bottom:12px}
+.tag{font-size:9px;letter-spacing:.15em;text-transform:uppercase;opacity:.4}
+.btnp{background:#e07b54;border:none;color:white;cursor:pointer;padding:10px 14px;border-radius:8px;font-family:'DM Mono',monospace;font-size:12px}
+.btns{border:1px solid rgba(255,255,255,0.1);background:transparent;color:#a0998a;cursor:pointer;padding:8px 12px;border-radius:8px;font-family:'DM Mono',monospace;font-size:11px}
+.btns.on{background:#3ecf8e;border-color:#3ecf8e;color:#0a0a0f}
+.btnd{border:1px solid rgba(248,113,113,0.25);background:transparent;color:#f87171;cursor:pointer;padding:4px 10px;border-radius:7px;font-family:'DM Mono',monospace;font-size:10px}
+.inp{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#e8e0d0;font-family:'DM Mono',monospace;font-size:14px;padding:9px 11px;outline:none;width:100%;margin-bottom:8px}
+select.inp option{background:#16161d}
+.row{display:flex;gap:8px}.row>*{flex:1;min-width:0}
+.bar{background:rgba(255,255,255,0.06);border-radius:99px;height:12px;overflow:hidden;position:relative;margin:10px 0 6px}
+.bfill{height:100%;border-radius:99px;transition:width .6s ease,background .3s}
+.bline{position:absolute;top:-2px;bottom:-2px;width:2px;background:#e8e0d0;opacity:.6}
+.big{font-family:'Playfair Display',serif;font-size:34px;font-weight:900;line-height:1}
+.muted{color:#7a7060;font-size:11px}
+.err{color:#f87171;font-size:11px;margin-top:6px}
+.pulse{display:inline-block;width:7px;height:7px;border-radius:50%;background:#f87171;margin-right:6px;animation:p 1.2s infinite}
+@keyframes p{50%{opacity:.2}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const API = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba";
+const POLL_MS = 20000;
+
+// Each stat is a sum of base stats read from the ESPN boxscore
+const STATS = {
+  PTS:["PTS"], REB:["REB"], AST:["AST"], "3PM":["3PM"], STL:["STL"], BLK:["BLK"],
+  PRA:["PTS","REB","AST"], PR:["PTS","REB"], PA:["PTS","AST"], RA:["REB","AST"]
+};
+// Boxscore column aliases: older responses use labels, newer ones keys
+const COLS = {
+  PTS:["PTS","points"], REB:["REB","rebounds"], AST:["AST","assists"],
+  STL:["STL","steals"], BLK:["BLK","blocks"],
+  "3PM":["3PT","threePointFieldGoalsMade-threePointFieldGoalsAttempted"]
+};
+
+const S = {
+  bets: load("lb_bets", []),
+  games: [],
+  live: {},          // eventId -> {state, detail, score, players:{normName:{name,stats}}}
+  form: {game:"", player:"", stat:"REB", side:"over", line:"", stake:"", odds:""},
+  lockMode: false,
+  err: ""
+};
+
+function load(k, d){ try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }
+function save(){ try { localStorage.setItem("lb_bets", JSON.stringify(S.bets)); } catch {} }
+const norm = s => (s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z ]/g,"").trim();
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+// ---------- ESPN ----------
+async function getJSON(url){
+  const r = await fetch(url, {cache:"no-store"});
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+
+async function loadGames(){
+  try {
+    const d = await getJSON(API + "/scoreboard");
+    S.games = (d.events||[]).map(e => {
+      const c = e.competitions[0];
+      const t = c.competitors.map(x => x.team.abbreviation);
+      return {id:e.id, name:e.shortName || t.join(" vs "), detail:c.status.type.shortDetail, state:c.status.type.state};
+    });
+    if (!S.form.game && S.games.length) S.form.game = S.games[0].id;
+    S.err = "";
+  } catch (e) { S.err = "No pude cargar los juegos (" + e.message + ")"; }
+  render();
+}
+
+function parseSummary(d){
+  const c = d.header.competitions[0];
+  const st = c.status;
+  const score = c.competitors.map(x => `${x.team.abbreviation} ${x.score ?? 0}`).join(" - ");
+  const players = {};
+  for (const team of (d.boxscore?.players || [])) {
+    for (const grp of (team.statistics || [])) {
+      const cols = grp.labels || grp.names || grp.keys || [];
+      const keys = grp.keys || [];
+      const idx = name => {
+        for (const alias of COLS[name]) {
+          let i = cols.indexOf(alias); if (i < 0) i = keys.indexOf(alias);
+          if (i >= 0) return i;
+        }
+        return -1;
+      };
+      for (const a of (grp.athletes || [])) {
+        if (!a.stats || !a.stats.length) continue;  // DNP
+        const stats = {};
+        for (const k in COLS) {
+          const i = idx(k);
+          stats[k] = i < 0 ? 0 : parseInt(String(a.stats[i]).split("-")[0], 10) || 0;
+        }
+        players[norm(a.athlete.displayName)] = {name:a.athlete.displayName, stats};
+      }
+    }
+  }
+  return {state:st.type.state, detail:st.type.shortDetail, score, players};
+}
+
+function findPlayer(live, q){
+  const n = norm(q);
+  if (live.players[n]) return live.players[n];
+  const hits = Object.keys(live.players).filter(k => k.includes(n) || k.split(" ").pop() === n.split(" ").pop());
+  return hits.length ? live.players[hits[0]] : null;
+}
+
+// ---------- bets ----------
+function evalBet(b){
+  const live = S.live[b.game];
+  if (!live) return {cur:0, status:"pending", live:null, p:null};
+  const p = findPlayer(live, b.player);
+  const cur = p ? STATS[b.stat].reduce((s,k) => s + p.stats[k], 0) : 0;
+  const final = live.state === "post";
+  let status = live.state === "pre" ? "pending" : "live";
+  if (b.side === "over") {
+    if (cur > b.line) status = "won";
+    else if (final) status = cur === b.line ? "push" : "lost";
+  } else {
+    if (cur > b.line) status = "lost";
+    else if (final) status = cur === b.line ? "push" : "won";
+  }
+  if (final && !p) status = "void";
+  return {cur, status, live, p};
+}
+
+function payout(b){
+  if (!b.stake) return 0;
+  const o = parseFloat(b.odds) || -110;
+  return o > 0 ? b.stake * o / 100 : b.stake * 100 / -o;
+}
+
+function barText(cur, line){
+  const n = 10, f = Math.max(0, Math.min(n, Math.round(cur / line * n)));
+  return "▰".repeat(f) + "▱".repeat(n - f);
+}
+
+async function poll(){
+  const ids = [...new Set([...S.bets.map(b => b.game), S.form.game].filter(Boolean))];
+  await Promise.all(ids.map(async id => {
+    if (S.live[id]?.state === "post") return;
+    try { S.live[id] = parseSummary(await getJSON(API + "/summary?event=" + id)); S.err = ""; }
+    catch (e) { S.err = "Error actualizando (" + e.message + ")"; }
+  }));
+  for (const b of S.bets) notifyBet(b);
+  updateMediaSession();
+  render();
+}
+
+// ---------- lock screen: notifications ----------
+async function notifyBet(b){
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  const r = evalBet(b);
+  if (!r.live || r.live.state === "pre") return;
+  const key = r.cur + "|" + r.status + "|" + r.live.detail;
+  if (b._lastKey === key) return;
+  const changed = b._lastStatus && b._lastStatus !== r.status;
+  b._lastKey = key; b._lastStatus = r.status;
+  const icon = {won:"✅", lost:"❌", push:"➖", void:"⚪"}[r.status] || "🔴";
+  const reg = await navigator.serviceWorker?.ready;
+  if (!reg) return;
+  reg.showNotification(`${icon} ${b.player} ${b.side === "over" ? "O" : "U"}${b.line} ${b.stat}: ${r.cur}`, {
+    body: `${barText(r.cur, b.line)}  ${r.cur}/${b.line}\n${r.live.detail} · ${r.live.score}`,
+    tag: "bet-" + b.id,
+    renotify: !!changed,
+    silent: !changed,
+    requireInteraction: true,
+    icon: "icon.svg",
+    vibrate: changed ? [200, 100, 200] : undefined
+  });
+}
+
+async function askNotif(){
+  if (!("Notification" in window)) return alert("Este navegador no soporta notificaciones");
+  await Notification.requestPermission();
+  S.bets.forEach(b => { b._lastKey = null; });
+  poll();
+}
+
+// ---------- lock screen: keep-alive + media card ----------
+// Android Chrome freezes hidden pages after a few minutes; a playing (near-silent)
+// audio track keeps it running and puts a media card on the lock screen.
+let audio = null;
+function quietWav(){
+  const rate = 8000, secs = 10, n = rate * secs, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+  const w = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  w(0,"RIFF"); v.setUint32(4, 36 + n*2, true); w(8,"WAVE"); w(12,"fmt ");
+  v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+  v.setUint32(24,rate,true); v.setUint32(28,rate*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true);
+  w(36,"data"); v.setUint32(40, n*2, true);
+  for (let i = 0; i < n; i++) v.setInt16(44 + i*2, (Math.random()*4 - 2) | 0, true);
+  return URL.createObjectURL(new Blob([buf], {type:"audio/wav"}));
+}
+
+async function toggleLock(){
+  if (S.lockMode) {
+    audio?.pause(); S.lockMode = false;
+  } else {
+    if (!audio) { audio = new Audio(quietWav()); audio.loop = true; }
+    try { await audio.play(); S.lockMode = true; } catch (e) { alert("No pude activar: " + e.message); }
+    if ("mediaSession" in navigator) {
+      navigator.mediaSession.setActionHandler("pause", () => { audio.pause(); S.lockMode = false; render(); });
+      navigator.mediaSession.setActionHandler("play", () => { audio.play(); S.lockMode = true; render(); });
+    }
+    if (Notification.permission === "default") await askNotif();
+    updateMediaSession();
+  }
+  render();
+}
+
+function updateMediaSession(){
+  if (!S.lockMode || !("mediaSession" in navigator)) return;
+  const open = S.bets.map(b => ({b, r: evalBet(b)}));
+  const first = open.find(x => x.r.status === "live") || open[0];
+  if (!first) return;
+  const {b, r} = first;
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: `${b.player} ${r.cur}/${b.line} ${b.stat} ${barText(r.cur, b.line)}`,
+    artist: r.live ? `${r.live.detail} · ${r.live.score}` : "Esperando juego",
+    album: open.length > 1 ? `+${open.length - 1} apuestas más` : "Live Bets",
+    artwork: [{src:"icon.svg", sizes:"512x512", type:"image/svg+xml"}]
+  });
+}
+
+// ---------- UI ----------
+function addBet(){
+  const f = S.form;
+  const line = parseFloat(f.line);
+  if (!f.game || !f.player.trim() || isNaN(line)) { S.err = "Llena juego, jugador y línea"; return render(); }
+  S.bets.push({id: Date.now(), game: f.game, gameName: S.games.find(g => g.id === f.game)?.name || "",
+    player: f.player.trim(), stat: f.stat, side: f.side, line, stake: parseFloat(f.stake) || 0, odds: f.odds});
+  f.player = ""; f.line = ""; f.stake = ""; f.odds = ""; S.err = "";
+  save(); poll();
+}
+
+function delBet(id){ S.bets = S.bets.filter(b => b.id !== id); save(); render(); }
+function setF(k, v){ S.form[k] = v; if (k === "game" || k === "stat" || k === "side") render(); }
+
+function render(){
+  const f = S.form;
+  const g = S.live[f.game];
+  const names = g ? Object.values(g.players).map(p => p.name) : [];
+  const pnl = S.bets.reduce((s,b) => {
+    const st = evalBet(b).status;
+    return s + (st === "won" ? payout(b) : st === "lost" ? -b.stake : 0);
+  }, 0);
+
+  let h = `
+  <div style="text-align:center;margin-bottom:18px;padding-top:8px">
+    <div class="tag" style="margin-bottom:6px">nba · player props en vivo</div>
+    <h1 style="font-family:'Playfair Display',serif;font-size:34px;font-weight:900;background:linear-gradient(135deg,#e8e0d0,#e07b54);-webkit-background-clip:text;-webkit-text-fill-color:transparent">Live Bets</h1>
+    ${S.bets.length ? `<div class="muted" style="margin-top:6px">P&L: <span style="color:${pnl >= 0 ? "#3ecf8e" : "#f87171"}">${pnl >= 0 ? "+" : "-"}$${Math.abs(pnl).toFixed(2)}</span></div>` : ""}
+  </div>
+  <div class="row" style="margin-bottom:12px">
+    <button class="btns ${S.lockMode ? "on" : ""}" onclick="toggleLock()">${S.lockMode ? "🔒 Lock screen ON" : "🔒 Activar lock screen"}</button>
+    <button class="btns ${typeof Notification !== "undefined" && Notification.permission === "granted" ? "on" : ""}" onclick="askNotif()">🔔 Notificaciones</button>
+  </div>`;
+
+  for (const b of S.bets) {
+    const r = evalBet(b);
+    const color = {won:"#3ecf8e", lost:"#f87171", push:"#a0998a", void:"#a0998a"}[r.status]
+      || (b.side === "over" ? "#e07b54" : (r.cur >= b.line - 1 ? "#facc15" : "#5b8dee"));
+    const label = {won:"✅ GANADA", lost:"❌ PERDIDA", push:"➖ PUSH", void:"⚪ NO JUGÓ", pending:"⏳ " + (r.live?.detail || b.gameName), live:""}[r.status];
+    const max = Math.max(b.line, r.cur) * 1.25 || 1;
+    h += `<div class="card" style="border-color:${r.status === "won" ? "rgba(62,207,142,.35)" : r.status === "lost" ? "rgba(248,113,113,.3)" : "rgba(255,255,255,.07)"}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div style="font-size:14px">${esc(r.p?.name || b.player)}</div>
+          <div class="muted">${b.side === "over" ? "Over" : "Under"} ${b.line} ${b.stat}${b.stake ? ` · $${b.stake} → $${payout(b).toFixed(2)}` : ""}</div>
+        </div>
+        <button class="btnd" onclick="delBet(${b.id})">✕</button>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:8px;margin-top:10px">
+        <span class="big" style="color:${color}">${r.cur}</span><span class="muted">/ ${b.line}</span>
+        <span style="margin-left:auto;font-size:11px">${r.status === "live" ? `<span class="pulse"></span>${esc(r.live.detail)}` : label}</span>
+      </div>
+      <div class="bar"><div class="bfill" style="width:${r.cur / max * 100}%;background:${color}"></div><div class="bline" style="left:${b.line / max * 100}%"></div></div>
+      <div class="muted">${r.live ? esc(r.live.score) : esc(b.gameName)}${r.live && r.live.state !== "pre" && !r.p ? " · jugador aún sin stats" : ""}</div>
+    </div>`;
+  }
+
+  h += `<div class="card">
+    <div class="tag" style="margin-bottom:12px">nueva apuesta</div>
+    <select class="inp" onchange="setF('game',this.value);poll()">
+      ${S.games.length ? S.games.map(x => `<option value="${x.id}" ${x.id === f.game ? "selected" : ""}>${esc(x.name)} · ${esc(x.detail)}</option>`).join("") : `<option>Cargando juegos…</option>`}
+    </select>
+    <input class="inp" list="plist" placeholder="Jugador (ej. Paolo Banchero)" value="${esc(f.player)}" oninput="setF('player',this.value)"/>
+    <datalist id="plist">${names.map(n => `<option value="${esc(n)}">`).join("")}</datalist>
+    <div class="row">
+      <select class="inp" onchange="setF('stat',this.value)">${Object.keys(STATS).map(k => `<option ${k === f.stat ? "selected" : ""}>${k}</option>`).join("")}</select>
+      <select class="inp" onchange="setF('side',this.value)">
+        <option value="over" ${f.side === "over" ? "selected" : ""}>Over</option>
+        <option value="under" ${f.side === "under" ? "selected" : ""}>Under</option>
+      </select>
+      <input class="inp" type="number" step="0.5" inputmode="decimal" placeholder="Línea" value="${esc(f.line)}" oninput="setF('line',this.value)"/>
+    </div>
+    <div class="row">
+      <input class="inp" type="number" inputmode="decimal" placeholder="Apuesta $" value="${esc(f.stake)}" oninput="setF('stake',this.value)"/>
+      <input class="inp" inputmode="numeric" placeholder="Odds (-110)" value="${esc(f.odds)}" oninput="setF('odds',this.value)"/>
+    </div>
+    <button class="btnp" style="width:100%" onclick="addBet()">+ Agregar apuesta</button>
+    ${S.err ? `<div class="err">${esc(S.err)}</div>` : ""}
+  </div>
+  <div class="muted" style="text-align:center;line-height:1.6">Se actualiza cada ${POLL_MS / 1000}s · datos de ESPN (~10-30s de retraso)</div>`;
+
+  // Don't wipe the input the user is typing in
+  const a = document.activeElement;
+  if (a && a.tagName === "INPUT" && document.getElementById("app").contains(a)) return;
+  document.getElementById("app").innerHTML = h;
+}
+
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+render();
+loadGames().then(poll);
+setInterval(poll, POLL_MS);
+setInterval(loadGames, 5 * 60000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
+</script>
+</body>
+</html>
