@@ -13,7 +13,7 @@ data class LiveGame(
     val players: Map<String, PlayerLine>,
 )
 
-data class PlayerLine(val name: String, val stats: Map<String, Int>)
+data class PlayerLine(val name: String, val id: String, val stats: Map<String, Int>)
 
 object Espn {
     private const val API = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba"
@@ -91,8 +91,9 @@ object Espn {
                         val i = idx(k)
                         if (i < 0) 0 else stats.optString(i).split("-")[0].toIntOrNull() ?: 0
                     }
-                    val name = a.getJSONObject("athlete").optString("displayName")
-                    players[norm(name)] = PlayerLine(name, vals)
+                    val athlete = a.getJSONObject("athlete")
+                    val name = athlete.optString("displayName")
+                    players[norm(name)] = PlayerLine(name, athlete.optString("id"), vals)
                 }
             }
         }

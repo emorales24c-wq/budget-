@@ -92,7 +92,7 @@ async function loadGames(){
       const c = e.competitions[0];
       const t = c.competitors.map(x => x.team.abbreviation);
       return {id:e.id, name:e.shortName || t.join(" vs "), detail:c.status.type.shortDetail, state:c.status.type.state,
-        teams:c.competitors.map(x => ({id:x.team.id, abbr:x.team.abbreviation}))};
+        teams:c.competitors.map(x => ({id:x.team.id, abbr:x.team.abbreviation, logo:x.team.logo || "", color:x.team.color ? "#" + x.team.color : ""}))};
     });
     if (!S.form.game && S.games.length) S.form.game = S.games[0].id;
     loadRoster(S.form.game);
@@ -111,7 +111,10 @@ async function loadRoster(gameId){
       const list = d.athletes || [];
       // Some responses group athletes by position: [{items:[...]}]
       const flat = list.flatMap(a => a.items || [a]);
-      return {abbr:t.abbr, names:flat.map(a => a.displayName || a.fullName).filter(Boolean).sort()};
+      const players = flat.filter(a => a.displayName || a.fullName)
+        .map(a => ({name: a.displayName || a.fullName, id: String(a.id || "")}))
+        .sort((x, y) => x.name.localeCompare(y.name));
+      return {abbr:t.abbr, logo:t.logo, color:t.color, players, names:players.map(x => x.name)};
     }));
   } catch (e) { S.err = "No pude cargar los jugadores (" + e.message + ")"; }
   render();
@@ -121,8 +124,11 @@ function parseSummary(d){
   const c = d.header.competitions[0];
   const st = c.status;
   const score = c.competitors.map(x => `${x.team.abbreviation} ${x.score ?? 0}`).join(" - ");
+  const teams = c.competitors.map(x => ({abbr: x.team.abbreviation, score: x.score ?? 0,
+    logo: x.team.logo || x.team.logos?.[0]?.href || logoUrl(x.team.abbreviation)}));
   const players = {};
   for (const team of (d.boxscore?.players || [])) {
+    const abbr = team.team?.abbreviation || "";
     for (const grp of (team.statistics || [])) {
       const cols = grp.labels || grp.names || grp.keys || [];
       const keys = grp.keys || [];
@@ -140,11 +146,11 @@ function parseSummary(d){
           const i = idx(k);
           stats[k] = i < 0 ? 0 : parseInt(String(a.stats[i]).split("-")[0], 10) || 0;
         }
-        players[norm(a.athlete.displayName)] = {name:a.athlete.displayName, stats};
+        players[norm(a.athlete.displayName)] = {name:a.athlete.displayName, id:String(a.athlete.id || ""), team:abbr, stats};
       }
     }
   }
-  return {state:st.type.state, detail:st.type.shortDetail, score, players};
+  return {state:st.type.state, detail:st.type.shortDetail, score, teams, players};
 }
 
 function findPlayer(live, q){
@@ -172,6 +178,64 @@ function evalBet(b){
   if (final && !p) status = "void";
   return {cur, status, live, p};
 }
+
+// ---------- player photos / team logos ----------
+const headshot = id => id ? `https://a.espncdn.com/i/headshots/nba/players/full/${id}.png` : "";
+const logoUrl = abbr => abbr ? `https://a.espncdn.com/i/teamlogos/nba/500/${abbr.toLowerCase()}.png` : "";
+
+// Photo id, team and team color for a player, from the roster or the live boxscore
+function playerMeta(gameId, name){
+  for (const t of S.rosters[gameId] || []) {
+    const p = t.players.find(x => x.name === name);
+    if (p) return {playerId: p.id, team: t.abbr, logo: t.logo || logoUrl(t.abbr), color: t.color};
+  }
+  const live = S.live[gameId], p = live && findPlayer(live, name);
+  if (!p) return {};
+  const t = S.games.find(g => g.id === gameId)?.teams?.find(x => x.abbr === p.team);
+  return {playerId: p.id, team: p.team, logo: t?.logo || logoUrl(p.team), color: t?.color || ""};
+}
+
+// Older bets were saved without ids: fill in from live data
+const legPhoto = (l, r) => headshot(l.playerId || r.p?.id);
+
+function avatar(l, r, size){
+  const src = legPhoto(l, r);
+  const initials = (r.p?.name || l.player).split(/\s+/).map(w => w[0]).slice(0, 2).join("");
+  return `<div style="position:absolute;inset:${size * 0.11}px;border-radius:50%;overflow:hidden;background:#1c1c24;display:flex;align-items:center;justify-content:center;font-size:${size * 0.24}px;color:#7a7060">
+    <span>${esc(initials)}</span>
+    ${src ? `<img src="${src}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top" onerror="this.remove()">` : ""}</div>`;
+}
+
+// Progress ring around the player's photo; full ring = line hit
+function ring(l, r, size, color){
+  const target = Math.floor(l.line) + 1;
+  const pct = Math.min(1, r.cur / target);
+  const sw = Math.max(4, size * 0.07), rad = (size - sw) / 2, C = 2 * Math.PI * rad;
+  return `<div style="position:relative;width:${size}px;height:${size}px;flex:0 0 ${size}px">
+    <svg width="${size}" height="${size}" style="position:absolute;inset:0;transform:rotate(-90deg)">
+      <circle cx="${size / 2}" cy="${size / 2}" r="${rad}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="${sw}"/>
+      <circle cx="${size / 2}" cy="${size / 2}" r="${rad}" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round"
+        stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - pct)}" style="transition:stroke-dashoffset .6s ease"/>
+    </svg>${avatar(l, r, size)}</div>`;
+}
+
+// "[logo] MIL 50 - 48 CHI [logo] · Q2 4:10"
+function scoreLine(live, fallback){
+  if (!live?.teams) return `<span class="muted">${esc(fallback || "")}</span>`;
+  const [a, b] = live.teams;
+  const logo = t => `<img src="${t.logo}" alt="" style="width:18px;height:18px;object-fit:contain" onerror="this.remove()">`;
+  const pre = live.state === "pre";
+  return `<span style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#a0998a">
+    ${logo(a)}${a.abbr}${pre ? "" : ` <b style="color:#e8e0d0">${a.score}</b>`}<span>${pre ? "@" : "-"}</span>${pre ? "" : `<b style="color:#e8e0d0">${b.score}</b> `}${b.abbr}${logo(b)}</span>`;
+}
+
+// Team colors like the Bucks' dark green vanish on a dark card, so lift them toward white
+function brighten(hex){
+  const n = parseInt(hex.slice(1), 16), lum = (0.299 * (n >> 16) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) / 255;
+  return lum < 0.45 ? `color-mix(in srgb, ${hex} ${Math.round(40 + lum * 80)}%, white)` : hex;
+}
+const liveColor = (l, r) => ({won:"#3ecf8e", lost:"#f87171", push:"#a0998a", void:"#a0998a"}[r.status]
+  || (/^#[0-9a-f]{6}$/i.test(l.color || "") ? brighten(l.color) : "#e07b54"));
 
 // A parlay is {id, parlay:true, legs:[...], stake, odds}; a single bet is its own only leg
 const legsOf = b => b.parlay ? b.legs : [b];
@@ -370,7 +434,7 @@ function formLeg(){
   const line = parseFloat(f.line);
   if (!f.game || !f.player.trim() || isNaN(line)) { S.err = "Llena juego, jugador y línea"; render(); return null; }
   return {game: f.game, gameName: S.games.find(g => g.id === f.game)?.name || "",
-    player: f.player.trim(), stat: f.stat, side: f.side, line};
+    player: f.player.trim(), stat: f.stat, side: f.side, line, ...playerMeta(f.game, f.player.trim())};
 }
 
 function addBet(){
@@ -488,27 +552,32 @@ function render(){
 
 function betCard(b){
   const r = evalBet(b);
-  const color = {won:"#3ecf8e", lost:"#f87171", push:"#a0998a", void:"#a0998a"}[r.status]
-    || (b.side === "over" ? "#e07b54" : (r.cur >= b.line - 1 ? "#facc15" : "#5b8dee"));
-  const label = {won:"✅ GANADA", lost:"❌ PERDIDA", push:"➖ PUSH", void:"⚪ NO JUGÓ", pending:"⏳ " + (r.live?.detail || b.gameName), live:""}[r.status];
-  const max = Math.max(b.line, r.cur) * 1.25 || 1;
+  const color = liveColor(b, r);
+  const label = {won:"✅ GANADA", lost:"❌ PERDIDA", push:"➖ PUSH", void:"⚪ NO JUGÓ", pending:"⏳ " + (r.live?.detail || ""), live:""}[r.status];
   return `<div class="card" style="border-color:${r.status === "won" ? "rgba(62,207,142,.35)" : r.status === "lost" ? "rgba(248,113,113,.3)" : "rgba(255,255,255,.07)"}">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start">
-      <div>
-        <div style="font-size:14px">${esc(r.p?.name || b.player)}</div>
-        <div class="muted">${b.side === "over" ? "Over" : "Under"} ${b.line} ${b.stat}${b.stake ? ` · $${b.stake} → $${payout(b).toFixed(2)}` : ""}${b.odds ? ` (${esc(b.odds)})` : ""}</div>
+    <div style="display:flex;gap:14px;align-items:center">
+      ${ring(b, r, 84, color)}
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:flex-start;gap:6px">
+          <div style="min-width:0">
+            <div style="font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.p?.name || b.player)}</div>
+            <div class="muted">${b.side === "over" ? "Over" : "Under"} ${b.line} ${b.stat}</div>
+          </div>
+          <div style="display:flex;gap:6px;margin-left:auto"><button class="btns" style="padding:4px 8px" onclick="editBet(${b.id})">✏️</button><button class="btnd" onclick="delBet(${b.id})">✕</button></div>
+        </div>
+        <div style="display:flex;align-items:baseline;gap:6px;margin-top:6px">
+          <span class="big" style="color:${color}">${r.cur}</span><span class="muted">/ ${b.line}</span>
+          <span style="margin-left:auto;font-size:11px">${r.status === "live" ? `<span class="pulse"></span>${esc(r.live.detail)}` : label}</span>
+        </div>
       </div>
-      <div style="display:flex;gap:6px"><button class="btns" style="padding:4px 10px" onclick="editBet(${b.id})">✏️</button><button class="btnd" onclick="delBet(${b.id})">✕</button></div>
     </div>
-    <div style="display:flex;align-items:baseline;gap:8px;margin-top:10px">
-      <span class="big" style="color:${color}">${r.cur}</span><span class="muted">/ ${b.line}</span>
-      <span style="margin-left:auto;font-size:11px">${r.status === "live" ? `<span class="pulse"></span>${esc(r.live.detail)}` : label}</span>
+    <div style="display:flex;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.05)">
+      ${scoreLine(r.live, b.gameName)}
+      <span class="muted" style="margin-left:auto">${b.stake ? `$${b.stake} → $${payout(b).toFixed(2)}` : ""}${b.odds ? ` (${esc(b.odds)})` : ""}</span>
     </div>
-    <div class="bar"><div class="bfill" style="width:${r.cur / max * 100}%;background:${color}"></div><div class="bline" style="left:${b.line / max * 100}%"></div></div>
-    <div class="muted">${r.live ? esc(r.live.score) : esc(b.gameName)}${r.live && r.live.state !== "pre" && !r.p ? " · jugador aún sin stats" : ""}</div>
+    ${r.live && r.live.state !== "pre" && !r.p ? `<div class="muted" style="margin-top:6px">jugador aún sin stats</div>` : ""}
   </div>`;
 }
-
 function parlayCard(b){
   const pr = evalParlay(b);
   const label = {won:"✅ GANADO", lost:"❌ PERDIDO", push:"➖ PUSH", pending:"⏳ Pendiente", live:'<span class="pulse"></span>En vivo'}[pr.status];
@@ -525,13 +594,15 @@ function parlayCard(b){
       <span style="margin-left:auto;font-size:11px">${label}</span>
     </div>
     ${b.legs.map((l, i) => {
-      const r = pr.rs[i], col = COLORS[r.status], max = Math.max(l.line, r.cur) * 1.25 || 1;
+      const r = pr.rs[i], col = liveColor(l, r);
       const ic = {won:"✅", lost:"❌", push:"➖", void:"⚪"}[r.status] || "";
-      return `<div style="margin-top:12px">
-        <div style="display:flex;font-size:12px"><span>${ic} ${esc(r.p?.name || l.player)}</span>
-          <span style="margin-left:auto"><b style="color:${col}">${r.cur}</b> <span class="muted">/ ${l.side === "over" ? "O" : "U"}${l.line} ${l.stat}</span></span></div>
-        <div class="bar" style="height:8px;margin:6px 0 2px"><div class="bfill" style="width:${r.cur / max * 100}%;background:${col}"></div><div class="bline" style="left:${l.line / max * 100}%"></div></div>
-        <div class="muted" style="font-size:10px">${r.live ? esc(r.live.state === "pre" ? r.live.detail : r.live.detail + " · " + r.live.score) : esc(l.gameName)}</div>
+      return `<div style="display:flex;align-items:center;gap:12px;margin-top:12px">
+        ${ring(l, r, 50, col)}
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;font-size:12px;gap:6px"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.p?.name || l.player)}</span>
+            <span style="margin-left:auto;white-space:nowrap"><b style="color:${col};font-size:15px">${r.cur}</b> <span class="muted">/ ${l.side === "over" ? "O" : "U"}${l.line} ${l.stat}</span> ${ic}</span></div>
+          <div class="muted" style="font-size:10px;margin-top:3px">${r.live ? esc(r.live.state === "pre" ? r.live.detail : r.live.detail + " · " + r.live.score) : esc(l.gameName)}</div>
+        </div>
       </div>`;
     }).join("")}
   </div>`;
@@ -563,6 +634,8 @@ function pnlView(){
 
   if (!H.length) return h + `<div class="muted" style="text-align:center;padding:20px">Cuando tus apuestas terminen aparecen aquí con lo que ganaste o perdiste.</div>`;
 
+  h += pnlChart(H) + pnlCalendar(H);
+
   h += `<div class="tag" style="margin:6px 0 10px">historial</div>`;
   for (const x of H) {
     const v = profitOf(x);
@@ -583,6 +656,94 @@ function pnlView(){
     </div>`;
   }
   return h;
+}
+
+// Gain / loss colors for charts (teal/coral stay apart for red-green colorblindness)
+const UP = "#22b8a0", DOWN = "#ff6b5e";
+const fmtDay = t => new Date(t).toLocaleDateString("es", {day: "numeric", month: "short"});
+
+// Running P&L, one point per settled bet, oldest first
+function pnlChart(H){
+  const pts = [...H].sort((a, b) => a.at - b.at);
+  let run = 0;
+  const data = [{at: pts[0].at, v: 0, label: "Inicio"}].concat(pts.map(x => ({at: x.at, v: run += profitOf(x), label: x.title})));
+  const W = 340, Hh = 150, padL = 8, padR = 8, padT = 24, padB = 18;
+  const lo = Math.min(0, ...data.map(d => d.v)), hi = Math.max(0, ...data.map(d => d.v));
+  const span = hi - lo || 1;
+  const X = i => padL + (W - padL - padR) * (data.length === 1 ? 0.5 : i / (data.length - 1));
+  const Y = v => padT + (Hh - padT - padB) * (1 - (v - lo) / span);
+  const path = data.map((d, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(d.v).toFixed(1)}`).join("");
+  const end = data[data.length - 1].v, col = end >= 0 ? UP : DOWN;
+  S._chart = data;
+  return `<div class="card">
+    <div style="display:flex;align-items:baseline"><div class="tag">tu dinero en el tiempo</div>
+      <div id="ctip" class="muted" style="margin-left:auto;font-size:11px;min-height:14px"></div></div>
+    <svg viewBox="0 0 ${W} ${Hh}" style="width:100%;height:auto;margin-top:8px;touch-action:pan-y" onpointermove="chartHover(event,this)" onpointerdown="chartHover(event,this)" onpointerleave="chartHover(null,this)">
+      <line x1="${padL}" x2="${W - padR}" y1="${Y(0)}" y2="${Y(0)}" stroke="rgba(255,255,255,.15)" stroke-dasharray="3 4"/>
+      <text x="${W - padR}" y="${Y(0) - 4}" text-anchor="end" font-size="9" fill="#7a7060">$0</text>
+      <path d="${path} L${X(data.length - 1)},${Y(0)} L${X(0)},${Y(0)} Z" fill="${col}" opacity=".08"/>
+      <path d="${path}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${X(data.length - 1)}" cy="${Y(end)}" r="4" fill="${col}" stroke="#0a0a0f" stroke-width="2"/>
+      <text x="${X(data.length - 1) - 8}" y="${Y(end) + (end >= 0 ? -8 : 16)}" text-anchor="end" font-size="11" fill="#e8e0d0">${money(end)}</text>
+      <g id="cx" style="display:none"><line y1="${padT}" y2="${Hh - padB}" stroke="rgba(255,255,255,.3)"/><circle r="5" fill="${col}" stroke="#0a0a0f" stroke-width="2"/></g>
+      <text x="${padL}" y="${Hh - 4}" font-size="9" fill="#7a7060">${fmtDay(data[0].at)}</text>
+      <text x="${W - padR}" y="${Hh - 4}" text-anchor="end" font-size="9" fill="#7a7060">${fmtDay(data[data.length - 1].at)}</text>
+    </svg>
+  </div>`;
+}
+
+function chartHover(e, svg){
+  const g = svg.querySelector("#cx"), tip = document.getElementById("ctip"), data = S._chart;
+  if (!e || !data) { g.style.display = "none"; tip.textContent = ""; return; }
+  const box = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal;
+  const x = (e.clientX - box.left) / box.width * vb.width;
+  const i = Math.max(0, Math.min(data.length - 1, Math.round((x - 8) / (vb.width - 16) * (data.length - 1))));
+  const cx = 8 + (vb.width - 16) * (data.length === 1 ? 0.5 : i / (data.length - 1));
+  const line = g.querySelector("line"), dot = g.querySelector("circle");
+  const ys = [...svg.querySelectorAll("path")][1].getAttribute("d").split(/[ML]/).filter(Boolean)[i].split(",")[1];
+  line.setAttribute("x1", cx); line.setAttribute("x2", cx);
+  dot.setAttribute("cx", cx); dot.setAttribute("cy", ys);
+  g.style.display = "";
+  tip.textContent = `${fmtDay(data[i].at)} · ${money(data[i].v)} · ${data[i].label}`;
+}
+
+// Last 5 weeks, one square per day: teal = won money, coral = lost, gray = even
+function pnlCalendar(H){
+  const byDay = {};
+  for (const x of H) {
+    const k = new Date(x.at).toDateString();
+    byDay[k] = byDay[k] || {v: 0, n: 0};
+    byDay[k].v += profitOf(x); byDay[k].n++;
+  }
+  const maxAbs = Math.max(1, ...Object.values(byDay).map(d => Math.abs(d.v)));
+  const start = new Date(); start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - start.getDay() - 28);   // Sunday, 4 weeks back
+  let cells = "";
+  for (let i = 0; i < 35; i++) {
+    const d = new Date(start); d.setDate(start.getDate() + i);
+    const rec = byDay[d.toDateString()], future = d > new Date();
+    let bg = "rgba(255,255,255,.04)";
+    if (rec) bg = rec.v === 0 ? "#383835" : `color-mix(in srgb, ${rec.v > 0 ? UP : DOWN} ${Math.round(35 + 65 * Math.abs(rec.v) / maxAbs)}%, #16161d)`;
+    const tip = rec ? `${fmtDay(d)}: ${money(rec.v)} (${rec.n} apuesta${rec.n > 1 ? "s" : ""})` : `${fmtDay(d)}: sin apuestas`;
+    cells += `<div title="${tip}" onclick="document.getElementById('caltip').textContent=this.title"
+      style="aspect-ratio:1;border-radius:4px;background:${future ? "transparent" : bg};font-size:9px;color:rgba(232,224,208,.55);display:flex;align-items:center;justify-content:center;cursor:pointer">
+      ${future ? "" : d.getDate()}</div>`;
+  }
+  return `<div class="card">
+    <div style="display:flex;align-items:baseline"><div class="tag">calendario</div>
+      <div id="caltip" class="muted" style="margin-left:auto;font-size:11px">toca un día</div></div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:10px">
+      ${["D","L","M","M","J","V","S"].map(x => `<div class="muted" style="text-align:center;font-size:9px">${x}</div>`).join("")}
+      ${cells}
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;justify-content:center;margin-top:10px;font-size:10px;color:#7a7060">
+      <span>− pérdida</span>
+      <span style="width:12px;height:12px;border-radius:3px;background:${DOWN}"></span>
+      <span style="width:12px;height:12px;border-radius:3px;background:#383835"></span>
+      <span style="width:12px;height:12px;border-radius:3px;background:${UP}"></span>
+      <span>ganancia +</span>
+    </div>
+  </div>`;
 }
 
 function formCard(f, g, roster, liveNames){
@@ -622,7 +783,7 @@ function formCard(f, g, roster, liveNames){
       <input class="inp" type="number" inputmode="decimal" placeholder="Apuesta $" value="${esc(f.stake)}" oninput="setF('stake',this.value)"/>
       <div style="display:flex;gap:6px">
         <button class="btns" style="flex:0 0 44px;height:39px;padding:0;font-size:18px;color:${f.sign === "+" ? "#3ecf8e" : "#f87171"}" onclick="flipSign()">${f.sign === "+" ? "+" : "−"}</button>
-        <input class="inp" style="flex:1;min-width:0" inputmode="numeric" placeholder="Odds (${parlay ? "600" : "110"})" value="${esc(f.odds)}" oninput="setF('odds',this.value)"/>
+        <input class="inp" style="flex:1;min-width:0" inputmode="numeric" placeholder="${parlay ? "600" : "110"}" value="${esc(f.odds)}" oninput="setF('odds',this.value)"/>
       </div>
     </div>
     ${parlay

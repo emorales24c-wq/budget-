@@ -11,6 +11,8 @@ data class Leg(
     val stat: String,
     val side: String,
     val line: Double,
+    val playerId: String,
+    val color: String,       // team color, "#RRGGBB" or ""
 )
 
 /** A single bet is a bet with one leg and parlay = false. */
@@ -57,5 +59,7 @@ object BetStore {
         stat = o.optString("stat", "PTS"),
         side = o.optString("side", "over"),
         line = o.optDouble("line", 0.0),
+        playerId = o.optString("playerId", ""),
+        color = o.optString("color", ""),
     )
 }
