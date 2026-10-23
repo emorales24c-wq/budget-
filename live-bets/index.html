@@ -61,7 +61,12 @@ const S = {
 };
 
 function load(k, d){ try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }
-function save(){ try { localStorage.setItem("lb_bets", JSON.stringify(S.bets)); } catch {} }
+// Inside the Android app, the native side shows the lock screen notifications
+const NATIVE = typeof window.Android !== "undefined";
+function save(){
+  try { localStorage.setItem("lb_bets", JSON.stringify(S.bets)); } catch {}
+  if (NATIVE) Android.syncBets(JSON.stringify(S.bets.map(({_lastKey, _lastStatus, ...b}) => b)));
+}
 const norm = s => (s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z ]/g,"").trim();
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
@@ -323,10 +328,10 @@ function render(){
     <h1 style="font-family:'Playfair Display',serif;font-size:34px;font-weight:900;background:linear-gradient(135deg,#e8e0d0,#e07b54);-webkit-background-clip:text;-webkit-text-fill-color:transparent">Live Bets</h1>
     ${S.bets.length ? `<div class="muted" style="margin-top:6px">P&L: <span style="color:${pnl >= 0 ? "#3ecf8e" : "#f87171"}">${pnl >= 0 ? "+" : "-"}$${Math.abs(pnl).toFixed(2)}</span></div>` : ""}
   </div>
-  <div class="row" style="margin-bottom:12px">
+  ${NATIVE ? "" : `<div class="row" style="margin-bottom:12px">
     <button class="btns ${S.lockMode ? "on" : ""}" onclick="toggleLock()">${S.lockMode ? "🔒 Lock screen ON" : "🔒 Activar lock screen"}</button>
     <button class="btns ${typeof Notification !== "undefined" && Notification.permission === "granted" ? "on" : ""}" onclick="askNotif()">🔔 Notificaciones</button>
-  </div>`;
+  </div>`}`;
 
   for (const b of S.bets) {
     const r = evalBet(b);
@@ -384,7 +389,8 @@ function render(){
   document.getElementById("app").innerHTML = h;
 }
 
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+if (!NATIVE && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+if (NATIVE) save();
 render();
 loadGames().then(poll);
 setInterval(poll, POLL_MS);
