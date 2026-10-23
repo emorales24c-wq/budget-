@@ -166,16 +166,12 @@ class BetService : Service() {
     private val RED = Color.parseColor("#F87171")
     private val ACCENT = Color.parseColor("#E07B54")
 
-    // Team color while live (unless it's too dark to see), green/red once decided
+    // Color only ever means bet state: red is reserved for a lost bet, so team colors aren't used
     private fun legColor(r: LegResult): Int = when (r.status) {
         "won" -> GREEN
         "lost" -> RED
         "push", "void" -> Color.GRAY
-        else -> try {
-            val c = Color.parseColor(r.leg.color)
-            val lum = (0.299 * Color.red(c) + 0.587 * Color.green(c) + 0.114 * Color.blue(c)) / 255
-            if (lum < 0.18) ACCENT else c
-        } catch (e: Exception) { ACCENT }
+        else -> ACCENT
     }
 
     private fun sideTxt(l: Leg) = "${if (l.side == "over") "O" else "U"}${lineTxt(l)} ${l.stat}"

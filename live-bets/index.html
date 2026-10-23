@@ -242,13 +242,8 @@ function scoreLine(live, fallback){
     ${logo(a)}${a.abbr}${pre ? "" : ` <b style="color:#e8e0d0">${a.score}</b>`}<span>${pre ? "@" : "-"}</span>${pre ? "" : `<b style="color:#e8e0d0">${b.score}</b> `}${b.abbr}${logo(b)}</span>`;
 }
 
-// Team colors like the Bucks' dark green vanish on a dark card, so lift them toward white
-function brighten(hex){
-  const n = parseInt(hex.slice(1), 16), lum = (0.299 * (n >> 16) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) / 255;
-  return lum < 0.45 ? `color-mix(in srgb, ${hex} ${Math.round(40 + lum * 80)}%, white)` : hex;
-}
-const liveColor = (l, r) => ({won:"#3ecf8e", lost:"#f87171", push:"#a0998a", void:"#a0998a"}[r.status]
-  || (/^#[0-9a-f]{6}$/i.test(l.color || "") ? brighten(l.color) : "#e07b54"));
+// Color only ever means bet state: red is reserved for a lost bet, so team colors aren't used
+const liveColor = (l, r) => ({won:"#3ecf8e", lost:"#f87171", push:"#a0998a", void:"#a0998a"}[r.status] || "#e07b54");
 
 // A parlay is {id, parlay:true, legs:[...], stake, odds}; a single bet is its own only leg
 const legsOf = b => b.parlay ? b.legs : [b];
@@ -796,7 +791,7 @@ function formCard(f, g, roster, liveNames){
     <div class="row">
       <input class="inp" type="number" inputmode="decimal" placeholder="Apuesta $" value="${esc(f.stake)}" oninput="setF('stake',this.value)"/>
       <div style="display:flex;gap:6px">
-        <button class="btns" style="flex:0 0 44px;height:39px;padding:0;font-size:18px;color:${f.sign === "+" ? "#3ecf8e" : "#f87171"}" onclick="flipSign()">${f.sign === "+" ? "+" : "−"}</button>
+        <button class="btns" style="flex:0 0 44px;height:39px;padding:0;font-size:18px;color:#e8e0d0" onclick="flipSign()">${f.sign === "+" ? "+" : "−"}</button>
         <input class="inp" style="flex:1;min-width:0" inputmode="numeric" placeholder="${parlay ? "600" : "110"}" value="${esc(f.odds)}" oninput="setF('odds',this.value)"/>
       </div>
     </div>
