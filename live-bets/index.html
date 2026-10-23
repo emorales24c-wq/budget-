@@ -61,6 +61,7 @@ const S = {
   editing: null,     // id of the bet loaded into the form
   history: load("lb_hist", []),   // settled bets: {id, at, title, legs, stake, odds, parlay, result}
   tab: "live",       // live | pnl
+  flash: [],         // bets just moved to Ganancias, shown in a banner for a few seconds
   lockMode: false,
   err: ""
 };
@@ -270,9 +271,15 @@ const statusOf = b => (b.parlay ? evalParlay(b) : evalBet(b)).status;
 const FINAL = ["won", "lost", "push", "void"];
 const legTxt = l => `${l.player} ${sideLabel(l)} ${l.stat}`;
 
-// Move bets to the P&L history once they're decided and their games have ended
+// Move bets to the P&L history as soon as they're decided: a won over or a lost
+// under/parlay leg can't change, so it counts right away. A push or a player who
+// didn't play is only known once the game is over.
 function archiveSettled(){
-  const done = S.bets.filter(b => FINAL.includes(statusOf(b)) && legsOf(b).every(l => S.live[l.game]?.state === "post"));
+  const done = S.bets.filter(b => {
+    const st = statusOf(b);
+    if (st === "won" || st === "lost") return true;
+    return FINAL.includes(st) && legsOf(b).every(l => S.live[l.game]?.state === "post");
+  });
   if (!done.length) return;
   for (const b of done) {
     const legs = legsOf(b).map(l => {
@@ -280,12 +287,16 @@ function archiveSettled(){
       return `${{won:"✅", lost:"❌", push:"➖", void:"⚪"}[r.status] || ""} ${legTxt(l)} · ${r.cur}`;
     });
     const st = statusOf(b);
-    S.history.unshift({id: b.id, at: Date.now(), parlay: !!b.parlay,
+    const rec = {id: b.id, at: Date.now(), parlay: !!b.parlay,
       title: b.parlay ? `Parlay · ${b.legs.length} piernas` : legTxt(b),
-      legs, stake: b.stake, odds: b.odds, result: st === "void" ? "push" : st});
+      legs, stake: b.stake, odds: b.odds, result: st === "void" ? "push" : st};
+    if (!S.history.some(h => h.id === rec.id)) S.history.unshift(rec);
+    S.flash.push(rec);
   }
   S.bets = S.bets.filter(b => !done.includes(b));
   save();
+  clearTimeout(S._flashTimer);
+  S._flashTimer = setTimeout(() => { S.flash = []; render(); }, 10000);
 }
 
 const profitOf = h => h.result === "won" ? payout(h) : h.result === "lost" ? -h.stake : 0;
@@ -546,6 +557,16 @@ function render(){
     <button class="btns ${S.tab === "live" ? "on" : ""}" onclick="setTab('live')">🎯 En vivo${S.bets.length ? ` (${S.bets.length})` : ""}</button>
     <button class="btns ${S.tab === "pnl" ? "on" : ""}" onclick="setTab('pnl')">📊 Ganancias</button>
   </div>
+  ${S.flash.map(x => {
+    const v = profitOf(x), won = x.result === "won";
+    return `<div class="card" style="padding:12px;border-color:${won ? "rgba(62,207,142,.4)" : x.result === "lost" ? "rgba(248,113,113,.35)" : "rgba(255,255,255,.1)"}">
+      <div style="display:flex;align-items:center;gap:8px;font-size:13px">
+        <span>${{won: "✅ Ganada", lost: "❌ Perdida", push: "➖ Push"}[x.result]} · ${esc(x.title)}</span>
+        <span style="margin-left:auto;color:${v > 0 ? "#3ecf8e" : v < 0 ? "#f87171" : "#a0998a"}">${x.stake ? money(v) : ""}</span>
+      </div>
+      <div class="muted" style="margin-top:4px">Movida a 📊 Ganancias</div>
+    </div>`;
+  }).join("")}
   ${NATIVE || S.tab !== "live" ? "" : `<div class="row" style="margin-bottom:12px">
     <button class="btns ${S.lockMode ? "on" : ""}" onclick="toggleLock()">${S.lockMode ? "🔒 Lock screen ON" : "🔒 Activar lock screen"}</button>
     <button class="btns ${typeof Notification !== "undefined" && Notification.permission === "granted" ? "on" : ""}" onclick="askNotif()">🔔 Notificaciones</button>

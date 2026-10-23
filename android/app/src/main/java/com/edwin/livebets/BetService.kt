@@ -50,7 +50,7 @@ class BetService : Service() {
     private lateinit var handler: Handler
     private lateinit var nm: NotificationManager
     private var wakeLock: PowerManager.WakeLock? = null
-    private val settled = mutableSetOf<Long>()   // bets whose final notification was posted
+    private lateinit var settled: MutableSet<Long>   // bets whose final notification was posted
     private val posted = mutableSetOf<Int>()     // notification ids currently shown
     private val finalIds = mutableSetOf<Int>()   // ids showing a won/lost result
 
@@ -66,6 +66,7 @@ class BetService : Service() {
     override fun onCreate() {
         super.onCreate()
         nm = getSystemService(NotificationManager::class.java)
+        settled = BetStore.loadSettled(this)
         createChannels()
         thread = HandlerThread("bets").apply { start() }
         handler = Handler(thread.looper)
@@ -155,7 +156,7 @@ class BetService : Service() {
         val ids = bets.map { notifId(it) }.toSet()
         // Bets deleted in the app (results moved to the history keep their notification)
         (posted - ids).forEach { if (it !in finalIds) nm.cancel(it); posted.remove(it) }
-        settled.retainAll(bets.map { it.id }.toSet())
+        if (settled.retainAll(bets.map { it.id }.toSet())) BetStore.saveSettled(this, settled)
 
         val open = bets.filter { it.id !in settled }
         if (open.isEmpty()) return null
@@ -362,6 +363,7 @@ class BetService : Service() {
         val id = notifId(b)
         if (settledNow) {
             settled.add(b.id)
+            BetStore.saveSettled(this, settled)
             finalIds.add(id)
         } else {
             nb.setDeleteIntent(

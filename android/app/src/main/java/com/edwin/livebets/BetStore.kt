@@ -33,6 +33,16 @@ object BetStore {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, json).apply()
     }
 
+    // Bets whose won/lost alert already went out, so a restarted service doesn't ring again
+    fun loadSettled(ctx: Context): MutableSet<Long> =
+        (ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("settled", "") ?: "")
+            .split(",").mapNotNull { it.toLongOrNull() }.toMutableSet()
+
+    fun saveSettled(ctx: Context, ids: Set<Long>) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString("settled", ids.joinToString(",")).apply()
+    }
+
     fun load(ctx: Context): List<Bet> {
         val raw = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, "[]") ?: "[]"
         val arr = try { JSONArray(raw) } catch (e: Exception) { JSONArray() }
