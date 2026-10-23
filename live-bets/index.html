@@ -58,6 +58,9 @@ const S = {
   form: {game:"", player:"", stat:"REB", side:"over", line:"", stake:"", odds:""},
   mode: "single",    // single | parlay
   draft: [],         // parlay legs being built
+  editing: null,     // id of the bet loaded into the form
+  history: load("lb_hist", []),   // settled bets: {id, at, title, legs, stake, odds, parlay, result}
+  tab: "live",       // live | pnl
   lockMode: false,
   err: ""
 };
@@ -66,7 +69,10 @@ function load(k, d){ try { return JSON.parse(localStorage.getItem(k)) ?? d; } ca
 // Inside the Android app, the native side shows the lock screen notifications
 const NATIVE = typeof window.Android !== "undefined";
 function save(){
-  try { localStorage.setItem("lb_bets", JSON.stringify(S.bets)); } catch {}
+  try {
+    localStorage.setItem("lb_bets", JSON.stringify(S.bets));
+    localStorage.setItem("lb_hist", JSON.stringify(S.history));
+  } catch {}
   if (NATIVE) Android.syncBets(JSON.stringify(S.bets.map(({_lastKey, _lastStatus, ...b}) => b)));
 }
 const norm = s => (s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z ]/g,"").trim();
@@ -184,6 +190,30 @@ function evalParlay(b){
 
 const statusOf = b => (b.parlay ? evalParlay(b) : evalBet(b)).status;
 
+const FINAL = ["won", "lost", "push", "void"];
+const legTxt = l => `${l.player} ${l.side === "over" ? "O" : "U"}${l.line} ${l.stat}`;
+
+// Move bets to the P&L history once they're decided and their games have ended
+function archiveSettled(){
+  const done = S.bets.filter(b => FINAL.includes(statusOf(b)) && legsOf(b).every(l => S.live[l.game]?.state === "post"));
+  if (!done.length) return;
+  for (const b of done) {
+    const legs = legsOf(b).map(l => {
+      const r = evalBet(l);
+      return `${{won:"✅", lost:"❌", push:"➖", void:"⚪"}[r.status] || ""} ${legTxt(l)} · ${r.cur}`;
+    });
+    const st = statusOf(b);
+    S.history.unshift({id: b.id, at: Date.now(), parlay: !!b.parlay,
+      title: b.parlay ? `Parlay · ${b.legs.length} piernas` : legTxt(b),
+      legs, stake: b.stake, odds: b.odds, result: st === "void" ? "push" : st});
+  }
+  S.bets = S.bets.filter(b => !done.includes(b));
+  save();
+}
+
+const profitOf = h => h.result === "won" ? payout(h) : h.result === "lost" ? -h.stake : 0;
+const money = v => `${v >= 0 ? "+" : "-"}$${Math.abs(v).toFixed(2)}`;
+
 function payout(b){
   if (!b.stake) return 0;
   const o = parseFloat(b.odds) || (b.parlay ? 0 : -110);
@@ -204,6 +234,7 @@ async function poll(){
     catch (e) { S.err = "Error actualizando (" + e.message + ")"; }
   }));
   for (const b of S.bets) notifyBet(b);
+  archiveSettled();
   updateMediaSession();
   render();
 }
@@ -345,7 +376,7 @@ function formLeg(){
 function addBet(){
   const leg = formLeg(), f = S.form;
   if (!leg) return;
-  S.bets.push({id: Date.now(), ...leg, stake: parseFloat(f.stake) || 0, odds: f.odds});
+  putBet({id: Date.now(), ...leg, stake: parseFloat(f.stake) || 0, odds: f.odds});
   f.player = ""; f.line = ""; f.stake = ""; f.odds = ""; S.err = "";
   save(); poll();
 }
@@ -361,13 +392,51 @@ function addLeg(){
 function saveParlay(){
   const f = S.form;
   if (S.draft.length < 2) { S.err = "Un parlay necesita 2 piernas o más"; return render(); }
-  S.bets.push({id: Date.now(), parlay: true, legs: S.draft, stake: parseFloat(f.stake) || 0, odds: f.odds});
+  putBet({id: Date.now(), parlay: true, legs: S.draft, stake: parseFloat(f.stake) || 0, odds: f.odds});
   S.draft = []; f.stake = ""; f.odds = ""; S.err = "";
   save(); poll();
 }
 
 function delLeg(i){ S.draft.splice(i, 1); render(); }
-function setMode(m){ S.mode = m; S.err = ""; render(); }
+
+// Put a saved leg back into the form fields
+function fillForm(l){
+  Object.assign(S.form, {game: l.game, player: l.player, stat: l.stat, side: l.side, line: String(l.line)});
+  if (!S.games.some(g => g.id === l.game)) S.games.push({id: l.game, name: l.gameName, detail: "", teams: []});
+  loadRoster(l.game);
+}
+
+function editBet(id){
+  const b = S.bets.find(x => x.id === id);
+  if (!b) return;
+  S.editing = id; S.err = "";
+  S.form.stake = b.stake ? String(b.stake) : ""; S.form.odds = b.odds || "";
+  if (b.parlay) { S.mode = "parlay"; S.draft = b.legs.map(l => ({...l})); S.form.player = ""; S.form.line = ""; }
+  else { S.mode = "single"; S.draft = []; fillForm(b); }
+  render();
+  document.getElementById("form")?.scrollIntoView({behavior: "smooth"});
+}
+
+function editLeg(i){ fillForm(S.draft[i]); S.draft.splice(i, 1); render(); }
+
+function cancelEdit(){
+  S.editing = null; S.draft = []; S.err = "";
+  Object.assign(S.form, {player: "", line: "", stake: "", odds: ""});
+  render();
+}
+
+// New bets are appended; an edited bet takes the old one's place (with a new id so
+// its notification starts fresh)
+function putBet(bet){
+  const i = S.bets.findIndex(b => b.id === S.editing);
+  if (i >= 0) S.bets[i] = bet; else S.bets.push(bet);
+  S.editing = null;
+}
+
+function setTab(t){ S.tab = t; render(); }
+function setResult(id, r){ const h = S.history.find(x => x.id === id); if (h) { h.result = r; save(); render(); } }
+function delHist(id){ if (confirm("¿Borrar esta apuesta del historial?")) { S.history = S.history.filter(h => h.id !== id); save(); render(); } }
+function setMode(m){ if (S.editing) return; S.mode = m; S.err = ""; render(); }
 function delBet(id){ S.bets = S.bets.filter(b => b.id !== id); save(); render(); }
 function setF(k, v){ S.form[k] = v; if (k === "game") S.form.player = "";
   if (k !== "line" && k !== "stake" && k !== "odds") render(); }
@@ -377,26 +446,29 @@ function render(){
   const g = S.live[f.game];
   const roster = S.rosters[f.game] || [];
   const liveNames = g ? Object.values(g.players).map(p => p.name) : [];
-  const pnl = S.bets.reduce((s,b) => {
-    const st = statusOf(b);
-    return s + (st === "won" ? payout(b) : st === "lost" ? -b.stake : 0);
-  }, 0);
+  const pnl = S.history.reduce((s, x) => s + profitOf(x), 0);
 
   let h = `
   <div style="text-align:center;margin-bottom:18px;padding-top:8px">
     <div class="tag" style="margin-bottom:6px">nba · player props en vivo</div>
     <h1 style="font-family:'Playfair Display',serif;font-size:34px;font-weight:900;background:linear-gradient(135deg,#e8e0d0,#e07b54);-webkit-background-clip:text;-webkit-text-fill-color:transparent">Live Bets</h1>
-    ${S.bets.length ? `<div class="muted" style="margin-top:6px">P&L: <span style="color:${pnl >= 0 ? "#3ecf8e" : "#f87171"}">${pnl >= 0 ? "+" : "-"}$${Math.abs(pnl).toFixed(2)}</span></div>` : ""}
+    ${S.history.length ? `<div class="muted" style="margin-top:6px">P&L total: <span style="color:${pnl >= 0 ? "#3ecf8e" : "#f87171"}">${money(pnl)}</span></div>` : ""}
   </div>
-  ${NATIVE ? "" : `<div class="row" style="margin-bottom:12px">
+  <div class="row" style="margin-bottom:12px">
+    <button class="btns ${S.tab === "live" ? "on" : ""}" onclick="setTab('live')">🎯 En vivo${S.bets.length ? ` (${S.bets.length})` : ""}</button>
+    <button class="btns ${S.tab === "pnl" ? "on" : ""}" onclick="setTab('pnl')">📊 Ganancias</button>
+  </div>
+  ${NATIVE || S.tab !== "live" ? "" : `<div class="row" style="margin-bottom:12px">
     <button class="btns ${S.lockMode ? "on" : ""}" onclick="toggleLock()">${S.lockMode ? "🔒 Lock screen ON" : "🔒 Activar lock screen"}</button>
     <button class="btns ${typeof Notification !== "undefined" && Notification.permission === "granted" ? "on" : ""}" onclick="askNotif()">🔔 Notificaciones</button>
   </div>`}`;
 
-  for (const b of S.bets) h += b.parlay ? parlayCard(b) : betCard(b);
-
-  h += formCard(f, g, roster, liveNames) + `
+  if (S.tab === "pnl") h += pnlView();
+  else {
+    for (const b of S.bets) h += b.parlay ? parlayCard(b) : betCard(b);
+    h += formCard(f, g, roster, liveNames) + `
   <div class="muted" style="text-align:center;line-height:1.6">Se actualiza cada ${POLL_MS / 1000}s · datos de ESPN (~10-30s de retraso)</div>`;
+  }
 
   // Don't wipe the input the user is typing in
   const a = document.activeElement;
@@ -416,7 +488,7 @@ function betCard(b){
         <div style="font-size:14px">${esc(r.p?.name || b.player)}</div>
         <div class="muted">${b.side === "over" ? "Over" : "Under"} ${b.line} ${b.stat}${b.stake ? ` · $${b.stake} → $${payout(b).toFixed(2)}` : ""}</div>
       </div>
-      <button class="btnd" onclick="delBet(${b.id})">✕</button>
+      <div style="display:flex;gap:6px"><button class="btns" style="padding:4px 10px" onclick="editBet(${b.id})">✏️</button><button class="btnd" onclick="delBet(${b.id})">✕</button></div>
     </div>
     <div style="display:flex;align-items:baseline;gap:8px;margin-top:10px">
       <span class="big" style="color:${color}">${r.cur}</span><span class="muted">/ ${b.line}</span>
@@ -436,7 +508,7 @@ function parlayCard(b){
         <div style="font-size:14px">Parlay · ${b.legs.length} piernas</div>
         <div class="muted">${b.stake ? `$${b.stake} → $${payout(b).toFixed(2)}${b.odds ? ` (${esc(b.odds)})` : ""}` : esc(b.odds || "")}</div>
       </div>
-      <button class="btnd" onclick="delBet(${b.id})">✕</button>
+      <div style="display:flex;gap:6px"><button class="btns" style="padding:4px 10px" onclick="editBet(${b.id})">✏️</button><button class="btnd" onclick="delBet(${b.id})">✕</button></div>
     </div>
     <div style="display:flex;align-items:baseline;gap:8px;margin:10px 0 4px">
       <span class="big" style="color:${COLORS[pr.status]}">${pr.hits}</span><span class="muted">/ ${b.legs.length} ✅</span>
@@ -455,17 +527,69 @@ function parlayCard(b){
   </div>`;
 }
 
+function pnlView(){
+  const H = S.history, day = 864e5, now = Date.now();
+  const sum = list => list.reduce((s, x) => s + profitOf(x), 0);
+  const startToday = new Date(); startToday.setHours(0, 0, 0, 0);
+  const today = sum(H.filter(x => x.at >= startToday.getTime()));
+  const week = sum(H.filter(x => now - x.at < 7 * day)), month = sum(H.filter(x => now - x.at < 30 * day));
+  const total = sum(H);
+  const w = H.filter(x => x.result === "won").length, l = H.filter(x => x.result === "lost").length;
+  const p = H.length - w - l;
+  const staked = H.reduce((s, x) => s + (x.stake || 0), 0);
+  const open = S.bets.reduce((s, b) => s + (b.stake || 0), 0);
+  const toWin = S.bets.reduce((s, b) => s + payout(b), 0);
+  const col = v => v >= 0 ? "#3ecf8e" : "#f87171";
+  const tile = (label, val, c) => `<div style="flex:1;min-width:0;background:rgba(255,255,255,.03);border-radius:10px;padding:10px">
+    <div class="tag">${label}</div><div style="font-size:15px;margin-top:4px;color:${c || "#e8e0d0"}">${val}</div></div>`;
+
+  let h = `<div class="card" style="text-align:center">
+    <div class="tag">ganancia / pérdida total</div>
+    <div class="big" style="font-size:44px;margin-top:8px;color:${col(total)}">${money(total)}</div>
+    <div class="muted" style="margin-top:6px">${w}-${l}${p ? `-${p}` : ""} · ${w + l ? Math.round(w / (w + l) * 100) : 0}% acierto · ROI ${staked ? (total / staked * 100).toFixed(1) : "0.0"}%</div>
+  </div>
+  <div class="row" style="margin-bottom:8px">${tile("hoy", money(today), col(today))}${tile("7 días", money(week), col(week))}${tile("30 días", money(month), col(month))}</div>
+  <div class="row" style="margin-bottom:12px">${tile("apostado", "$" + staked.toFixed(2))}${tile("en juego", "$" + open.toFixed(2))}${tile("por cobrar", "+$" + toWin.toFixed(2))}</div>`;
+
+  if (!H.length) return h + `<div class="muted" style="text-align:center;padding:20px">Cuando tus apuestas terminen aparecen aquí con lo que ganaste o perdiste.</div>`;
+
+  h += `<div class="tag" style="margin:6px 0 10px">historial</div>`;
+  for (const x of H) {
+    const v = profitOf(x);
+    const btn = (r, t) => `<button class="btns ${x.result === r ? "on" : ""}" style="padding:3px 8px;font-size:10px" onclick="setResult(${x.id},'${r}')">${t}</button>`;
+    h += `<div class="card" style="padding:12px">
+      <div style="display:flex;align-items:flex-start;gap:8px">
+        <div style="min-width:0">
+          <div style="font-size:13px">${esc(x.title)}</div>
+          <div class="muted">${new Date(x.at).toLocaleDateString("es", {day: "numeric", month: "short"})}${x.stake ? ` · $${x.stake}` : ""}${x.odds ? ` · ${esc(x.odds)}` : ""}</div>
+        </div>
+        <div style="margin-left:auto;font-size:15px;color:${v > 0 ? "#3ecf8e" : v < 0 ? "#f87171" : "#a0998a"}">${x.stake ? money(v) : {won: "✅", lost: "❌", push: "➖"}[x.result]}</div>
+      </div>
+      <div class="muted" style="margin-top:6px;line-height:1.6">${x.legs.map(esc).join("<br>")}</div>
+      <div style="display:flex;gap:6px;margin-top:8px;align-items:center">
+        ${btn("won", "✅ Ganada")}${btn("lost", "❌ Perdida")}${btn("push", "➖ Push")}
+        <button class="btnd" style="margin-left:auto" onclick="delHist(${x.id})">✕</button>
+      </div>
+    </div>`;
+  }
+  return h;
+}
+
 function formCard(f, g, roster, liveNames){
   const parlay = S.mode === "parlay";
-  return `<div class="card">
-    <div class="row" style="margin-bottom:12px">
+  return `<div class="card" id="form" style="${S.editing ? "border-color:rgba(250,204,21,.4)" : ""}">
+    ${S.editing ? `<div style="display:flex;align-items:center;margin-bottom:12px">
+      <span style="font-size:12px;color:#facc15">✏️ Editando ${parlay ? "parlay" : "apuesta"}</span>
+      <button class="btns" style="margin-left:auto;padding:4px 10px" onclick="cancelEdit()">Cancelar</button>
+    </div>` : `<div class="row" style="margin-bottom:12px">
       <button class="btns ${parlay ? "" : "on"}" onclick="setMode('single')">Sencilla</button>
       <button class="btns ${parlay ? "on" : ""}" onclick="setMode('parlay')">Parlay</button>
-    </div>
+    </div>`}
     ${parlay && S.draft.length ? `<div style="margin-bottom:12px">${S.draft.map((l, i) => `
       <div style="display:flex;align-items:center;font-size:12px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)">
         <span>${i + 1}. ${esc(l.player)} ${l.side === "over" ? "O" : "U"}${l.line} ${l.stat}</span>
-        <button class="btnd" style="margin-left:auto" onclick="delLeg(${i})">✕</button>
+        <button class="btns" style="margin-left:auto;padding:3px 8px" onclick="editLeg(${i})">✏️</button>
+        <button class="btnd" style="margin-left:6px" onclick="delLeg(${i})">✕</button>
       </div>`).join("")}</div>` : ""}
     <select class="inp" onchange="setF('game',this.value);loadRoster(this.value);poll()">
       ${S.games.length ? S.games.map(x => `<option value="${x.id}" ${x.id === f.game ? "selected" : ""}>${esc(x.name)} · ${esc(x.detail)}</option>`).join("") : `<option>Cargando juegos…</option>`}
@@ -489,8 +613,8 @@ function formCard(f, g, roster, liveNames){
       <input class="inp" inputmode="numeric" placeholder="${parlay ? "Odds (+600)" : "Odds (-110)"}" value="${esc(f.odds)}" oninput="setF('odds',this.value)"/>
     </div>
     ${parlay
-      ? `<button class="btnp" style="width:100%" onclick="saveParlay()">Guardar parlay (${S.draft.length} piernas)</button>`
-      : `<button class="btnp" style="width:100%" onclick="addBet()">+ Agregar apuesta</button>`}
+      ? `<button class="btnp" style="width:100%" onclick="saveParlay()">${S.editing ? "Guardar cambios" : "Guardar parlay"} (${S.draft.length} piernas)</button>`
+      : `<button class="btnp" style="width:100%" onclick="addBet()">${S.editing ? "Guardar cambios" : "+ Agregar apuesta"}</button>`}
     ${S.err ? `<div class="err">${esc(S.err)}</div>` : ""}
   </div>`;
 }

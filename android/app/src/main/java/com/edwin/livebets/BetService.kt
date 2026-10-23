@@ -45,6 +45,7 @@ class BetService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private val settled = mutableSetOf<Long>()   // bets whose final notification was posted
     private val posted = mutableSetOf<Int>()     // notification ids currently shown
+    private val finalIds = mutableSetOf<Int>()   // ids showing a won/lost result
 
     private val tick = object : Runnable {
         override fun run() {
@@ -106,8 +107,8 @@ class BetService : Service() {
     private fun poll(): Long? {
         val bets = BetStore.load(this)
         val ids = bets.map { notifId(it) }.toSet()
-        // Bets deleted in the app
-        (posted - ids).forEach { nm.cancel(it); posted.remove(it) }
+        // Bets deleted in the app (results moved to the history keep their notification)
+        (posted - ids).forEach { if (it !in finalIds) nm.cancel(it); posted.remove(it) }
         settled.retainAll(bets.map { it.id }.toSet())
 
         val open = bets.filter { it.id !in settled }
@@ -232,6 +233,7 @@ class BetService : Service() {
                 nb.setContentText(text + money)
             }
             settled.add(b.id)
+            finalIds.add(notifId(b))
         }
 
         val id = notifId(b)
