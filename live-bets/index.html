@@ -53,9 +53,11 @@ const COLS = {
 const S = {
   bets: load("lb_bets", []),
   games: [],
-  live: {},
-  rosters: {},       // gameId -> [{abbr, names}]          // eventId -> {state, detail, score, players:{normName:{name,stats}}}
+  live: {},          // eventId -> {state, detail, score, players:{normName:{name,stats}}}
+  rosters: {},       // gameId -> [{abbr, names}]
   form: {game:"", player:"", stat:"REB", side:"over", line:"", stake:"", odds:""},
+  mode: "single",    // single | parlay
+  draft: [],         // parlay legs being built
   lockMode: false,
   err: ""
 };
@@ -165,9 +167,27 @@ function evalBet(b){
   return {cur, status, live, p};
 }
 
+// A parlay is {id, parlay:true, legs:[...], stake, odds}; a single bet is its own only leg
+const legsOf = b => b.parlay ? b.legs : [b];
+
+function evalParlay(b){
+  const rs = b.legs.map(evalBet);
+  const hits = rs.filter(r => r.status === "won").length;
+  const counted = rs.filter(r => r.status !== "push" && r.status !== "void").length;
+  let status;
+  if (rs.some(r => r.status === "lost")) status = "lost";
+  else if (rs.every(r => ["won","push","void"].includes(r.status))) status = hits ? "won" : "push";
+  else if (rs.some(r => r.status === "live" || r.status === "won")) status = "live";
+  else status = "pending";
+  return {rs, hits, counted, status};
+}
+
+const statusOf = b => (b.parlay ? evalParlay(b) : evalBet(b)).status;
+
 function payout(b){
   if (!b.stake) return 0;
-  const o = parseFloat(b.odds) || -110;
+  const o = parseFloat(b.odds) || (b.parlay ? 0 : -110);
+  if (!o) return 0;
   return o > 0 ? b.stake * o / 100 : b.stake * 100 / -o;
 }
 
@@ -177,7 +197,7 @@ function barText(cur, line){
 }
 
 async function poll(){
-  const ids = [...new Set([...S.bets.map(b => b.game), S.form.game].filter(Boolean))];
+  const ids = [...new Set([...S.bets.flatMap(legsOf), ...S.draft].map(l => l.game).concat(S.form.game).filter(Boolean))];
   await Promise.all(ids.map(async id => {
     if (S.live[id]?.state === "post") return;
     try { S.live[id] = parseSummary(await getJSON(API + "/summary?event=" + id)); S.err = ""; }
@@ -191,6 +211,7 @@ async function poll(){
 // ---------- lock screen: notifications ----------
 async function notifyBet(b){
   if (!("Notification" in window) || Notification.permission !== "granted") return;
+  if (b.parlay) return notifyParlay(b);
   const r = evalBet(b);
   if (!r.live || r.live.state === "pre") return;
   const key = r.cur + "|" + r.status + "|" + r.live.detail;
@@ -208,6 +229,21 @@ async function notifyBet(b){
     requireInteraction: true,
     icon: "icon.svg",
     vibrate: changed ? [200, 100, 200] : undefined
+  });
+}
+
+async function notifyParlay(b){
+  const pr = evalParlay(b);
+  const key = pr.rs.map(r => r.cur + r.status).join("|") + pr.status;
+  if (b._lastKey === key) return;
+  const changed = b._lastStatus && b._lastStatus !== pr.status;
+  b._lastKey = key; b._lastStatus = pr.status;
+  const icon = {won:"✅", lost:"❌", push:"➖"}[pr.status] || "🔴";
+  const reg = await navigator.serviceWorker?.ready;
+  if (!reg) return;
+  reg.showNotification(`${icon} Parlay ${pr.hits}/${b.legs.length} ✅`, {
+    body: b.legs.map((l, i) => `${{won:"✅", lost:"❌"}[pr.rs[i].status] || "•"} ${lastName(l.player)} ${pr.rs[i].cur}/${l.line} ${l.stat}`).join("\n"),
+    tag: "bet-" + b.id, renotify: !!changed, silent: !changed, requireInteraction: true, icon: "icon.svg"
   });
 }
 
@@ -282,7 +318,7 @@ function drawArt(items){
 
 function updateMediaSession(){
   if (!S.lockMode || !("mediaSession" in navigator)) return;
-  const items = S.bets.map(b => ({b, r: evalBet(b)}));
+  const items = S.bets.flatMap(legsOf).map(b => ({b, r: evalBet(b)}));
   const first = items.find(x => x.r.status === "live") || items[0];
   if (!first) {
     navigator.mediaSession.metadata = new MediaMetadata({title:"Sin apuestas", artist:"Agrega una en Live Bets"});
@@ -298,16 +334,40 @@ function updateMediaSession(){
 }
 
 // ---------- UI ----------
-function addBet(){
+function formLeg(){
   const f = S.form;
   const line = parseFloat(f.line);
-  if (!f.game || !f.player.trim() || isNaN(line)) { S.err = "Llena juego, jugador y línea"; return render(); }
-  S.bets.push({id: Date.now(), game: f.game, gameName: S.games.find(g => g.id === f.game)?.name || "",
-    player: f.player.trim(), stat: f.stat, side: f.side, line, stake: parseFloat(f.stake) || 0, odds: f.odds});
+  if (!f.game || !f.player.trim() || isNaN(line)) { S.err = "Llena juego, jugador y línea"; render(); return null; }
+  return {game: f.game, gameName: S.games.find(g => g.id === f.game)?.name || "",
+    player: f.player.trim(), stat: f.stat, side: f.side, line};
+}
+
+function addBet(){
+  const leg = formLeg(), f = S.form;
+  if (!leg) return;
+  S.bets.push({id: Date.now(), ...leg, stake: parseFloat(f.stake) || 0, odds: f.odds});
   f.player = ""; f.line = ""; f.stake = ""; f.odds = ""; S.err = "";
   save(); poll();
 }
 
+function addLeg(){
+  const leg = formLeg();
+  if (!leg) return;
+  S.draft.push(leg);
+  S.form.player = ""; S.form.line = ""; S.err = "";
+  render();
+}
+
+function saveParlay(){
+  const f = S.form;
+  if (S.draft.length < 2) { S.err = "Un parlay necesita 2 piernas o más"; return render(); }
+  S.bets.push({id: Date.now(), parlay: true, legs: S.draft, stake: parseFloat(f.stake) || 0, odds: f.odds});
+  S.draft = []; f.stake = ""; f.odds = ""; S.err = "";
+  save(); poll();
+}
+
+function delLeg(i){ S.draft.splice(i, 1); render(); }
+function setMode(m){ S.mode = m; S.err = ""; render(); }
 function delBet(id){ S.bets = S.bets.filter(b => b.id !== id); save(); render(); }
 function setF(k, v){ S.form[k] = v; if (k === "game") S.form.player = "";
   if (k !== "line" && k !== "stake" && k !== "odds") render(); }
@@ -318,7 +378,7 @@ function render(){
   const roster = S.rosters[f.game] || [];
   const liveNames = g ? Object.values(g.players).map(p => p.name) : [];
   const pnl = S.bets.reduce((s,b) => {
-    const st = evalBet(b).status;
+    const st = statusOf(b);
     return s + (st === "won" ? payout(b) : st === "lost" ? -b.stake : 0);
   }, 0);
 
@@ -333,31 +393,80 @@ function render(){
     <button class="btns ${typeof Notification !== "undefined" && Notification.permission === "granted" ? "on" : ""}" onclick="askNotif()">🔔 Notificaciones</button>
   </div>`}`;
 
-  for (const b of S.bets) {
-    const r = evalBet(b);
-    const color = {won:"#3ecf8e", lost:"#f87171", push:"#a0998a", void:"#a0998a"}[r.status]
-      || (b.side === "over" ? "#e07b54" : (r.cur >= b.line - 1 ? "#facc15" : "#5b8dee"));
-    const label = {won:"✅ GANADA", lost:"❌ PERDIDA", push:"➖ PUSH", void:"⚪ NO JUGÓ", pending:"⏳ " + (r.live?.detail || b.gameName), live:""}[r.status];
-    const max = Math.max(b.line, r.cur) * 1.25 || 1;
-    h += `<div class="card" style="border-color:${r.status === "won" ? "rgba(62,207,142,.35)" : r.status === "lost" ? "rgba(248,113,113,.3)" : "rgba(255,255,255,.07)"}">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <div>
-          <div style="font-size:14px">${esc(r.p?.name || b.player)}</div>
-          <div class="muted">${b.side === "over" ? "Over" : "Under"} ${b.line} ${b.stat}${b.stake ? ` · $${b.stake} → $${payout(b).toFixed(2)}` : ""}</div>
-        </div>
-        <button class="btnd" onclick="delBet(${b.id})">✕</button>
-      </div>
-      <div style="display:flex;align-items:baseline;gap:8px;margin-top:10px">
-        <span class="big" style="color:${color}">${r.cur}</span><span class="muted">/ ${b.line}</span>
-        <span style="margin-left:auto;font-size:11px">${r.status === "live" ? `<span class="pulse"></span>${esc(r.live.detail)}` : label}</span>
-      </div>
-      <div class="bar"><div class="bfill" style="width:${r.cur / max * 100}%;background:${color}"></div><div class="bline" style="left:${b.line / max * 100}%"></div></div>
-      <div class="muted">${r.live ? esc(r.live.score) : esc(b.gameName)}${r.live && r.live.state !== "pre" && !r.p ? " · jugador aún sin stats" : ""}</div>
-    </div>`;
-  }
+  for (const b of S.bets) h += b.parlay ? parlayCard(b) : betCard(b);
 
-  h += `<div class="card">
-    <div class="tag" style="margin-bottom:12px">nueva apuesta</div>
+  h += formCard(f, g, roster, liveNames) + `
+  <div class="muted" style="text-align:center;line-height:1.6">Se actualiza cada ${POLL_MS / 1000}s · datos de ESPN (~10-30s de retraso)</div>`;
+
+  // Don't wipe the input the user is typing in
+  const a = document.activeElement;
+  if (a && a.tagName === "INPUT" && document.getElementById("app").contains(a)) return;
+  document.getElementById("app").innerHTML = h;
+}
+
+function betCard(b){
+  const r = evalBet(b);
+  const color = {won:"#3ecf8e", lost:"#f87171", push:"#a0998a", void:"#a0998a"}[r.status]
+    || (b.side === "over" ? "#e07b54" : (r.cur >= b.line - 1 ? "#facc15" : "#5b8dee"));
+  const label = {won:"✅ GANADA", lost:"❌ PERDIDA", push:"➖ PUSH", void:"⚪ NO JUGÓ", pending:"⏳ " + (r.live?.detail || b.gameName), live:""}[r.status];
+  const max = Math.max(b.line, r.cur) * 1.25 || 1;
+  return `<div class="card" style="border-color:${r.status === "won" ? "rgba(62,207,142,.35)" : r.status === "lost" ? "rgba(248,113,113,.3)" : "rgba(255,255,255,.07)"}">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <div style="font-size:14px">${esc(r.p?.name || b.player)}</div>
+        <div class="muted">${b.side === "over" ? "Over" : "Under"} ${b.line} ${b.stat}${b.stake ? ` · $${b.stake} → $${payout(b).toFixed(2)}` : ""}</div>
+      </div>
+      <button class="btnd" onclick="delBet(${b.id})">✕</button>
+    </div>
+    <div style="display:flex;align-items:baseline;gap:8px;margin-top:10px">
+      <span class="big" style="color:${color}">${r.cur}</span><span class="muted">/ ${b.line}</span>
+      <span style="margin-left:auto;font-size:11px">${r.status === "live" ? `<span class="pulse"></span>${esc(r.live.detail)}` : label}</span>
+    </div>
+    <div class="bar"><div class="bfill" style="width:${r.cur / max * 100}%;background:${color}"></div><div class="bline" style="left:${b.line / max * 100}%"></div></div>
+    <div class="muted">${r.live ? esc(r.live.score) : esc(b.gameName)}${r.live && r.live.state !== "pre" && !r.p ? " · jugador aún sin stats" : ""}</div>
+  </div>`;
+}
+
+function parlayCard(b){
+  const pr = evalParlay(b);
+  const label = {won:"✅ GANADO", lost:"❌ PERDIDO", push:"➖ PUSH", pending:"⏳ Pendiente", live:'<span class="pulse"></span>En vivo'}[pr.status];
+  return `<div class="card" style="border-color:${pr.status === "won" ? "rgba(62,207,142,.35)" : pr.status === "lost" ? "rgba(248,113,113,.3)" : "rgba(224,123,84,.25)"}">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <div style="font-size:14px">Parlay · ${b.legs.length} piernas</div>
+        <div class="muted">${b.stake ? `$${b.stake} → $${payout(b).toFixed(2)}${b.odds ? ` (${esc(b.odds)})` : ""}` : esc(b.odds || "")}</div>
+      </div>
+      <button class="btnd" onclick="delBet(${b.id})">✕</button>
+    </div>
+    <div style="display:flex;align-items:baseline;gap:8px;margin:10px 0 4px">
+      <span class="big" style="color:${COLORS[pr.status]}">${pr.hits}</span><span class="muted">/ ${b.legs.length} ✅</span>
+      <span style="margin-left:auto;font-size:11px">${label}</span>
+    </div>
+    ${b.legs.map((l, i) => {
+      const r = pr.rs[i], col = COLORS[r.status], max = Math.max(l.line, r.cur) * 1.25 || 1;
+      const ic = {won:"✅", lost:"❌", push:"➖", void:"⚪"}[r.status] || "";
+      return `<div style="margin-top:12px">
+        <div style="display:flex;font-size:12px"><span>${ic} ${esc(r.p?.name || l.player)}</span>
+          <span style="margin-left:auto"><b style="color:${col}">${r.cur}</b> <span class="muted">/ ${l.side === "over" ? "O" : "U"}${l.line} ${l.stat}</span></span></div>
+        <div class="bar" style="height:8px;margin:6px 0 2px"><div class="bfill" style="width:${r.cur / max * 100}%;background:${col}"></div><div class="bline" style="left:${l.line / max * 100}%"></div></div>
+        <div class="muted" style="font-size:10px">${r.live ? esc(r.live.state === "pre" ? r.live.detail : r.live.detail + " · " + r.live.score) : esc(l.gameName)}</div>
+      </div>`;
+    }).join("")}
+  </div>`;
+}
+
+function formCard(f, g, roster, liveNames){
+  const parlay = S.mode === "parlay";
+  return `<div class="card">
+    <div class="row" style="margin-bottom:12px">
+      <button class="btns ${parlay ? "" : "on"}" onclick="setMode('single')">Sencilla</button>
+      <button class="btns ${parlay ? "on" : ""}" onclick="setMode('parlay')">Parlay</button>
+    </div>
+    ${parlay && S.draft.length ? `<div style="margin-bottom:12px">${S.draft.map((l, i) => `
+      <div style="display:flex;align-items:center;font-size:12px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+        <span>${i + 1}. ${esc(l.player)} ${l.side === "over" ? "O" : "U"}${l.line} ${l.stat}</span>
+        <button class="btnd" style="margin-left:auto" onclick="delLeg(${i})">✕</button>
+      </div>`).join("")}</div>` : ""}
     <select class="inp" onchange="setF('game',this.value);loadRoster(this.value);poll()">
       ${S.games.length ? S.games.map(x => `<option value="${x.id}" ${x.id === f.game ? "selected" : ""}>${esc(x.name)} · ${esc(x.detail)}</option>`).join("") : `<option>Cargando juegos…</option>`}
     </select>
@@ -374,19 +483,16 @@ function render(){
       </select>
       <input class="inp" type="number" step="0.5" inputmode="decimal" placeholder="Línea" value="${esc(f.line)}" oninput="setF('line',this.value)"/>
     </div>
+    ${parlay ? `<button class="btns" style="width:100%;margin-bottom:12px" onclick="addLeg()">+ Agregar pierna al parlay</button>` : ""}
     <div class="row">
       <input class="inp" type="number" inputmode="decimal" placeholder="Apuesta $" value="${esc(f.stake)}" oninput="setF('stake',this.value)"/>
-      <input class="inp" inputmode="numeric" placeholder="Odds (-110)" value="${esc(f.odds)}" oninput="setF('odds',this.value)"/>
+      <input class="inp" inputmode="numeric" placeholder="${parlay ? "Odds (+600)" : "Odds (-110)"}" value="${esc(f.odds)}" oninput="setF('odds',this.value)"/>
     </div>
-    <button class="btnp" style="width:100%" onclick="addBet()">+ Agregar apuesta</button>
+    ${parlay
+      ? `<button class="btnp" style="width:100%" onclick="saveParlay()">Guardar parlay (${S.draft.length} piernas)</button>`
+      : `<button class="btnp" style="width:100%" onclick="addBet()">+ Agregar apuesta</button>`}
     ${S.err ? `<div class="err">${esc(S.err)}</div>` : ""}
-  </div>
-  <div class="muted" style="text-align:center;line-height:1.6">Se actualiza cada ${POLL_MS / 1000}s · datos de ESPN (~10-30s de retraso)</div>`;
-
-  // Don't wipe the input the user is typing in
-  const a = document.activeElement;
-  if (a && a.tagName === "INPUT" && document.getElementById("app").contains(a)) return;
-  document.getElementById("app").innerHTML = h;
+  </div>`;
 }
 
 if (!NATIVE && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");

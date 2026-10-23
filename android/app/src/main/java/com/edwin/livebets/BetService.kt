@@ -113,81 +113,124 @@ class BetService : Service() {
         val open = bets.filter { it.id !in settled }
         if (open.isEmpty()) return null
 
-        val games = open.map { it.game }.distinct().associateWith { id ->
+        val games = open.flatMap { b -> b.legs.map { it.game } }.distinct().associateWith { id ->
             try { Espn.summary(id) } catch (e: Exception) { null }
         }
 
-        var anyLive = false
-        for (b in open) {
-            val g = games[b.game]
-            if (g?.state == "in") anyLive = true
-            show(b, g)
-        }
+        for (b in open) show(b, games)
+        val anyLive = games.values.any { it?.state == "in" }
         return if (anyLive || games.values.any { it == null }) LIVE_MS else PREGAME_MS
     }
 
-    private fun show(b: Bet, g: LiveGame?) {
-        val p = g?.let { Espn.findPlayer(it, b.player) }
-        val cur = p?.let { pl -> Espn.STATS[b.stat]?.sumOf { pl.stats[it] ?: 0 } } ?: 0
+    private class LegResult(val leg: Leg, val game: LiveGame?, val name: String, val cur: Int, val status: String)
+
+    private fun evalLeg(l: Leg, g: LiveGame?): LegResult {
+        val p = g?.let { Espn.findPlayer(it, l.player) }
+        val cur = p?.let { pl -> Espn.STATS[l.stat]?.sumOf { pl.stats[it] ?: 0 } } ?: 0
         val final = g?.state == "post"
         val status = when {
             final && p == null -> "void"
-            b.side == "over" && cur > b.line -> "won"
-            b.side == "under" && cur > b.line -> "lost"
-            final && cur.toDouble() == b.line -> "push"
-            final -> if (b.side == "over") "lost" else "won"
+            l.side == "over" && cur > l.line -> "won"
+            l.side == "under" && cur > l.line -> "lost"
+            final && cur.toDouble() == l.line -> "push"
+            final -> if (l.side == "over") "lost" else "won"
             g?.state == "in" -> "live"
             else -> "pending"
         }
+        val name = (p?.name ?: l.player).trim().split(Regex("\\s+")).last()
+        return LegResult(l, g, name, cur, status)
+    }
 
-        val name = (p?.name ?: b.player).trim().split(Regex("\\s+")).last()
-        val side = if (b.side == "over") "O" else "U"
-        val lineTxt = if (b.line % 1.0 == 0.0) b.line.toInt().toString() else b.line.toString()
-        val target = floor(b.line).toInt() + 1    // what the over needs to hit
-        val done = status in setOf("won", "lost", "push", "void")
+    private fun icon(status: String) = when (status) {
+        "won" -> "✅"; "lost" -> "❌"; "push" -> "➖"; "void" -> "⚪"; "live" -> "🔴"; else -> "⏳"
+    }
 
-        val icon = when (status) {
-            "won" -> "✅"; "lost" -> "❌"; "push" -> "➖"; "void" -> "⚪"; "live" -> "🔴"; else -> "⏳"
+    private fun lineTxt(l: Leg) = if (l.line % 1.0 == 0.0) l.line.toInt().toString() else l.line.toString()
+
+    private fun gameTxt(r: LegResult) = when {
+        r.game == null -> r.leg.gameName
+        r.game.state == "pre" -> "${r.leg.gameName} · ${r.game.detail}"
+        else -> "${r.game.detail} · ${r.game.score}"
+    }
+
+    private fun show(b: Bet, games: Map<String, LiveGame?>) {
+        val rs = b.legs.map { evalLeg(it, games[it.game]) }
+        val done = setOf("won", "lost", "push", "void")
+        val status: String
+        val title: String
+        val text: String
+        val progress: Int
+        val max: Int
+        var lines: List<String>? = null
+
+        if (!b.parlay) {
+            val r = rs.first()
+            status = r.status
+            title = "${icon(status)} ${r.name}  ${r.cur} / ${lineTxt(r.leg)} ${r.leg.stat}"
+            text = gameTxt(r)
+            max = floor(r.leg.line).toInt() + 1    // what the over needs to hit
+            progress = min(r.cur, max)
+        } else {
+            val hits = rs.count { it.status == "won" }
+            status = when {
+                rs.any { it.status == "lost" } -> "lost"
+                rs.all { it.status in done } -> if (hits > 0) "won" else "push"
+                rs.any { it.status == "live" || it.status == "won" } -> "live"
+                else -> "pending"
+            }
+            title = "${icon(status)} Parlay  $hits / ${rs.size} ✅"
+            // Collapsed view: the first leg still in play
+            val next = rs.firstOrNull { it.status !in done }
+            text = next?.let { "${it.name} ${it.cur}/${lineTxt(it.leg)} ${it.leg.stat} · ${gameTxt(it)}" }
+                ?: rs.joinToString("  ") { "${icon(it.status)} ${it.name}" }
+            lines = rs.map {
+                val mark = if (it.status in done) icon(it.status) else "•"
+                "$mark ${it.name}  ${it.cur} / ${if (it.leg.side == "over") "O" else "U"}${lineTxt(it.leg)} ${it.leg.stat}"
+            }
+            max = rs.size
+            progress = hits
         }
-        val title = "$icon $name  $cur / $lineTxt ${b.stat}"
-        val text = when {
-            g == null -> b.gameName
-            g.state == "pre" -> "${b.gameName} · ${g.detail}"
-            else -> "${g.detail} · ${g.score}"
-        }
+
+        val settledNow = status in done
         val color = when (status) {
             "won" -> Color.parseColor("#3ECF8E"); "lost" -> Color.parseColor("#F87171")
             else -> Color.parseColor("#E07B54")
         }
+        val sub = if (b.parlay) "Parlay ${rs.size} piernas"
+            else rs.first().leg.let { "${if (it.side == "over") "O" else "U"}${lineTxt(it)} ${it.stat}" }
 
-        val nb = NotificationCompat.Builder(this, if (done) CH_RESULT else CH_LIVE)
+        val nb = NotificationCompat.Builder(this, if (settledNow) CH_RESULT else CH_LIVE)
             .setSmallIcon(R.drawable.ic_stat)
             .setContentTitle(title)
             .setContentText(text)
-            .setSubText("$side$lineTxt ${b.stat}")
+            .setSubText(sub)
             .setColor(color)
-            .setColorized(false)
             .setContentIntent(openApp())
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setShowWhen(false)
-            .setOnlyAlertOnce(!done)
-            .setOngoing(!done)
-            .setAutoCancel(done)
+            .setOnlyAlertOnce(!settledNow)
+            .setOngoing(!settledNow)
+            .setAutoCancel(settledNow)
             .setSortKey(b.id.toString())
 
-        if (!done) nb.setProgress(target, min(cur, target), false)
-        if (done) {
-            val money = if (b.stake > 0) {
-                val o = b.odds.toDoubleOrNull() ?: -110.0
-                val win = if (o > 0) b.stake * o / 100 else b.stake * 100 / -o
-                when (status) {
-                    "won" -> " · +$%.2f".format(win)
+        lines?.let { ls -> nb.setStyle(NotificationCompat.InboxStyle().also { st -> ls.forEach { st.addLine(it) } }) }
+        if (!settledNow) nb.setProgress(max, progress, false)
+        if (settledNow) {
+            if (b.stake > 0) {
+                val o = b.odds.toDoubleOrNull() ?: if (b.parlay) 0.0 else -110.0
+                val win = when {
+                    o > 0 -> b.stake * o / 100
+                    o < 0 -> b.stake * 100 / -o
+                    else -> 0.0
+                }
+                val money = when (status) {
+                    "won" -> if (win > 0) " · +$%.2f".format(win) else ""
                     "lost" -> " · -$%.2f".format(b.stake)
                     else -> ""
                 }
-            } else ""
-            nb.setContentText("${g?.detail ?: ""} · ${g?.score ?: ""}$money")
+                nb.setContentText(text + money)
+            }
             settled.add(b.id)
         }
 
