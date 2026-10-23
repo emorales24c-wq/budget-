@@ -1,0 +1,280 @@
+<title>Proyecciones NBA 2026-27</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Layout: scoreboard header + sticky control strip + one dense sortable table; rows expand into a prop calculator */
+:root{
+  --bg:#f3f4f7; --surface:#ffffff; --sunk:#e9ecf1; --ink:#15202c; --muted:#5d6977; --line:#d9dee6;
+  --accent:#c4541c; --accent-ink:#ffffff; --over:#1d7a46; --over-bg:#dcf1e4; --under:#b3261e; --under-bg:#f8dedb; --pass:#6b7280; --pass-bg:#eceef1;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif; --body:"Barlow",system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f141b; --surface:#171e27; --sunk:#1e2731; --ink:#e7ebf0; --muted:#94a0ae; --line:#2a3440;
+  --accent:#f07a3e; --accent-ink:#1a0d05; --over:#5fd08f; --over-bg:#163625; --under:#f2857c; --under-bg:#3d1c1a; --pass:#a2abb6; --pass-bg:#252d37; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f141b; --surface:#171e27; --sunk:#1e2731; --ink:#e7ebf0; --muted:#94a0ae; --line:#2a3440;
+  --accent:#f07a3e; --accent-ink:#1a0d05; --over:#5fd08f; --over-bg:#163625; --under:#f2857c; --under-bg:#3d1c1a; --pass:#a2abb6; --pass-bg:#252d37; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.4}
+.wrap{max-width:1280px;margin:0 auto;padding-block:20px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end;justify-content:space-between;margin-bottom:16px}
+h1{font-family:var(--display);font-weight:700;font-size:2.2rem;letter-spacing:.01em;margin:0;line-height:1;text-wrap:balance}
+h1 span{color:var(--accent)}
+.meta{color:var(--muted);font-size:.85rem;max-width:62ch}
+.controls{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:10px;display:flex;flex-wrap:wrap;gap:10px;align-items:end;border-bottom:1px solid var(--line)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.f{display:flex;flex-direction:column;gap:3px;min-width:0}
+.f label{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+input,select,button{font:inherit;color:var(--ink)}
+input[type=text],input[type=number],select{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-height:34px}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+#q{width:200px;max-width:100%}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:transparent;padding:6px 12px;min-height:34px;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:6px 12px;min-height:34px;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.adj{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px;font-size:.82rem}
+.chip{background:var(--sunk);border-radius:999px;padding:3px 10px;font-variant-numeric:tabular-nums}
+.chip b{font-weight:600}
+.up{color:var(--over)} .dn{color:var(--under)}
+.tablebox{overflow-x:auto;margin-top:10px;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;min-width:980px;font-variant-numeric:tabular-nums}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th{font-family:var(--display);font-weight:600;font-size:.9rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:var(--sunk);position:sticky;top:0;cursor:pointer;user-select:none}
+th.l,td.l{text-align:left}
+th[aria-sort] {color:var(--ink)}
+th[aria-sort=descending]::after{content:" ▾"} th[aria-sort=ascending]::after{content:" ▴"}
+th.proj{color:var(--accent)}
+td.name{font-weight:600}
+td.name small{display:block;font-weight:400;color:var(--muted);font-size:.75rem}
+td.v{font-weight:600;font-size:1rem}
+td.v small{display:block;font-weight:400;font-size:.7rem}
+td input[type=number]{width:64px;text-align:right;min-height:30px;padding:4px 6px}
+td select{max-width:150px;min-height:30px;padding:3px 4px}
+.tog{border:1px solid var(--line);background:var(--surface);border-radius:5px;padding:3px 8px;cursor:pointer;min-width:42px}
+.tog[aria-pressed=true]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.exp{border:0;background:transparent;cursor:pointer;color:var(--accent);font-size:1rem;padding:2px 6px}
+tr.warn td.v{color:var(--muted)}
+tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
+.props{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;padding:6px 0}
+.prop{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px;display:grid;gap:6px}
+.prop h4{margin:0;font-family:var(--display);font-size:1.05rem;letter-spacing:.03em;display:flex;justify-content:space-between}
+.prop h4 span{color:var(--accent)}
+.prop .in{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.prop .in input{width:100%;min-height:30px}
+.prop .in label{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.prop .out{display:flex;justify-content:space-between;align-items:center;font-size:.85rem;font-variant-numeric:tabular-nums}
+.pill{border-radius:999px;padding:2px 10px;font-weight:700;font-size:.78rem;letter-spacing:.05em}
+.pill.OVER{background:var(--over-bg);color:var(--over)} .pill.UNDER{background:var(--under-bg);color:var(--under)} .pill.PASS{background:var(--pass-bg);color:var(--pass)}
+.foot{color:var(--muted);font-size:.8rem;margin-top:14px;max-width:75ch;display:grid;gap:6px}
+.count{color:var(--muted);font-size:.85rem;margin-left:auto}
+@media (max-width:640px){.controls{position:static} h1{font-size:1.8rem} #q{width:100%} .f.grow{flex:1 1 100%}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+<header>
+  <div>
+    <h1>Proyecciones <span>NBA</span> 2026-27</h1>
+  </div>
+  <p class="meta">Pon los minutos esperados (xMP) y el rival de cada jugador, y la tabla calcula sus stats proyectados. Toca ▸ en una fila para meter la línea y las cuotas de un prop.</p>
+</header>
+
+<div class="controls">
+  <div class="f grow"><label for="q">Buscar jugador</label><input id="q" type="text" placeholder="Ej. Edwards" autocomplete="off"></div>
+  <div class="f"><label for="team">Equipo</label><select id="team"></select></div>
+  <div class="f"><label for="rival">Rival</label><select id="rival"></select></div>
+  <div class="f"><label>Condición</label><div class="seg" id="home"><button type="button" data-v="1" aria-pressed="true">Local</button><button type="button" data-v="0" aria-pressed="false">Visita</button></div></div>
+  <div class="f"><label for="minmp">Min. prom. ≥</label><input id="minmp" type="number" min="0" max="48" step="1" value="10" style="width:70px"></div>
+  <button class="btn" id="reset" type="button">Borrar mis cambios</button>
+  <span class="count" id="count"></span>
+</div>
+
+<div class="adj" id="adj"></div>
+
+<div class="tablebox">
+<table id="tbl">
+  <thead><tr>
+    <th class="l" data-k="name">Jugador</th>
+    <th data-k="g">PJ</th>
+    <th data-k="mp">Min prom</th>
+    <th data-k="xmp">xMP</th>
+    <th class="l" data-k="rival">Rival</th>
+    <th data-k="home">Local</th>
+    <th class="proj" data-k="pts">PTS</th>
+    <th class="proj" data-k="reb">REB</th>
+    <th class="proj" data-k="ast">AST</th>
+    <th class="proj" data-k="tpm">3PM</th>
+    <th class="proj" data-k="pra">PRA</th>
+    <th class="proj" data-k="stl">STL</th>
+    <th class="proj" data-k="blk">BLK</th>
+    <th aria-label="Props"></th>
+  </tr></thead>
+  <tbody id="tb"></tbody>
+</table>
+</div>
+
+<div class="foot">
+  <div><b>Datos:</b> basketball-reference.com (stats por partido de jugadores) y teamrankings.com (pace, % de rebote y lo que permite cada rival). Temporada 2026-27, descargados el 23-oct-2026. La temporada lleva 1 o 2 partidos por equipo, así que las proyecciones todavía son muy inestables.</div>
+  <div><b>Cálculo:</b> factor base = (xMP ÷ min prom) × pace del partido × local (±1%). Puntos × defensa del rival por posesión; rebotes × % de rebote del rival; asistencias y triples × lo que permite el rival por posesión. Probabilidad Over con distribución normal (desviación = proyección × CV supuesto). Las cifras en pequeño debajo de cada stat son el promedio de la temporada.</div>
+  <div>Herramienta educativa: no garantiza resultados. Apuesta con responsabilidad.</div>
+</div>
+</div>
+
+<script>
+const DATA={"p":[["A.J. Green","MIL","SG",1,15.0,0.0,1.0,2.0,2.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,6.0],["Aaron Gordon","DEN","PF",1,29.0,3.0,5.0,3.0,4.0,5.0,6.0,3.0,3.0,1.0,2.0,1.0,20.0],["Aaron Wiggins","ATL","SG",1,32.0,2.0,4.0,3.0,5.0,3.0,3.0,1.0,2.0,0.0,2.0,0.0,16.0],["Ace Bailey","UTA","SF",1,24.0,3.0,6.0,2.0,5.0,0.0,0.0,2.0,3.0,3.0,0.0,3.0,12.0],["Aday Mara","OKC","C",2,12.0,2.0,3.5,0.0,0.0,0.5,1.0,2.0,0.5,0.5,0.5,1.0,4.5],["Adem Bona","PHI","C",2,11.5,0.5,0.5,0.0,0.5,0.0,0.0,0.5,2.0,0.5,0.0,1.0,1.0],["Ajay Mitchell","OKC","SG",2,23.0,3.5,7.0,0.0,2.5,1.0,1.0,0.0,2.5,3.0,2.5,0.5,8.0],["Al Horford","GSW","C",1,17.0,0.0,0.0,0.0,3.0,0.0,0.0,1.0,3.0,2.0,1.0,0.0,0.0],["Alex Caruso","OKC","SG",2,22.0,1.5,2.0,1.5,3.5,0.5,1.0,0.5,4.5,3.0,1.0,0.5,8.0],["Alex Karaban","SAC","SF",1,5.0,0.0,0.0,0.0,0.0,1.0,2.0,1.0,0.0,0.0,0.0,0.0,1.0],["Alex Sarr","WAS","C",1,24.0,3.0,6.0,0.0,3.0,0.0,0.0,5.0,4.0,2.0,0.0,0.0,6.0],["Alijah Martin","TOR","SG",1,5.0,1.0,1.0,0.0,0.0,1.0,2.0,0.0,0.0,0.0,0.0,0.0,3.0],["Allen Graves","TOR","PF",1,19.0,2.0,3.0,0.0,2.0,1.0,2.0,4.0,1.0,0.0,1.0,3.0,5.0],["Alperen Şengün","HOU","C",1,30.0,7.0,13.0,2.0,2.0,3.0,4.0,5.0,5.0,5.0,0.0,0.0,23.0],["Amen Thompson","HOU","SF",1,33.0,5.0,10.0,1.0,2.0,3.0,5.0,6.0,4.0,4.0,1.0,0.0,16.0],["Andre Drummond","NYK","C",1,24.0,5.0,13.0,0.0,0.0,2.0,4.0,7.0,7.0,4.0,1.0,2.0,12.0],["Andrew Nembhard","IND","SG",1,34.0,6.0,7.0,0.0,3.0,6.0,7.0,0.0,2.0,9.0,1.0,0.0,18.0],["Andrew Wiggins","MIA","SF",1,27.0,4.0,7.0,1.0,4.0,0.0,0.0,1.0,1.0,1.0,0.0,0.0,11.0],["Anfernee Simons","PHI","SG",2,21.0,1.0,1.0,1.5,6.0,1.0,1.5,0.5,2.0,0.0,0.0,0.0,7.5],["Anthony Davis","WAS","PF",1,34.0,10.0,17.0,1.0,3.0,11.0,14.0,3.0,9.0,4.0,2.0,1.0,34.0],["Anthony Edwards","MIN","SG",1,33.0,7.0,12.0,9.0,17.0,4.0,5.0,0.0,10.0,3.0,2.0,1.0,45.0],["Ausar Thompson","DET","SF",1,33.0,4.0,7.0,0.0,1.0,3.0,3.0,3.0,8.0,5.0,1.0,0.0,11.0],["Austin Reaves","LAL","SG",1,32.0,5.0,8.0,1.0,3.0,10.0,10.0,1.0,3.0,6.0,2.0,1.0,23.0],["Ayo Dosunmu","MIN","SG",1,29.0,5.0,10.0,1.0,3.0,3.0,3.0,3.0,2.0,3.0,0.0,0.0,16.0],["Baba Miller","LAC","SF",1,9.0,2.0,2.0,0.0,0.0,0.0,0.0,1.0,2.0,1.0,0.0,0.0,4.0],["Bam Adebayo","MIA","C",1,31.0,5.0,7.0,1.0,5.0,2.0,3.0,1.0,6.0,4.0,3.0,0.0,15.0],["Baylor Scheierman","BOS","SG",1,18.0,1.0,2.0,2.0,2.0,0.0,0.0,0.0,3.0,0.0,1.0,0.0,8.0],["Ben Sheppard","IND","SG",1,12.0,0.0,1.0,1.0,2.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,3.0],["Bennedict Mathurin","NOP","SF",1,18.0,3.0,4.0,0.0,3.0,5.0,6.0,1.0,2.0,2.0,1.0,0.0,11.0],["Bennett Stirtz","OKC","PG",2,1.5,0.0,0.0,0.0,0.5,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],["Bilal Coulibaly","WAS","SF",1,29.0,3.0,3.0,1.0,3.0,2.0,3.0,1.0,1.0,1.0,4.0,2.0,11.0],["Bobby Portis","MIA","PF",1,25.0,2.0,3.0,1.0,2.0,0.0,0.0,1.0,3.0,1.0,1.0,1.0,7.0],["Bogdan Bogdanović","HOU","SG",1,13.0,1.0,1.0,1.0,2.0,0.0,0.0,1.0,0.0,2.0,0.0,0.0,5.0],["Bones Hyland","MIN","PG",1,4.0,0.0,0.0,1.0,2.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,3.0],["Brandon Miller","CHO","SF",1,36.0,4.0,7.0,3.0,14.0,1.0,2.0,1.0,2.0,1.0,0.0,1.0,18.0],["Brandon Williams","GSW","PG",1,18.0,2.0,9.0,1.0,3.0,7.0,7.0,2.0,2.0,3.0,3.0,0.0,14.0],["Brayden Burries","MIL","SG",1,16.0,1.0,4.0,2.0,2.0,4.0,5.0,1.0,4.0,0.0,0.0,0.0,12.0],["Brice Sensabaugh","UTA","SF",1,14.0,1.0,2.0,0.0,2.0,0.0,0.0,0.0,2.0,1.0,0.0,0.0,2.0],["Bronny James","LAL","SG",1,7.0,1.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,2.0],["Brook Lopez","LAC","C",1,27.0,6.0,9.0,1.0,3.0,2.0,2.0,1.0,10.0,1.0,1.0,1.0,17.0],["Brooks Barnhizer","OKC","SG",2,1.5,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.5,0.0,0.0,0.0],["Bruce Thornton","HOU","PG",1,3.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],["Bryce Hopkins","DEN","SF",1,2.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0],["Bub Carrington","WAS","PG",1,19.0,1.0,3.0,2.0,3.0,2.0,2.0,1.0,0.0,4.0,2.0,0.0,10.0],["Buddy Hield","CHI","SG",1,14.0,0.0,1.0,0.0,3.0,0.0,0.0,1.0,1.0,2.0,0.0,0.0,0.0],["Cade Cunningham","DET","PG",1,35.0,7.0,12.0,1.0,6.0,5.0,5.0,0.0,4.0,8.0,1.0,1.0,22.0],["Caleb Wilson","CHI","PF",1,32.0,6.0,13.0,1.0,8.0,1.0,2.0,3.0,1.0,0.0,3.0,1.0,16.0],["Cam Christie","LAC","SG",1,2.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],["Cam Spencer","MEM","SG",1,16.0,0.0,3.0,1.0,1.0,0.0,0.0,1.0,2.0,2.0,1.0,0.0,3.0],["Cameron Boozer","MEM","PF",1,33.0,2.0,9.0,0.0,6.0,3.0,4.0,1.0,10.0,5.0,0.0,0.0,7.0],["Cameron Johnson","DEN","PF",1,11.0,1.0,2.0,1.0,1.0,0.0,0.0,0.0,2.0,1.0,0.0,0.0,5.0],["Carter Bryant","SAS","PF",1,6.0,0.0,0.0,0.0,3.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0],["Cason Wallace","OKC","SG",2,21.5,1.5,3.0,1.5,5.0,0.0,0.0,0.0,2.0,1.5,2.5,0.0,7.5],["Cedric Coward","MEM","SG",1,28.0,2.0,4.0,1.0,2.0,0.0,0.0,0.0,7.0,2.0,0.0,1.0,7.0],["Chaney Johnson","BRK","SF",1,5.0,0.0,0.0,0.0,1.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0],["Chet Holmgren","OKC","C",2,29.0,4.0,7.5,0.0,1.0,5.0,5.0,6.5,5.5,2.0,0.5,4.0,13.0],["Chris Mañon","LAL","SG",1,6.0,1.0,2.0,0.0,1.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,2.0],["Christian Anderson Jr.","CHO","PG",1,13.0,0.0,2.0,0.0,1.0,0.0,0.0,1.0,1.0,2.0,2.0,0.0,0.0],["Christian Braun","DEN","SG",1,33.0,2.0,4.0,1.0,6.0,0.0,0.0,3.0,3.0,1.0,1.0,0.0,7.0],["CJ McCollum","ATL","PG",1,25.0,3.0,3.0,4.0,6.0,1.0,1.0,0.0,2.0,3.0,0.0,0.0,19.0],["Clint Capela","HOU","C",1,8.0,0.0,0.0,0.0,0.0,0.0,0.0,2.0,1.0,0.0,0.0,0.0,0.0],["Cody Williams","MIN","SG",1,3.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],["Collin Gillespie","PHO","PG",1,21.0,0.0,0.0,0.0,8.0,0.0,1.0,1.0,0.0,2.0,4.0,0.0,0.0],["Collin Murray-Boyles","TOR","PF",1,20.0,2.0,6.0,0.0,1.0,2.0,2.0,3.0,5.0,3.0,1.0,1.0,6.0],["Cooper Flagg","DAL","SF",1,33.0,9.0,13.0,1.0,4.0,11.0,13.0,0.0,5.0,2.0,3.0,1.0,32.0],["Craig Porter Jr.","CLE","PG",1,8.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0,2.0,0.0,1.0,0.0,0.0],["Daeqwon Plowden","SAC","SG",1,13.0,2.0,3.0,0.0,0.0,0.0,0.0,0.0,2.0,1.0,1.0,0.0,4.0],["Damian Lillard","POR","PG",1,24.0,1.0,2.0,6.0,10.0,5.0,5.0,1.0,2.0,6.0,1.0,0.0,25.0],["Daniel Gafford","DAL","C",1,22.0,0.0,1.0,0.0,0.0,2.0,4.0,1.0,2.0,1.0,1.0,2.0,2.0],["Daniss Jenkins","DET","PG",1,15.0,0.0,2.0,1.0,1.0,0.0,0.0,2.0,0.0,3.0,0.0,0.0,3.0],["Darius Acuff Jr.","SAC","PG",1,35.0,5.0,17.0,0.0,7.0,2.0,5.0,1.0,2.0,3.0,3.0,0.0,12.0],["Darius Garland","LAC","PG",1,32.0,8.0,11.0,3.0,8.0,5.0,8.0,0.0,1.0,4.0,1.0,0.0,30.0],["DaRon Holmes","DEN","PF",1,2.0,0.0,0.0,1.0,2.0,0.0,0.0,1.0,0.0,1.0,0.0,0.0,3.0],["Darryn Peterson","UTA","SG",1,31.0,3.0,6.0,0.0,1.0,3.0,4.0,0.0,4.0,3.0,0.0,0.0,9.0],["David Jones García","SAS","SF",1,1.0,0.0,1.0,0.0,0.0,2.0,2.0,0.0,0.0,0.0,0.0,0.0,2.0],["Davion Mitchell","MIA","PG",1,33.0,3.0,6.0,1.0,2.0,2.0,2.0,0.0,0.0,11.0,0.0,1.0,11.0],["Day'Ron Sharpe","BRK","C",1,30.0,4.0,5.0,0.0,0.0,0.0,1.0,3.0,5.0,3.0,0.0,3.0,8.0],["De'Aaron Fox","SAS","PG",1,32.0,6.0,7.0,0.0,2.0,2.0,3.0,0.0,7.0,7.0,1.0,0.0,14.0],["De'Andre Hunter","SAC","SF",1,20.0,0.0,3.0,2.0,2.0,0.0,4.0,1.0,2.0,1.0,0.0,0.0,6.0],["De'Anthony Melton","GSW","PG",1,21.0,0.0,0.0,0.0,2.0,0.0,0.0,1.0,1.0,2.0,1.0,0.0,0.0],["Deandre Ayton","WAS","C",1,15.0,5.0,6.0,0.0,0.0,1.0,2.0,1.0,3.0,0.0,0.0,2.0,11.0],["Dejounte Murray","NOP","PG",1,34.0,7.0,13.0,2.0,5.0,3.0,3.0,2.0,1.0,7.0,2.0,3.0,23.0],["DeMar DeRozan","DEN","SF",1,28.0,5.0,8.0,0.0,1.0,3.0,6.0,1.0,1.0,0.0,0.0,0.0,13.0],["Deni Avdija","POR","SF",1,23.0,5.0,12.0,2.0,4.0,2.0,4.0,3.0,7.0,4.0,2.0,0.0,18.0],["Dennis Schröder","CHO","PG",1,35.0,7.0,10.0,0.0,3.0,5.0,5.0,0.0,4.0,6.0,0.0,0.0,19.0],["Derik Queen","NOP","C",1,18.0,2.0,4.0,0.0,0.0,6.0,6.0,1.0,9.0,1.0,2.0,0.0,10.0],["Derrick Jones Jr.","LAC","SF",1,26.0,2.0,2.0,1.0,2.0,1.0,2.0,2.0,4.0,5.0,1.0,0.0,8.0],["Derrick White","BOS","SG",1,36.0,4.0,6.0,3.0,7.0,0.0,0.0,1.0,0.0,8.0,1.0,0.0,17.0],["Desmond Bane","ORL","SG",1,33.0,2.0,5.0,3.0,10.0,5.0,7.0,0.0,5.0,2.0,3.0,0.0,18.0],["Devin Booker","PHO","SG",1,29.0,7.0,13.0,0.0,0.0,9.0,9.0,2.0,2.0,2.0,1.0,1.0,23.0],["Devin Vassell","SAS","SG",1,31.0,1.0,4.0,1.0,4.0,2.0,2.0,0.0,3.0,1.0,0.0,0.0,7.0],["Dillon Brooks","PHO","SF",1,27.0,3.0,9.0,1.0,2.0,1.0,2.0,1.0,3.0,0.0,0.0,0.0,10.0],["Domantas Sabonis","SAC","C",1,34.0,5.0,5.0,0.0,0.0,4.0,4.0,1.0,17.0,8.0,1.0,0.0,14.0],["Donovan Clingan","POR","C",1,21.0,2.0,5.0,2.0,4.0,1.0,2.0,2.0,5.0,2.0,0.0,0.0,11.0],["Donovan Mitchell","CLE","SG",1,35.0,9.0,15.0,2.0,4.0,8.0,11.0,0.0,10.0,3.0,2.0,1.0,32.0],["Draymond Green","GSW","PF",1,21.0,1.0,3.0,0.0,1.0,0.0,0.0,0.0,4.0,8.0,1.0,1.0,2.0],["Duncan Robinson","DET","SF",1,28.0,0.0,1.0,5.0,9.0,6.0,8.0,0.0,2.0,2.0,1.0,0.0,21.0],["Duop Reath","PHO","C",1,9.0,1.0,1.0,1.0,2.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,5.0],["Dylan Harper","SAS","SG",1,32.0,7.0,15.0,0.0,2.0,4.0,4.0,2.0,5.0,5.0,0.0,0.0,18.0],["Dyson Daniels","ATL","SG",1,35.0,8.0,11.0,0.0,2.0,4.0,6.0,1.0,3.0,3.0,5.0,0.0,20.0],["Egor Dëmin","BRK","PG",1,27.0,2.0,5.0,0.0,5.0,0.0,0.0,2.0,2.0,2.0,1.0,0.0,4.0],["Emanuel Sharp","SAC","SG",1,17.0,1.0,2.0,2.0,4.0,0.0,0.0,0.0,1.0,0.0,1.0,0.0,8.0],["Evan Mobley","CLE","PF",1,34.0,6.0,9.0,1.0,4.0,3.0,3.0,1.0,7.0,2.0,0.0,0.0,18.0],["Franz Wagner","ORL","SF",1,29.0,7.0,12.0,2.0,8.0,2.0,4.0,1.0,5.0,5.0,1.0,0.0,22.0],["Fred VanVleet","HOU","PG",1,30.0,0.0,2.0,2.0,6.0,0.0,0.0,0.0,2.0,11.0,3.0,1.0,6.0],["Gary Payton II","GSW","SG",1,18.0,5.0,6.0,0.0,3.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,10.0],["Georges Niang","GSW","PF",1,20.0,3.0,4.0,0.0,4.0,1.0,1.0,0.0,2.0,2.0,2.0,0.0,7.0],["GG Jackson II","MEM","PF",1,19.0,2.0,6.0,2.0,2.0,2.0,2.0,2.0,6.0,0.0,0.0,2.0,12.0],["Giannis Antetokounmpo","MIA","PF",1,30.0,13.0,17.0,0.0,2.0,9.0,14.0,1.0,5.0,1.0,1.0,0.0,35.0],["Goga Bitadze","ORL","C",1,12.0,1.0,3.0,0.0,0.0,4.0,5.0,3.0,3.0,1.0,0.0,0.0,6.0],["Gradey Dick","LAC","SG",1,19.0,2.0,2.0,1.0,2.0,5.0,6.0,0.0,4.0,0.0,0.0,1.0,12.0],["Graham Ike","GSW","",1,12.0,1.0,2.0,1.0,1.0,3.0,4.0,1.0,1.0,1.0,1.0,1.0,8.0],["Grayson Allen","CHO","SG",1,29.0,1.0,1.0,5.0,8.0,4.0,4.0,0.0,3.0,4.0,0.0,0.0,21.0],["Gui Santos","GSW","PF",1,25.0,4.0,7.0,1.0,3.0,1.0,2.0,2.0,3.0,0.0,1.0,0.0,12.0],["Harrison Barnes","SAS","PF",1,9.0,0.0,0.0,1.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,3.0],["Herbert Jones","NOP","SF",1,17.0,1.0,3.0,1.0,1.0,0.0,0.0,1.0,1.0,0.0,1.0,0.0,5.0],["Hugo González","BOS","SG",1,10.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,3.0,0.0,0.0,0.0,0.0],["Immanuel Quickley","TOR","PG",1,28.0,2.0,4.0,4.0,9.0,7.0,8.0,2.0,2.0,7.0,2.0,0.0,23.0],["Isaac Okoro","CHI","SG",1,18.0,0.0,0.0,0.0,1.0,4.0,4.0,0.0,0.0,1.0,0.0,0.0,4.0],["Isaiah Collier","UTA","PG",1,16.0,2.0,6.0,0.0,1.0,3.0,5.0,1.0,2.0,3.0,1.0,0.0,7.0],["Isaiah Crawford","HOU","SF",1,3.0,0.0,0.0,1.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,3.0],["Isaiah Evans","MIN","SG",1,2.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0],["Isaiah Hartenstein","OKC","C",2,20.0,2.5,7.0,0.0,0.0,0.0,0.0,2.0,2.5,2.5,0.5,1.0,5.0],["Isaiah Jackson","LAC","C",1,15.0,6.0,8.0,0.0,0.0,1.0,2.0,1.0,4.0,0.0,1.0,0.0,13.0],["Isaiah Joe","DET","SG",1,19.0,0.0,2.0,2.0,7.0,2.0,3.0,0.0,2.0,2.0,1.0,1.0,8.0],["Ivica Zubac","IND","C",1,34.0,7.0,12.0,0.0,0.0,2.0,4.0,4.0,11.0,0.0,0.0,2.0,16.0],["Ja Morant","POR","PG",1,23.0,4.0,5.0,2.0,3.0,0.0,0.0,1.0,4.0,8.0,3.0,0.0,14.0],["Ja'Kobe Walter","TOR","SG",1,23.0,3.0,3.0,1.0,5.0,1.0,2.0,0.0,3.0,4.0,3.0,0.0,10.0],["Ja'Kobi Gillespie","SAS","PG",1,1.0,1.0,1.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,2.0],["Jabari Smith Jr.","HOU","PF",1,36.0,7.0,9.0,4.0,8.0,4.0,5.0,2.0,3.0,1.0,2.0,0.0,30.0],["Jabari Walker","PHI","SF",2,3.5,0.5,0.5,0.0,0.0,0.0,0.0,0.5,0.0,0.5,0.0,0.0,1.0],["Jaden Bradley","TOR","PG",1,5.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],["Jaden Hardy","LAL","SG",1,7.0,0.0,1.0,1.0,2.0,0.0,0.0,0.0,2.0,0.0,0.0,0.0,3.0],["Jaden McDaniels","MIN","PF",1,29.0,7.0,8.0,1.0,3.0,0.0,0.0,2.0,6.0,1.0,3.0,0.0,17.0],["Jae'Sean Tate","HOU","SF",1,2.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],["Jaime Jaquez Jr.","MIL","SF",1,31.0,7.0,9.0,1.0,3.0,5.0,6.0,2.0,5.0,2.0,0.0,0.0,22.0],["Jake LaRavia","LAL","PF",1,18.0,2.0,2.0,2.0,3.0,0.0,0.0,0.0,2.0,2.0,1.0,0.0,10.0],["Jakob Poeltl","TOR","C",1,22.0,1.0,1.0,0.0,0.0,1.0,3.0,0.0,6.0,0.0,1.0,1.0,3.0],["Jalen Brunson","NYK","PG",1,34.0,5.0,16.0,1.0,3.0,8.0,8.0,0.0,5.0,3.0,0.0,0.0,21.0],["Jalen Duren","DET","C",1,28.0,8.0,13.0,0.0,0.0,6.0,7.0,3.0,6.0,1.0,1.0,1.0,22.0],["Jalen Green","PHO","SG",1,25.0,2.0,6.0,2.0,6.0,0.0,0.0,0.0,2.0,3.0,0.0,1.0,10.0],["Jalen Johnson","ATL","SF",1,28.0,7.0,15.0,0.0,4.0,6.0,7.0,0.0,14.0,6.0,0.0,0.0,20.0],["Jalen Pickett","LAC","SG",1,2.0,0.0,0.0,1.0,1.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,3.0],["Jalen Smith","CHI","C",1,19.0,5.0,7.0,0.0,3.0,5.0,6.0,4.0,4.0,1.0,0.0,1.0,15.0],["Jalen Suggs","ORL","PG",1,32.0,2.0,6.0,0.0,2.0,2.0,2.0,1.0,2.0,5.0,2.0,0.0,6.0],["Jalen Williams","OKC","SG",2,31.5,4.5,11.5,1.5,4.0,3.0,4.0,0.0,6.0,2.5,0.5,0.5,16.5],["Jamal Cain","ORL","SF",1,14.0,0.0,1.0,0.0,2.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],["Jamal Murray","DEN","PG",1,37.0,2.0,10.0,0.0,1.0,2.0,4.0,2.0,8.0,3.0,1.0,0.0,6.0],["Jamal Shead","TOR","PG",1,16.0,0.0,2.0,0.0,0.0,2.0,2.0,0.0,2.0,5.0,1.0,0.0,2.0],["Jamaree Bouyea","PHO","PG",1,7.0,1.0,1.0,0.0,0.0,1.0,1.0,0.0,2.0,2.0,0.0,0.0,3.0],["James Harden","CLE","PG",1,33.0,2.0,6.0,3.0,6.0,3.0,4.0,0.0,3.0,5.0,1.0,0.0,16.0],["Jamison Battle","TOR","SF",1,11.0,1.0,2.0,2.0,2.0,0.0,0.0,2.0,3.0,0.0,1.0,0.0,8.0],["Jarace Walker","IND","PF",1,19.0,0.0,3.0,1.0,3.0,0.0,0.0,0.0,6.0,2.0,0.0,1.0,3.0],["Jared McCain","OKC","SG",2,20.0,1.0,2.0,3.0,5.5,1.0,1.0,0.0,1.0,1.5,0.5,0.0,12.0],["Jaren Jackson Jr.","UTA","C",1,28.0,4.0,6.0,2.0,4.0,1.0,2.0,0.0,5.0,2.0,1.0,2.0,15.0],["Jarrett Allen","CLE","C",1,28.0,6.0,10.0,0.0,0.0,2.0,4.0,3.0,4.0,0.0,0.0,2.0,14.0],["Jase Richardson","ORL","SG",1,14.0,1.0,2.0,0.0,1.0,0.0,0.0,0.0,2.0,3.0,1.0,2.0,2.0],["Javonte Green","DET","SG",1,18.0,0.0,2.0,5.0,8.0,4.0,4.0,1.0,3.0,0.0,0.0,0.0,19.0],["Jaxson Hayes","UTA","C",1,26.0,2.0,2.0,0.0,1.0,1.0,4.0,1.0,4.0,3.0,2.0,6.0,5.0],["Jaylen Brown","PHI","SF",2,36.5,7.0,13.5,1.5,3.5,1.5,2.0,1.0,7.0,5.0,1.0,0.5,20.0],["Jaylen Clark","MIN","SG",1,3.0,0.0,1.0,0.0,0.0,1.0,4.0,1.0,0.0,1.0,0.0,0.0,1.0],["Jaylen Wells","MEM","SG",1,28.0,4.0,6.0,1.0,4.0,1.0,3.0,3.0,2.0,0.0,4.0,0.0,12.0],["Jaylin Sellers","CHI","PG",1,14.0,0.0,2.0,1.0,2.0,0.0,0.0,0.0,1.0,2.0,0.0,0.0,3.0],["Jaylin Williams","OKC","PF",2,16.0,0.0,0.5,1.0,4.5,1.0,1.0,0.5,5.0,2.0,0.0,0.0,4.0],["Jaylon Tyson","CLE","SG",1,24.0,1.0,2.0,0.0,4.0,1.0,2.0,2.0,4.0,2.0,1.0,2.0,3.0],["Jayson Kent","POR","SF",1,7.0,0.0,2.0,0.0,2.0,0.0,0.0,1.0,0.0,0.0,1.0,0.0,0.0],["Jayson Tatum","BOS","PF",1,38.0,6.0,16.0,0.0,7.0,1.0,1.0,1.0,3.0,11.0,0.0,0.0,13.0],["Jerami Grant","MEM","PF",1,24.0,2.0,5.0,2.0,4.0,5.0,6.0,2.0,0.0,3.0,0.0,1.0,15.0],["Jeremiah Fears","NOP","PG",1,21.0,1.0,5.0,1.0,5.0,3.0,4.0,1.0,2.0,1.0,0.0,0.0,8.0],["Jericho Sims","MIL","C",1,2.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],["Joan Beringer","MIN","PF",1,14.0,0.0,2.0,0.0,0.0,0.0,0.0,4.0,2.0,1.0,0.0,0.0,0.0],["Jock Landale","ATL","C",1,19.0,4.0,4.0,0.0,1.0,2.0,2.0,1.0,1.0,3.0,0.0,1.0,10.0],["Joel Embiid","PHI","C",2,34.0,4.5,10.0,1.5,5.5,5.0,6.5,1.0,8.0,3.5,1.0,1.5,18.5],["John Collins","DET","PF",1,25.0,3.0,4.0,0.0,3.0,0.0,0.0,2.0,3.0,1.0,1.0,1.0,6.0],["Jonathan Kuminga","MIN","PF",1,30.0,3.0,6.0,2.0,4.0,0.0,0.0,1.0,0.0,3.0,4.0,1.0,12.0],["Jonathan Mogbo","SAC","PF",1,8.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],["Jordan Clarkson","NYK","SG",1,8.0,2.0,4.0,0.0,0.0,0.0,0.0,1.0,0.0,1.0,0.0,0.0,4.0],["Jordan Goodwin","PHO","PG",1,22.0,0.0,1.0,1.0,3.0,0.0,0.0,1.0,3.0,0.0,2.0,0.0,3.0],["Jordan Poole","NOP","SG",1,15.0,0.0,1.0,0.0,3.0,4.0,4.0,0.0,2.0,3.0,0.0,0.0,4.0],["Jordan Walsh","BOS","PF",1,13.0,0.0,1.0,0.0,1.0,0.0,0.0,3.0,3.0,1.0,1.0,1.0,0.0],["Jose Alvarado","NYK","PG",1,16.0,1.0,4.0,2.0,3.0,0.0,0.0,0.0,3.0,3.0,2.0,0.0,8.0],["Josh Giddey","CHI","PG",1,24.0,1.0,6.0,0.0,4.0,0.0,2.0,2.0,5.0,6.0,0.0,0.0,2.0],["Josh Hart","NYK","SG",1,30.0,3.0,5.0,2.0,5.0,2.0,3.0,0.0,7.0,3.0,1.0,1.0,14.0],["Josh Okogie","UTA","SG",1,8.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0],["Jrue Holiday","POR","PG",1,21.0,2.0,3.0,0.0,3.0,4.0,4.0,2.0,2.0,1.0,2.0,0.0,8.0],["Julian Champagnie","SAS","SF",1,30.0,1.0,2.0,2.0,6.0,0.0,0.0,1.0,2.0,1.0,2.0,3.0,8.0],["Julius Randle","BRK","PF",1,38.0,8.0,13.0,3.0,5.0,8.0,11.0,0.0,8.0,7.0,0.0,1.0,33.0],["Justin Champagnie","WAS","SF",1,21.0,2.0,2.0,1.0,2.0,1.0,1.0,0.0,8.0,1.0,0.0,0.0,8.0],["Karl-Anthony Towns","NYK","C",1,24.0,3.0,5.0,3.0,4.0,4.0,7.0,3.0,9.0,1.0,1.0,2.0,19.0],["Kasparas Jakučionis","MIL","SG",1,26.0,3.0,4.0,1.0,3.0,6.0,6.0,1.0,2.0,3.0,0.0,1.0,15.0],["Kawhi Leonard","TOR","SF",1,24.0,3.0,11.0,2.0,6.0,11.0,11.0,1.0,5.0,2.0,4.0,1.0,23.0],["Keaton Wagler","LAC","SG",1,29.0,1.0,2.0,3.0,6.0,4.0,4.0,1.0,4.0,5.0,2.0,0.0,15.0],["Keegan Murray","SAC","PF",1,28.0,1.0,4.0,0.0,4.0,0.0,0.0,2.0,2.0,0.0,1.0,0.0,2.0],["Kel'el Ware","MIL","C",1,14.0,3.0,4.0,0.0,2.0,1.0,3.0,2.0,1.0,1.0,1.0,0.0,7.0],["Keldon Johnson","SAS","SF",1,20.0,3.0,6.0,1.0,2.0,1.0,1.0,3.0,1.0,1.0,2.0,0.0,10.0],["Kelly Oubre Jr.","IND","SF",1,28.0,2.0,2.0,0.0,3.0,0.0,0.0,0.0,2.0,3.0,1.0,1.0,4.0],["Kenrich Williams","OKC","PF",2,6.5,0.0,0.0,1.0,1.5,0.0,0.0,0.5,1.0,0.5,0.0,0.0,3.0],["Kentavious Caldwell-Pope","PHI","SG",2,25.5,0.5,1.0,1.5,3.5,1.0,1.0,0.5,3.0,1.5,0.5,0.5,6.5],["Keon Ellis","BRK","SG",1,34.0,2.0,4.0,1.0,3.0,0.0,0.0,1.0,1.0,4.0,2.0,1.0,7.0],["Kevin Durant","HOU","PF",1,37.0,8.0,12.0,2.0,4.0,8.0,11.0,0.0,6.0,3.0,1.0,1.0,30.0],["Kevin Huerter","DET","SG",1,18.0,0.0,0.0,1.0,4.0,0.0,0.0,0.0,3.0,2.0,0.0,0.0,3.0],["Kevon Looney","LAL","C",1,15.0,3.0,5.0,0.0,0.0,0.0,0.0,2.0,3.0,1.0,0.0,0.0,6.0],["Keyonte George","UTA","PG",1,29.0,3.0,6.0,4.0,6.0,4.0,7.0,1.0,2.0,5.0,1.0,0.0,22.0],["Khaman Maluach","PHO","C",1,17.0,1.0,2.0,0.0,0.0,0.0,0.0,2.0,4.0,1.0,0.0,1.0,2.0],["Khris Middleton","WAS","SF",1,12.0,1.0,2.0,0.0,0.0,0.0,0.0,1.0,1.0,0.0,0.0,0.0,2.0],["Kingston Flemings","ATL","PG",1,15.0,0.0,4.0,0.0,1.0,0.0,0.0,1.0,3.0,3.0,0.0,1.0,0.0],["Klay Thompson","MIA","SF",1,16.0,0.0,0.0,3.0,6.0,1.0,1.0,0.0,1.0,0.0,0.0,0.0,10.0],["Koa Peat","PHO","PF",1,7.0,2.0,4.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,4.0],["Kobe Sanders","LAC","SG",1,19.0,1.0,4.0,0.0,1.0,0.0,0.0,0.0,0.0,3.0,3.0,0.0,2.0],["Kris Dunn","LAC","PG",1,27.0,0.0,0.0,2.0,5.0,1.0,2.0,2.0,3.0,7.0,3.0,2.0,7.0],["Kyle Anderson","TOR","SF",1,5.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,1.0,2.0,1.0,0.0,0.0],["Kyle Filipowski","UTA","C",1,9.0,1.0,1.0,0.0,1.0,1.0,1.0,0.0,0.0,0.0,1.0,0.0,3.0],["Kyle Kuzma","MIL","PF",1,27.0,1.0,5.0,1.0,4.0,0.0,0.0,2.0,4.0,3.0,3.0,0.0,5.0],["Kyrie Irving","DAL","SG",1,24.0,5.0,5.0,1.0,4.0,2.0,2.0,1.0,3.0,2.0,1.0,0.0,15.0],["Kyshawn George","WAS","SG",1,29.0,7.0,8.0,1.0,6.0,1.0,1.0,0.0,5.0,3.0,1.0,1.0,18.0],["LaMelo Ball","MIN","PG",1,29.0,2.0,4.0,5.0,13.0,2.0,3.0,0.0,2.0,6.0,2.0,0.0,21.0],["Landry Shamet","NYK","SG",1,25.0,1.0,3.0,1.0,4.0,0.0,2.0,1.0,1.0,4.0,0.0,0.0,5.0],["Larry Nance Jr.","IND","PF",1,5.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],["Lauri Markkanen","UTA","PF",1,36.0,3.0,6.0,1.0,7.0,9.0,10.0,0.0,9.0,3.0,0.0,1.0,18.0],["LeBron James","PHI","SF",2,33.5,4.5,10.0,0.5,3.5,5.0,6.5,1.0,8.5,6.0,2.0,1.0,15.5],["Leonard Miller","CHI","SF",1,26.0,2.0,5.0,0.0,4.0,0.0,0.0,2.0,4.0,1.0,1.0,0.0,4.0],["Liam McNeeley","CHO","SF",1,3.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0],["LJ Cryer","GSW","PG",1,9.0,1.0,2.0,2.0,4.0,1.0,2.0,0.0,1.0,3.0,0.0,0.0,9.0],["Luguentz Dort","ATL","SF",1,28.0,0.0,2.0,2.0,5.0,2.0,2.0,3.0,1.0,0.0,1.0,0.0,8.0],["Luka Dončić","LAL","PG",1,30.0,2.0,6.0,5.0,12.0,9.0,9.0,0.0,8.0,7.0,3.0,0.0,28.0],["Luka Garza","BOS","C",1,8.0,1.0,1.0,0.0,2.0,0.0,0.0,2.0,0.0,0.0,0.0,0.0,2.0],["Luke Kornet","SAS","C",1,13.0,2.0,2.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,1.0,4.0],["Malevy Leons","GSW","SF",1,9.0,0.0,3.0,0.0,1.0,0.0,0.0,0.0,1.0,0.0,1.0,0.0,0.0],["Maliq Brown","SAS","PF",1,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0],["Marcus Sasser","DAL","PG",1,24.0,2.0,3.0,4.0,5.0,1.0,1.0,0.0,1.0,1.0,1.0,0.0,17.0],["Marcus Smart","HOU","PG",1,26.0,2.0,2.0,2.0,4.0,0.0,0.0,0.0,2.0,2.0,1.0,0.0,10.0],["Mario Hezonja","CLE","PF",1,19.0,5.0,8.0,0.0,5.0,0.0,0.0,2.0,1.0,2.0,2.0,1.0,10.0],["Marvin Bagley III","DEN","PF",1,11.0,1.0,3.0,0.0,0.0,0.0,0.0,2.0,1.0,1.0,0.0,0.0,2.0],["Matas Buzelis","CHI","SF",1,25.0,2.0,4.0,0.0,4.0,13.0,16.0,1.0,5.0,0.0,0.0,2.0,17.0],["Matisse Thybulle","LAL","SG",1,23.0,0.0,2.0,1.0,2.0,0.0,0.0,1.0,2.0,1.0,1.0,1.0,3.0],["Max Christie","DAL","SG",1,29.0,1.0,1.0,1.0,7.0,0.0,0.0,1.0,2.0,2.0,0.0,0.0,5.0],["Micah Potter","POR","C",1,12.0,2.0,2.0,0.0,1.0,0.0,0.0,0.0,3.0,0.0,0.0,0.0,4.0],["Michael Porter Jr.","BRK","SF",1,34.0,5.0,10.0,5.0,11.0,1.0,2.0,1.0,6.0,1.0,3.0,0.0,26.0],["Mikal Bridges","NYK","SF",1,33.0,2.0,6.0,0.0,2.0,0.0,0.0,1.0,2.0,1.0,0.0,1.0,4.0],["Mikel Brown Jr.","BRK","PG",1,20.0,1.0,5.0,1.0,3.0,1.0,1.0,1.0,2.0,3.0,0.0,0.0,6.0],["Miles Bridges","PHO","SF",1,29.0,3.0,6.0,0.0,5.0,2.0,2.0,1.0,3.0,0.0,1.0,1.0,8.0],["Miles McBride","NYK","PG",1,14.0,0.0,2.0,1.0,3.0,0.0,0.0,0.0,1.0,1.0,0.0,1.0,3.0],["Mitchell Robinson","BOS","C",1,18.0,2.0,2.0,0.0,0.0,0.0,2.0,1.0,2.0,1.0,1.0,2.0,4.0],["Morez Johnson Jr.","DAL","PF",1,14.0,3.0,5.0,0.0,0.0,0.0,2.0,1.0,2.0,1.0,0.0,0.0,6.0],["Moritz Wagner","BRK","C",1,16.0,0.0,1.0,1.0,2.0,4.0,4.0,0.0,0.0,1.0,0.0,0.0,7.0],["Moussa Cissé","DAL","C",1,3.0,1.0,1.0,0.0,0.0,1.0,2.0,0.0,0.0,0.0,0.0,0.0,3.0],["Moussa Diabaté","CHO","C",1,34.0,7.0,11.0,0.0,0.0,3.0,3.0,5.0,3.0,3.0,5.0,0.0,17.0],["Myles Turner","MIL","C",1,32.0,2.0,2.0,2.0,5.0,1.0,1.0,1.0,4.0,3.0,0.0,1.0,11.0],["Myron Gardner","MIA","SF",1,3.0,0.0,0.0,0.0,0.0,4.0,4.0,0.0,2.0,0.0,0.0,0.0,4.0],["Naji Marshall","DAL","SF",1,29.0,5.0,7.0,2.0,6.0,0.0,0.0,1.0,1.0,6.0,1.0,0.0,16.0],["Naz Reid","CHO","C",1,33.0,4.0,9.0,4.0,10.0,0.0,1.0,2.0,9.0,7.0,0.0,0.0,20.0],["Neemias Queta","BOS","C",1,22.0,1.0,3.0,0.0,0.0,1.0,2.0,1.0,3.0,2.0,1.0,2.0,3.0],["Nick Martinelli","LAC","",1,2.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0,0.0,1.0,0.0,0.0,0.0],["Nick Richards","MIA","C",1,3.0,2.0,2.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,4.0],["Nickeil Alexander-Walker","ATL","SG",1,30.0,3.0,7.0,5.0,8.0,10.0,13.0,3.0,1.0,3.0,1.0,1.0,31.0],["Nikola Jokić","DEN","C",1,35.0,4.0,12.0,1.0,7.0,2.0,4.0,1.0,6.0,5.0,1.0,1.0,13.0],["Nikola Jović","MIA","PF",1,24.0,2.0,5.0,0.0,3.0,0.0,0.0,0.0,4.0,2.0,0.0,1.0,4.0],["Nikola Vučević","ORL","C",1,5.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,1.0,0.0,0.0,0.0],["Nique Clifford","SAC","SG",1,17.0,3.0,5.0,0.0,2.0,0.0,0.0,1.0,0.0,3.0,1.0,0.0,6.0],["Noa Essengue","CHI","PF",1,10.0,0.0,0.0,0.0,0.0,1.0,2.0,1.0,2.0,0.0,0.0,0.0,1.0],["Noah Clowney","BRK","PF",1,22.0,2.0,2.0,1.0,1.0,2.0,2.0,0.0,3.0,1.0,1.0,0.0,9.0],["Nolan Traoré","BRK","PG",1,16.0,0.0,4.0,0.0,0.0,3.0,4.0,2.0,0.0,0.0,0.0,0.0,3.0],["Norman Powell","CHI","SG",1,22.0,1.0,3.0,2.0,6.0,7.0,11.0,0.0,5.0,1.0,2.0,0.0,15.0],["Obi Toppin","IND","PF",1,25.0,3.0,3.0,4.0,9.0,2.0,3.0,1.0,2.0,1.0,2.0,0.0,20.0],["OG Anunoby","NYK","PF",1,32.0,2.0,3.0,1.0,9.0,3.0,3.0,1.0,4.0,0.0,1.0,1.0,10.0],["Onyeka Okongwu","ATL","C",1,29.0,3.0,4.0,0.0,4.0,2.0,2.0,1.0,4.0,7.0,0.0,0.0,8.0],["Oso Ighodaro","PHO","PF",1,15.0,4.0,7.0,0.0,0.0,0.0,2.0,2.0,1.0,3.0,0.0,0.0,8.0],["Ousmane Dieng","MIL","C",1,21.0,1.0,2.0,1.0,4.0,0.0,0.0,2.0,2.0,3.0,0.0,0.0,5.0],["P.J. Washington","DAL","PF",1,31.0,2.0,3.0,2.0,6.0,0.0,2.0,1.0,3.0,2.0,0.0,1.0,10.0],["Paolo Banchero","ORL","PF",1,41.0,7.0,8.0,3.0,4.0,12.0,16.0,1.0,6.0,10.0,1.0,0.0,35.0],["Pascal Siakam","IND","PF",1,35.0,12.0,20.0,1.0,3.0,3.0,8.0,2.0,6.0,1.0,1.0,0.0,30.0],["Pat Spencer","PHO","PG",1,7.0,0.0,1.0,1.0,1.0,0.0,0.0,0.0,3.0,1.0,1.0,1.0,3.0],["Paul George","BOS","PF",1,31.0,5.0,9.0,7.0,12.0,7.0,8.0,0.0,5.0,3.0,5.0,0.0,38.0],["Paul Reed","DET","C",1,17.0,2.0,3.0,0.0,0.0,2.0,2.0,2.0,4.0,2.0,1.0,0.0,6.0],["Payton Pritchard","BOS","PG",1,28.0,2.0,4.0,2.0,5.0,7.0,8.0,2.0,2.0,1.0,0.0,0.0,17.0],["Pelle Larsson","MIA","SG",1,24.0,0.0,1.0,0.0,1.0,2.0,2.0,0.0,3.0,4.0,1.0,1.0,2.0],["Peyton Watson","CLE","SF",1,30.0,2.0,4.0,0.0,3.0,4.0,4.0,0.0,1.0,2.0,2.0,1.0,8.0],["Precious Achiuwa","SAC","C",1,29.0,4.0,7.0,1.0,1.0,4.0,5.0,3.0,2.0,2.0,2.0,0.0,15.0],["Quentin Grimes","LAL","SG",1,27.0,4.0,5.0,0.0,2.0,2.0,2.0,0.0,2.0,4.0,1.0,1.0,10.0],["Quenton Jackson","IND","PG",1,16.0,2.0,3.0,0.0,0.0,2.0,2.0,1.0,3.0,1.0,3.0,0.0,6.0],["Quinten Post","MEM","C",1,19.0,2.0,2.0,1.0,2.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,7.0],["Rasheer Fleming","PHO","PF",1,12.0,0.0,2.0,0.0,3.0,1.0,2.0,1.0,1.0,0.0,1.0,1.0,1.0],["Reed Sheppard","HOU","PG",1,16.0,0.0,0.0,1.0,6.0,0.0,0.0,0.0,2.0,4.0,2.0,0.0,3.0],["RJ Barrett","TOR","SF",1,26.0,8.0,11.0,0.0,3.0,4.0,7.0,1.0,3.0,3.0,0.0,0.0,20.0],["Robert Williams","POR","C",1,15.0,1.0,3.0,0.0,0.0,0.0,0.0,3.0,7.0,1.0,0.0,1.0,2.0],["Ron Holland","DET","SF",1,3.0,0.0,0.0,0.0,1.0,0.0,0.0,1.0,0.0,1.0,0.0,1.0,0.0],["Royce O'Neale","CHO","SF",1,17.0,1.0,1.0,2.0,5.0,0.0,0.0,2.0,2.0,0.0,1.0,1.0,8.0],["Rudy Gobert","MIN","C",1,33.0,0.0,2.0,0.0,0.0,5.0,8.0,5.0,10.0,1.0,0.0,0.0,5.0],["Rui Hachimura","LAC","PF",1,32.0,1.0,6.0,2.0,7.0,2.0,5.0,2.0,6.0,2.0,1.0,1.0,10.0],["Ryan Conwell","MIA","SG",1,3.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,2.0,0.0,0.0,0.0],["Ryan Dunn","PHO","SF",1,14.0,0.0,0.0,0.0,1.0,3.0,4.0,1.0,1.0,0.0,0.0,0.0,3.0],["Ryan Kalkbrenner","CHO","C",1,14.0,2.0,3.0,0.0,0.0,0.0,0.0,3.0,2.0,3.0,0.0,2.0,4.0],["Ryan Nembhard","DEN","PG",1,2.0,1.0,2.0,1.0,1.0,0.0,0.0,1.0,0.0,1.0,0.0,0.0,5.0],["Ryan Rollins","MIL","PG",1,24.0,3.0,9.0,1.0,5.0,0.0,0.0,2.0,4.0,3.0,0.0,0.0,9.0],["Saddiq Bey","NOP","SF",1,24.0,2.0,5.0,2.0,4.0,3.0,3.0,0.0,5.0,0.0,0.0,0.0,13.0],["Sam Hauser","BOS","PF",1,18.0,1.0,2.0,3.0,5.0,0.0,0.0,1.0,3.0,1.0,0.0,0.0,11.0],["Sam Merrill","CLE","SG",1,24.0,1.0,2.0,1.0,3.0,0.0,0.0,1.0,4.0,2.0,1.0,0.0,5.0],["Sandro Mamukelashvili","LAL","PF",1,22.0,2.0,4.0,0.0,1.0,1.0,2.0,2.0,2.0,2.0,2.0,0.0,5.0],["Scoot Henderson","POR","PG",1,19.0,6.0,8.0,1.0,6.0,0.0,0.0,0.0,2.0,1.0,1.0,0.0,15.0],["Scottie Barnes","TOR","PF",1,26.0,7.0,16.0,1.0,3.0,6.0,6.0,2.0,4.0,5.0,0.0,0.0,23.0],["Scotty Pippen Jr.","MEM","PG",1,20.0,2.0,4.0,0.0,3.0,5.0,6.0,2.0,0.0,5.0,3.0,0.0,9.0],["Sergio de Larrea","DAL","PG",1,7.0,0.0,0.0,0.0,1.0,0.0,0.0,1.0,1.0,1.0,0.0,0.0,0.0],["Shai Gilgeous-Alexander","OKC","PG",2,35.5,6.5,14.0,3.0,9.0,2.5,3.0,1.0,3.0,3.5,1.5,2.0,24.5],["Sidy Cissoko","POR","SF",1,25.0,0.0,0.0,1.0,3.0,0.0,0.0,1.0,3.0,3.0,0.0,0.0,3.0],["Simone Fontecchio","MIA","SF",1,3.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0],["Sion James","CHO","SG",1,27.0,0.0,1.0,1.0,6.0,0.0,0.0,1.0,2.0,0.0,1.0,0.0,3.0],["Stephen Curry","GSW","PG",1,21.0,5.0,8.0,2.0,7.0,7.0,7.0,1.0,1.0,1.0,2.0,0.0,23.0],["Stephon Castle","SAS","PG",1,28.0,4.0,9.0,5.0,12.0,1.0,1.0,2.0,5.0,1.0,0.0,0.0,24.0],["Svi Mykhailiuk","UTA","SF",1,19.0,2.0,2.0,2.0,3.0,0.0,0.0,0.0,1.0,2.0,3.0,0.0,10.0],["Tari Eason","HOU","PF",1,3.0,1.0,2.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,1.0,0.0,2.0],["Tarris Reed Jr.","SAS","C",1,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],["Terrence Shannon Jr.","MIN","SG",1,20.0,1.0,2.0,2.0,7.0,2.0,4.0,1.0,0.0,1.0,0.0,0.0,10.0],["Tim Hardaway Jr.","MIA","SG",1,18.0,0.0,0.0,1.0,7.0,0.0,0.0,0.0,4.0,1.0,1.0,0.0,3.0],["Tobe Awaka","CHI","PF",1,14.0,1.0,1.0,0.0,0.0,0.0,0.0,6.0,1.0,2.0,0.0,1.0,2.0],["Toumani Camara","POR","PF",1,23.0,2.0,2.0,4.0,7.0,2.0,2.0,1.0,1.0,3.0,0.0,0.0,18.0],["Trae Young","WAS","PG",1,38.0,4.0,7.0,0.0,6.0,12.0,16.0,0.0,0.0,13.0,2.0,0.0,20.0],["Trayce Jackson-Davis","TOR","C",1,10.0,4.0,5.0,0.0,0.0,1.0,1.0,1.0,0.0,0.0,0.0,0.0,9.0],["Tre Johnson","WAS","SG",1,19.0,3.0,4.0,0.0,2.0,2.0,2.0,0.0,1.0,0.0,0.0,1.0,8.0],["Tre Jones","CHI","PG",1,13.0,5.0,7.0,0.0,1.0,3.0,4.0,0.0,3.0,0.0,0.0,0.0,13.0],["Trevon Brazile","DEN","PF",1,18.0,1.0,2.0,0.0,4.0,2.0,2.0,3.0,9.0,0.0,0.0,0.0,4.0],["Trey Lyles","MIN","PF",1,12.0,0.0,1.0,0.0,0.0,1.0,2.0,0.0,1.0,0.0,0.0,0.0,1.0],["Trey Murphy III","NOP","SF",1,32.0,2.0,6.0,2.0,5.0,1.0,1.0,0.0,4.0,1.0,0.0,0.0,11.0],["Tristan Da Silva","ORL","SF",1,28.0,1.0,1.0,4.0,10.0,0.0,0.0,1.0,1.0,3.0,1.0,1.0,14.0],["Ty Jerome","MEM","SG",1,32.0,12.0,15.0,5.0,10.0,6.0,7.0,1.0,6.0,6.0,0.0,1.0,45.0],["Tyler Herro","MIL","SG",1,32.0,5.0,10.0,4.0,11.0,2.0,2.0,0.0,2.0,9.0,1.0,0.0,24.0],["Tyrese Haliburton","IND","PG",1,34.0,6.0,9.0,2.0,6.0,5.0,5.0,0.0,2.0,12.0,1.0,0.0,23.0],["Tyrese Maxey","PHI","PG",2,40.5,8.5,13.0,2.0,8.0,7.0,8.5,1.0,2.5,5.5,2.5,1.5,30.0],["Tyrese Proctor","CLE","PG",1,5.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],["Tyus Jones","DEN","PG",1,10.0,1.0,2.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,2.0],["Victor Wembanyama","SAS","C",1,34.0,1.0,9.0,0.0,4.0,10.0,12.0,2.0,11.0,3.0,1.0,6.0,12.0],["VJ Edgecombe","PHI","SG",2,34.0,3.5,7.0,0.5,3.5,1.5,2.5,1.5,4.0,3.5,2.0,0.0,10.0],["Vít Krejčí","POR","PG",1,15.0,0.0,1.0,0.0,2.0,1.0,1.0,0.0,2.0,3.0,2.0,0.0,1.0],["Walker Kessler","LAL","C",1,30.0,12.0,12.0,0.0,0.0,2.0,4.0,2.0,7.0,1.0,0.0,2.0,26.0],["Wendell Carter Jr.","ORL","C",1,31.0,7.0,7.0,1.0,3.0,5.0,5.0,2.0,5.0,0.0,1.0,0.0,22.0],["Will Richard","GSW","SG",1,20.0,4.0,5.0,0.0,0.0,0.0,1.0,4.0,1.0,1.0,1.0,0.0,8.0],["Yang Hansen","POR","C",1,12.0,1.0,2.0,1.0,2.0,0.0,0.0,1.0,2.0,0.0,0.0,0.0,5.0],["Yaxel Lendeborg","GSW","SF",1,29.0,4.0,7.0,1.0,4.0,1.0,3.0,2.0,1.0,2.0,1.0,0.0,12.0],["Yves Missi","NOP","C",1,30.0,5.0,6.0,0.0,0.0,3.0,4.0,7.0,7.0,5.0,2.0,3.0,13.0],["Zaccharie Risacher","DAL","SF",1,27.0,2.0,3.0,0.0,4.0,0.0,0.0,1.0,5.0,2.0,5.0,0.0,4.0],["Zach Collins","CHI","PF",1,9.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,4.0,0.0,0.0,0.0,0.0],["Zach Edey","MEM","C",1,21.0,3.0,5.0,0.0,0.0,0.0,0.0,3.0,6.0,0.0,0.0,2.0,6.0],["Zach LaVine","SAC","SG",1,34.0,7.0,11.0,3.0,8.0,5.0,8.0,1.0,3.0,4.0,0.0,0.0,28.0],["Ziaire Williams","LAL","SF",1,24.0,3.0,5.0,1.0,2.0,0.0,0.0,1.0,2.0,4.0,1.0,0.0,9.0],["Zion Williamson","NOP","PF",1,32.0,5.0,12.0,2.0,4.0,6.0,6.0,1.0,2.0,3.0,3.0,0.0,22.0]],"t":[["ATL","Atlanta Hawks",113.8,0.268,0.775,125,30,13],["BOS","Boston Celtics",102.1,0.255,0.659,121,27,15],["BRK","Brooklyn Nets",104.5,0.275,0.643,110,26,15],["CHI","Chicago Bulls",114.1,0.375,0.692,135,31,10],["CHO","Charlotte Hornets",104.5,0.357,0.725,103,22,12],["CLE","Cleveland Cavaliers",112.8,0.222,0.8,114,24,7],["DAL","Dallas Mavericks",101.6,0.242,0.595,128,32,16],["DEN","Denver Nuggets",96.6,0.388,0.68,96,22,11],["DET","Detroit Pistons",102.1,0.341,0.745,113,28,17],["GSW","Golden State Warriors",103.8,0.313,0.677,127,28,11],["HOU","Houston Rockets",101.6,0.405,0.758,110,20,11],["IND","Indiana Pacers",107.7,0.205,0.708,120,23,10],["LAC","LA Clippers",104,0.262,0.776,96,22,8],["LAL","Los Angeles Lakers",103.8,0.323,0.688,105,25,8],["MEM","Memphis Grizzlies",105,0.313,0.889,103,25,11],["MIA","Miami Heat",109.6,0.103,0.638,131,20,21],["MIL","Milwaukee Bucks",105.7,0.289,0.7,128,28,6],["MIN","Minnesota Timberwolves",109.6,0.362,0.897,106,27,8],["NOP","New Orleans Pelicans",107.7,0.292,0.795,123,29,9],["NYK","New York Knicks",107.8,0.264,0.867,106,28,11],["OKC","Oklahoma City Thunder",102.6,0.274,0.698,94,19,9],["ORL","Orlando Magic",113.8,0.225,0.732,132,28,14],["PHI","Philadelphia 76ers",110.3,0.167,0.755,103,19.5,9],["PHO","Phoenix Suns",100.7,0.245,0.619,124,32,19],["POR","Portland Trail Blazers",100.7,0.381,0.755,83,14,6],["SAC","Sacramento Kings",104,0.224,0.738,121,29,14],["SAS","San Antonio Spurs",108.7,0.213,0.778,116,24,14],["TOR","Toronto Raptors",114.1,0.308,0.625,92,16,4],["UTA","Utah Jazz",105,0.111,0.688,123,23,13],["WAS","Washington Wizards",105.7,0.3,0.711,116,28,15]]};
+const HOME_ADV=0.01, MIN_EDGE=0.05;
+const CV={pts:.25,reb:.35,ast:.40,tpm:.60,pra:.20,pr:.23,pa:.23,ra:.30};
+const TEAMS={}; DATA.t.forEach(t=>TEAMS[t[0]]={ab:t[0],name:t[1],pace:t[2],orb:t[3],drb:t[4],pts:t[5],ast:t[6],tpm:t[7]});
+const TL=Object.values(TEAMS).sort((a,b)=>a.name.localeCompare(b.name));
+const avg=a=>a.reduce((s,x)=>s+x,0)/a.length;
+const LG={pace:avg(TL.map(t=>t.pace)),orb:avg(TL.map(t=>t.orb)),drb:avg(TL.map(t=>t.drb)),
+  pts:avg(TL.map(t=>t.pts/t.pace)),ast:avg(TL.map(t=>t.ast/t.pace)),tpm:avg(TL.map(t=>t.tpm/t.pace))};
+const P=DATA.p.map((r,i)=>({i,name:r[0],tm:r[1],pos:r[2],g:r[3],mp:r[4],p2:r[5],a2:r[6],p3:r[7],a3:r[8],ft:r[9],fta:r[10],orb:r[11],drb:r[12],ast:r[13],stl:r[14],blk:r[15],pts:r[16]}));
+
+let S={}; const KEY="nba-proj-v1";
+try{S=JSON.parse(localStorage.getItem(KEY)||"{}")||{}}catch(e){S={}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+const ov=n=>S[n]||(S[n]={});
+
+const $=id=>document.getElementById(id);
+const G={team:"",rival:"WAS",home:1,q:"",minmp:10,sort:"pts",dir:-1};
+const open=new Set();
+
+function adjFor(tm,opp){
+  const t=TEAMS[tm],o=TEAMS[opp]; if(!t||!o||tm===opp) return null;
+  return {pace:((t.pace+o.pace)/2)/t.pace, def:(o.pts/o.pace)/LG.pts, orb:(1-o.drb)/(1-LG.drb), drb:(1-o.orb)/(1-LG.orb), ast:(o.ast/o.pace)/LG.ast, tpm:(o.tpm/o.pace)/LG.tpm};
+}
+function rowState(p){const o=S[p.name]||{};return {xmp:o.x!=null?o.x:Math.round(p.mp), rival:o.r||G.rival, home:o.h!=null?o.h:G.home}}
+function project(p){
+  const st=rowState(p), a=adjFor(p.tm,st.rival);
+  if(!a||!p.mp) return {st,ok:false};
+  const base=(st.xmp/p.mp)*a.pace*(st.home?1+HOME_ADV:1-HOME_ADV);
+  const pts=(p.p2*2+p.p3*3+p.ft)*base*a.def;
+  const reb=p.orb*base*a.orb+p.drb*base*a.drb;
+  const ast=p.ast*base*a.ast, tpm=p.p3*base*a.tpm;
+  return {st,ok:true,pts,reb,ast,tpm,pra:pts+reb+ast,pr:pts+reb,pa:pts+ast,ra:reb+ast,stl:p.stl*base,blk:p.blk*base};
+}
+const seasonVal=(p,k)=>({pts:p.pts,reb:p.orb+p.drb,ast:p.ast,tpm:p.p3,pra:p.pts+p.orb+p.drb+p.ast,stl:p.stl,blk:p.blk})[k];
+const f1=x=>(Math.round(x*10)/10).toFixed(1);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function erf(x){const s=Math.sign(x);x=Math.abs(x);const t=1/(1+.3275911*x);const y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-.284496736)*t+.254829592)*t*Math.exp(-x*x);return s*y}
+const ncdf=(x,m,sd)=>.5*(1+erf((x-m)/(sd*Math.SQRT2)));
+const impl=o=>o<0?-o/(-o+100):100/(o+100);
+
+// selects
+const teamSel=$("team"),rivalSel=$("rival");
+teamSel.innerHTML='<option value="">Todos los equipos</option>'+TL.map(t=>`<option value="${t.ab}">${esc(t.name)}</option>`).join("");
+const rivalOpts=TL.map(t=>`<option value="${t.ab}">${esc(t.name)}</option>`).join("");
+rivalSel.innerHTML=rivalOpts; rivalSel.value=G.rival;
+
+const COLS=["pts","reb","ast","tpm","pra","stl","blk"];
+function cellsHTML(p,pr){
+  return COLS.map(k=>{
+    if(!pr.ok) return `<td class="v" data-c="${k}">—</td>`;
+    const v=pr[k],s=seasonVal(p,k),cls=v>s+.05?"up":v<s-.05?"dn":"";
+    return `<td class="v" data-c="${k}">${f1(v)}<small class="${cls}">${f1(s)}</small></td>`}).join("");
+}
+function rowHTML(p){
+  const pr=project(p),st=pr.st;
+  return `<tr data-i="${p.i}" class="${pr.ok?"":"warn"}">
+   <td class="l name">${esc(p.name)}<small>${p.tm}${p.pos?" · "+esc(p.pos):""}</small></td>
+   <td>${p.g}</td><td>${f1(p.mp)}</td>
+   <td><input type="number" min="0" max="48" step="0.5" value="${st.xmp}" data-a="x" aria-label="Minutos esperados de ${esc(p.name)}"></td>
+   <td class="l"><select data-a="r" aria-label="Rival de ${esc(p.name)}">${rivalOpts.replace(`value="${st.rival}"`,`value="${st.rival}" selected`)}</select></td>
+   <td><button type="button" class="tog" data-a="h" aria-pressed="${st.home?"true":"false"}">${st.home?"Sí":"No"}</button></td>
+   ${cellsHTML(p,pr)}
+   <td><button type="button" class="exp" data-a="e" aria-expanded="${open.has(p.i)}" aria-label="Props de ${esc(p.name)}">${open.has(p.i)?"▾":"▸"}</button></td></tr>`
+   +(open.has(p.i)?detailHTML(p,pr):"");
+}
+const PROPS=[["pts","Puntos"],["reb","Rebotes"],["ast","Asistencias"],["tpm","Triples"],["pra","PRA"],["pr","Pts+Reb"],["pa","Pts+Ast"],["ra","Reb+Ast"]];
+function propOut(p,pr,k){
+  const L=(S[p.name]||{}).l||{}, l=L[k]||{};
+  if(!pr.ok) return `<span>Elige un rival distinto a su equipo</span>`;
+  if(l.line==null||l.line==="") return `<span>Escribe la línea</span>`;
+  const m=pr[k],sd=Math.max(.5,m*CV[k]),po=1-ncdf(+l.line,m,sd),pu=1-po;
+  const io=l.oo!=null&&l.oo!==""?impl(+l.oo):null, iu=l.ou!=null&&l.ou!==""?impl(+l.ou):null;
+  const eo=io!=null?po-io:null, eu=iu!=null?pu-iu:null;
+  const pick=eo!=null&&eo>=MIN_EDGE?"OVER":eu!=null&&eu>=MIN_EDGE?"UNDER":"PASS";
+  const pct=x=>(x*100).toFixed(1)+"%", sg=x=>x==null?"–":(x>=0?"+":"")+(x*100).toFixed(1)+"%";
+  return `<span>O ${pct(po)} · U ${pct(pu)}<br><small>Edge O ${sg(eo)} · U ${sg(eu)}</small></span><span class="pill ${pick}">${pick}</span>`;
+}
+function detailHTML(p,pr){
+  const L=(S[p.name]||{}).l||{};
+  return `<tr class="detail" data-d="${p.i}"><td colspan="14"><div class="props">`+PROPS.map(([k,lab])=>{const l=L[k]||{};
+   return `<div class="prop" data-k="${k}"><h4>${lab}<span>${pr.ok?f1(pr[k]):"—"}</span></h4>
+   <div class="in"><div><label for="l${p.i}${k}">Línea</label><input id="l${p.i}${k}" type="number" step="0.5" data-a="line" value="${l.line??""}"></div>
+   <div><label for="o${p.i}${k}">Cuota O</label><input id="o${p.i}${k}" type="number" step="5" placeholder="-110" data-a="oo" value="${l.oo??""}"></div>
+   <div><label for="u${p.i}${k}">Cuota U</label><input id="u${p.i}${k}" type="number" step="5" placeholder="-110" data-a="ou" value="${l.ou??""}"></div></div>
+   <div class="out">${propOut(p,pr,k)}</div></div>`}).join("")+`</div></td></tr>`;
+}
+
+function visible(){
+  const q=G.q.trim().toLowerCase();
+  let rows=P.filter(p=>(!G.team||p.tm===G.team)&&(!q||p.name.toLowerCase().includes(q))&&p.mp>=G.minmp);
+  const proj=new Map(rows.map(p=>[p.i,project(p)]));
+  const key=p=>{const pr=proj.get(p.i),k=G.sort;
+    if(k==="name"||k==="rival") return k==="name"?p.name:pr.st.rival;
+    if(k==="g"||k==="mp") return p[k]; if(k==="xmp") return pr.st.xmp; if(k==="home") return pr.st.home;
+    return pr.ok?pr[k]:-1};
+  rows.sort((a,b)=>{const x=key(a),y=key(b);return (typeof x==="string"?x.localeCompare(y):x-y)*G.dir});
+  return rows;
+}
+function render(){
+  const rows=visible();
+  $("tb").innerHTML=rows.map(rowHTML).join("")||`<tr><td colspan="14" class="l">Ningún jugador coincide con los filtros. Baja el mínimo de minutos o cambia el equipo.</td></tr>`;
+  $("count").textContent=rows.length+" jugadores";
+  document.querySelectorAll("th[data-k]").forEach(th=>{th.removeAttribute("aria-sort");if(th.dataset.k===G.sort)th.setAttribute("aria-sort",G.dir<0?"descending":"ascending")});
+  renderAdj();
+}
+function renderAdj(){
+  const box=$("adj");
+  if(!G.team){box.innerHTML=`<span class="chip">Elige un equipo para ver su partido contra el rival. Sin filtro, todos los jugadores usan el rival de arriba salvo los que cambies en su fila.</span>`;return}
+  const a=adjFor(G.team,G.rival);
+  if(!a){box.innerHTML=`<span class="chip dn">El rival no puede ser el mismo equipo.</span>`;return}
+  const c=(lab,v)=>`<span class="chip">${lab} <b class="${v>1.005?"up":v<.995?"dn":""}">×${v.toFixed(2)}</b></span>`;
+  box.innerHTML=`<span class="chip"><b>${esc(TEAMS[G.team].name)}</b> vs <b>${esc(TEAMS[G.rival].name)}</b> · ${G.home?"local":"visita"}</span>`+
+    c("Pace",a.pace)+c("Defensa (pts)",a.def)+c("Reb of.",a.orb)+c("Reb def.",a.drb)+c("Asist.",a.ast)+c("Triples",a.tpm);
+}
+function refreshRow(tr){
+  const p=P[+tr.dataset.i],pr=project(p);
+  tr.classList.toggle("warn",!pr.ok);
+  COLS.forEach(k=>{const td=tr.querySelector(`[data-c="${k}"]`);const tmp=document.createElement("tr");tmp.innerHTML=cellsHTML(p,pr);td.replaceWith(tmp.querySelector(`[data-c="${k}"]`))});
+  const d=tr.nextElementSibling;
+  if(d&&d.dataset.d==tr.dataset.i) d.querySelectorAll(".prop").forEach(el=>{const k=el.dataset.k;el.querySelector("h4 span").textContent=pr.ok?f1(pr[k]):"—";el.querySelector(".out").innerHTML=propOut(p,pr,k)});
+}
+
+$("tb").addEventListener("input",e=>{
+  const el=e.target,a=el.dataset.a; if(!a) return;
+  const d=el.closest("tr.detail");
+  if(d){const p=P[+d.dataset.d],k=el.closest(".prop").dataset.k,o=ov(p.name);o.l=o.l||{};o.l[k]=o.l[k]||{};o.l[k][a]=el.value;save();refreshRow(d.previousElementSibling);return}
+  const tr=el.closest("tr"),p=P[+tr.dataset.i];
+  if(a==="x"){const v=parseFloat(el.value);if(isNaN(v))return;ov(p.name).x=Math.max(0,Math.min(48,v))}
+  if(a==="r") ov(p.name).r=el.value;
+  save();refreshRow(tr);
+});
+$("tb").addEventListener("click",e=>{
+  const b=e.target.closest("button");if(!b)return;const tr=b.closest("tr"),p=P[+tr.dataset.i];
+  if(b.dataset.a==="h"){const st=rowState(p);ov(p.name).h=st.home?0:1;save();b.setAttribute("aria-pressed",String(!st.home));b.textContent=st.home?"No":"Sí";refreshRow(tr)}
+  if(b.dataset.a==="e"){open.has(p.i)?open.delete(p.i):open.add(p.i);
+    const d=tr.nextElementSibling; if(d&&d.classList.contains("detail")) d.remove();
+    if(open.has(p.i)) tr.insertAdjacentHTML("afterend",detailHTML(p,project(p)));
+    b.textContent=open.has(p.i)?"▾":"▸";b.setAttribute("aria-expanded",String(open.has(p.i)))}
+});
+document.querySelector("thead").addEventListener("click",e=>{const th=e.target.closest("th[data-k]");if(!th)return;const k=th.dataset.k;
+  if(G.sort===k)G.dir*=-1;else{G.sort=k;G.dir=(k==="name"||k==="rival")?1:-1}render()});
+$("q").addEventListener("input",e=>{G.q=e.target.value;render()});
+teamSel.addEventListener("change",e=>{G.team=e.target.value;if(G.team&&G.rival===G.team){G.rival=TL.find(t=>t.ab!==G.team).ab;rivalSel.value=G.rival}
+  if(G.team)P.forEach(p=>{if(p.tm===G.team&&S[p.name]){delete S[p.name].r;delete S[p.name].h}});save();render()});
+rivalSel.addEventListener("change",e=>{G.rival=e.target.value;
+  P.forEach(p=>{if((!G.team||p.tm===G.team)&&S[p.name])delete S[p.name].r});save();render()});
+$("home").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;G.home=+b.dataset.v;
+  $("home").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));
+  P.forEach(p=>{if((!G.team||p.tm===G.team)&&S[p.name])delete S[p.name].h});save();render()});
+$("minmp").addEventListener("input",e=>{const v=parseFloat(e.target.value);G.minmp=isNaN(v)?0:v;render()});
+$("reset").addEventListener("click",()=>{S={};save();open.clear();render()});
+render();
+</script>
