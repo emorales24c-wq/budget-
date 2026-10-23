@@ -7,6 +7,7 @@ import java.net.URL
 import java.text.Normalizer
 
 data class LiveGame(
+    val start: Long,            // tip-off, epoch ms (0 if unknown)
     val state: String,          // pre | in | post
     val detail: String,         // "Q3 5:12", "Final", "10/23 - 4:00 PM EDT"
     val score: String,
@@ -97,7 +98,14 @@ object Espn {
                 }
             }
         }
-        return LiveGame(type.optString("state"), type.optString("shortDetail"), score, players)
+        return LiveGame(parseTime(comp.optString("date")), type.optString("state"), type.optString("shortDetail"), score, players)
+    }
+
+    // ESPN dates look like "2026-10-23T20:00Z"
+    private fun parseTime(s: String): Long = try {
+        java.time.OffsetDateTime.parse(s, java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME).toInstant().toEpochMilli()
+    } catch (e: Exception) {
+        try { java.time.Instant.parse(s).toEpochMilli() } catch (e2: Exception) { 0L }
     }
 
     fun findPlayer(g: LiveGame, query: String): PlayerLine? {

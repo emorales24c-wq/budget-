@@ -1,5 +1,6 @@
 package com.edwin.livebets
 
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -33,7 +34,8 @@ class BetService : Service() {
         private const val CH_RESULT = "result"
         private const val SERVICE_ID = 1
         private const val LIVE_MS = 20_000L
-        private const val PREGAME_MS = 5 * 60_000L
+        private const val PREGAME_MAX_MS = 30 * 60_000L   // check at least this often before tip-off
+        private const val TIPOFF_EARLY_MS = 2 * 60_000L   // wake up this long before tip-off
 
         /** The running service, so a cleared notification can ask it to post again. */
         @Volatile var running: BetService? = null
@@ -76,6 +78,40 @@ class BetService : Service() {
         handler.postDelayed(tick, 1000)
     }
 
+    /** The pre-game alarm fired: start polling now. */
+    fun wakeAndPoll() {
+        stayAwake()
+        handler.removeCallbacks(tick)
+        handler.post(tick)
+    }
+
+    // Short, renewed wake lock: held only while games are live, never left dangling
+    private fun stayAwake() {
+        val wl = wakeLock ?: getSystemService(PowerManager::class.java)
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "livebets:poll")
+            .apply { setReferenceCounted(false) }
+            .also { wakeLock = it }
+        wl.acquire(2 * 60_000L)
+    }
+
+    private fun sleep() {
+        wakeLock?.let { if (it.isHeld) it.release() }
+    }
+
+    // Exact alarms still fire in Doze, unlike Handler delays
+    private fun scheduleWake(atMs: Long) {
+        val am = getSystemService(AlarmManager::class.java)
+        val pi = PendingIntent.getBroadcast(
+            this, 0, Intent(this, WakeReceiver::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        if (Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms()) {
+            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMs, pi)
+        } else {
+            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMs, pi)
+        }
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val n = NotificationCompat.Builder(this, CH_SERVICE)
             .setSmallIcon(R.drawable.ic_stat)
@@ -84,18 +120,15 @@ class BetService : Service() {
             .setContentIntent(openApp())
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .build()
-        ServiceCompat.startForeground(
-            this, SERVICE_ID, n,
-            if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0
-        )
-        if (wakeLock == null) {
-            wakeLock = getSystemService(PowerManager::class.java)
-                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "livebets:poll")
-                .apply { acquire(6 * 60 * 60_000L) }
+        // dataSync services are cut off after 6 h a day on Android 15; specialUse has no limit
+        val type = when {
+            Build.VERSION.SDK_INT >= 34 -> ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            Build.VERSION.SDK_INT >= 29 -> ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            else -> 0
         }
-        // Bet list changed: refresh right away
-        handler.removeCallbacks(tick)
-        handler.post(tick)
+        ServiceCompat.startForeground(this, SERVICE_ID, n, type)
+        // Bet list changed (or alarm fired): refresh right away
+        wakeAndPoll()
         return START_STICKY
     }
 
@@ -107,7 +140,7 @@ class BetService : Service() {
         running = null
         handler.removeCallbacks(tick)
         thread.quitSafely()
-        wakeLock?.let { if (it.isHeld) it.release() }
+        sleep()
         super.onDestroy()
     }
 
@@ -132,8 +165,25 @@ class BetService : Service() {
         }
 
         for (b in open) show(b, games)
-        val anyLive = games.values.any { it?.state == "in" }
-        return if (anyLive || games.values.any { it == null }) LIVE_MS else PREGAME_MS
+
+        // Live: keep the CPU awake and poll every 20 s
+        if (games.values.any { it?.state == "in" }) {
+            stayAwake()
+            return LIVE_MS
+        }
+        val now = System.currentTimeMillis()
+        // ESPN unreachable (no signal?): retry in a minute without holding the CPU awake
+        if (games.values.any { it == null }) {
+            scheduleWake(now + 60_000L)
+            sleep()
+            return 60_000L
+        }
+        // Before tip-off: sleep until just before the first game starts
+        val firstStart = games.values.mapNotNull { it?.start }.filter { it > 0 }.minOrNull()
+        val delay = ((firstStart ?: 0L) - TIPOFF_EARLY_MS - now).coerceIn(60_000L, PREGAME_MAX_MS)
+        scheduleWake(now + delay)
+        sleep()
+        return delay
     }
 
     private class LegResult(
