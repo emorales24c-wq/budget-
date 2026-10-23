@@ -55,7 +55,7 @@ const S = {
   games: [],
   live: {},          // eventId -> {state, detail, score, players:{normName:{name,stats}}}
   rosters: {},       // gameId -> [{abbr, names}]
-  form: {game:"", player:"", stat:"REB", side:"over", line:"", stake:"", odds:""},
+  form: {game:"", player:"", stat:"REB", side:"over", line:"", stake:"", odds:"", sign:"-"},
   mode: "single",    // single | parlay
   draft: [],         // parlay legs being built
   editing: null,     // id of the bet loaded into the form
@@ -376,7 +376,7 @@ function formLeg(){
 function addBet(){
   const leg = formLeg(), f = S.form;
   if (!leg) return;
-  putBet({id: Date.now(), ...leg, stake: parseFloat(f.stake) || 0, odds: f.odds});
+  putBet({id: Date.now(), ...leg, stake: parseFloat(f.stake) || 0, odds: fullOdds()});
   f.player = ""; f.line = ""; f.stake = ""; f.odds = ""; S.err = "";
   save(); poll();
 }
@@ -392,7 +392,7 @@ function addLeg(){
 function saveParlay(){
   const f = S.form;
   if (S.draft.length < 2) { S.err = "Un parlay necesita 2 piernas o más"; return render(); }
-  putBet({id: Date.now(), parlay: true, legs: S.draft, stake: parseFloat(f.stake) || 0, odds: f.odds});
+  putBet({id: Date.now(), parlay: true, legs: S.draft, stake: parseFloat(f.stake) || 0, odds: fullOdds()});
   S.draft = []; f.stake = ""; f.odds = ""; S.err = "";
   save(); poll();
 }
@@ -410,7 +410,7 @@ function editBet(id){
   const b = S.bets.find(x => x.id === id);
   if (!b) return;
   S.editing = id; S.err = "";
-  S.form.stake = b.stake ? String(b.stake) : ""; S.form.odds = b.odds || "";
+  S.form.stake = b.stake ? String(b.stake) : ""; setOdds(b.odds || "");
   if (b.parlay) { S.mode = "parlay"; S.draft = b.legs.map(l => ({...l})); S.form.player = ""; S.form.line = ""; }
   else { S.mode = "single"; S.draft = []; fillForm(b); }
   render();
@@ -436,7 +436,17 @@ function putBet(bet){
 function setTab(t){ S.tab = t; render(); }
 function setResult(id, r){ const h = S.history.find(x => x.id === id); if (h) { h.result = r; save(); render(); } }
 function delHist(id){ if (confirm("¿Borrar esta apuesta del historial?")) { S.history = S.history.filter(h => h.id !== id); save(); render(); } }
-function setMode(m){ if (S.editing) return; S.mode = m; S.err = ""; render(); }
+function setMode(m){
+  if (S.editing) return;
+  S.mode = m; S.err = "";
+  if (!S.form.odds) S.form.sign = m === "parlay" ? "+" : "-";
+  render();
+}
+
+// Phone number pads have no "+" key, so the sign is a separate toggle button
+const fullOdds = () => { const d = S.form.odds.replace(/\D/g, ""); return d ? S.form.sign + d : ""; };
+function setOdds(o){ S.form.sign = o.startsWith("+") ? "+" : "-"; S.form.odds = o.replace(/\D/g, ""); }
+function flipSign(){ S.form.sign = S.form.sign === "+" ? "-" : "+"; render(); }
 function delBet(id){ S.bets = S.bets.filter(b => b.id !== id); save(); render(); }
 function setF(k, v){ S.form[k] = v; if (k === "game") S.form.player = "";
   if (k !== "line" && k !== "stake" && k !== "odds") render(); }
@@ -486,7 +496,7 @@ function betCard(b){
     <div style="display:flex;justify-content:space-between;align-items:flex-start">
       <div>
         <div style="font-size:14px">${esc(r.p?.name || b.player)}</div>
-        <div class="muted">${b.side === "over" ? "Over" : "Under"} ${b.line} ${b.stat}${b.stake ? ` · $${b.stake} → $${payout(b).toFixed(2)}` : ""}</div>
+        <div class="muted">${b.side === "over" ? "Over" : "Under"} ${b.line} ${b.stat}${b.stake ? ` · $${b.stake} → $${payout(b).toFixed(2)}` : ""}${b.odds ? ` (${esc(b.odds)})` : ""}</div>
       </div>
       <div style="display:flex;gap:6px"><button class="btns" style="padding:4px 10px" onclick="editBet(${b.id})">✏️</button><button class="btnd" onclick="delBet(${b.id})">✕</button></div>
     </div>
@@ -610,7 +620,10 @@ function formCard(f, g, roster, liveNames){
     ${parlay ? `<button class="btns" style="width:100%;margin-bottom:12px" onclick="addLeg()">+ Agregar pierna al parlay</button>` : ""}
     <div class="row">
       <input class="inp" type="number" inputmode="decimal" placeholder="Apuesta $" value="${esc(f.stake)}" oninput="setF('stake',this.value)"/>
-      <input class="inp" inputmode="numeric" placeholder="${parlay ? "Odds (+600)" : "Odds (-110)"}" value="${esc(f.odds)}" oninput="setF('odds',this.value)"/>
+      <div style="display:flex;gap:6px">
+        <button class="btns" style="flex:0 0 44px;height:39px;padding:0;font-size:18px;color:${f.sign === "+" ? "#3ecf8e" : "#f87171"}" onclick="flipSign()">${f.sign === "+" ? "+" : "−"}</button>
+        <input class="inp" style="flex:1;min-width:0" inputmode="numeric" placeholder="Odds (${parlay ? "600" : "110"})" value="${esc(f.odds)}" oninput="setF('odds',this.value)"/>
+      </div>
     </div>
     ${parlay
       ? `<button class="btnp" style="width:100%" onclick="saveParlay()">${S.editing ? "Guardar cambios" : "Guardar parlay"} (${S.draft.length} piernas)</button>`
