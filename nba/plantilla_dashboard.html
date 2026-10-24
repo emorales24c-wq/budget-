@@ -95,6 +95,7 @@ table.dtbl{min-width:560px}
 .dtbl th{text-align:center} .dtbl th.l{text-align:left}
 .dtbl tr.hl td{outline:2px solid var(--accent);outline-offset:-2px}
 .wt{display:block;font-size:.68rem;color:var(--muted);font-weight:400}
+.mix{background:var(--sunk);border-left:3px solid var(--accent);border-radius:6px;padding:8px 12px;margin:0 0 10px;font-size:.88rem;max-width:90ch}
 .foot{color:var(--muted);font-size:.8rem;margin-top:14px;max-width:75ch;display:grid;gap:6px}
 .count{color:var(--muted);font-size:.85rem;margin-left:auto}
 @media (max-width:640px){.controls{position:static} h1{font-size:1.8rem} #q{width:100%} .f.grow{flex:1 1 100%}}
@@ -113,6 +114,7 @@ table.dtbl{min-width:560px}
   <p class="meta">Pon los minutos esperados (xMP) y el rival de cada jugador, y la tabla calcula sus stats proyectados. Toca ▸ en una fila para meter la línea y las cuotas de un prop.</p>
 </header>
 
+<p class="mix" id="mix" hidden></p>
 <nav class="tabs" role="tablist">
   <button type="button" role="tab" id="tab-proj" aria-selected="true" aria-controls="view-proj">Proyecciones</button>
   <button type="button" role="tab" id="tab-dvp" aria-selected="false" aria-controls="view-dvp">Defensa por posición</button>
@@ -190,7 +192,7 @@ const LG={pace:avg(TL.map(t=>t.pace)),orb:avg(TL.map(t=>t.orb)),drb:avg(TL.map(t
   pts:avg(TL.map(t=>t.pts/t.pace)),ast:avg(TL.map(t=>t.ast/t.pace)),tpm:avg(TL.map(t=>t.tpm/t.pace)),off:avg(TL.map(t=>t.ppg/t.pace))};
 const SD_TOTAL=12, SD_SPREAD=12;
 const DV=DATA.dvp||{};
-const P=DATA.p.map((r,i)=>({i,name:r[0],tm:r[1],pos:r[2],g:r[3],mp:r[4],p2:r[5],a2:r[6],p3:r[7],a3:r[8],ft:r[9],fta:r[10],orb:r[11],drb:r[12],ast:r[13],stl:r[14],blk:r[15],pts:r[16],gs:r[17]||0}));
+const P=DATA.p.map((r,i)=>({i,name:r[0],tm:r[1],pos:r[2],g:r[3],mp:r[4],p2:r[5],a2:r[6],p3:r[7],a3:r[8],ft:r[9],fta:r[10],orb:r[11],drb:r[12],ast:r[13],stl:r[14],blk:r[15],pts:r[16],gs:r[17]||0,w:r[18]==null?1:r[18]}));
 const roleOf=p=>p.g&&p.gs/p.g>=.5?"S":"B";
 
 let S={}; const KEY="nba-proj-v1";
@@ -245,7 +247,7 @@ function rowHTML(p){
   const pr=project(p),st=pr.st;
   return `<tr data-i="${p.i}" class="${pr.ok?"":"warn"}">
    <td class="l name">${esc(p.name)}<small>${p.tm}${p.pos?" · "+esc(p.pos):""} · ${roleOf(p)==="S"?"Titular":"Suplente"}${pr.ok&&!pr.pos&&G.usePos?" · sin ajuste por posición":""}</small></td>
-   <td>${p.g}</td><td>${f1(p.mp)}</td>
+   <td>${p.g}${p.w<1?`<small class="wt" title="Peso de 2026-27 en sus promedios; el resto es 2025-26">${Math.round(p.w*100)}% 26-27</small>`:""}</td><td>${f1(p.mp)}</td>
    <td><input type="number" min="0" max="48" step="0.5" value="${st.xmp}" data-a="x" aria-label="Minutos esperados de ${esc(p.name)}"></td>
    <td class="l"><select data-a="r" aria-label="Rival de ${esc(p.name)}">${rivalOpts.replace(`value="${st.rival}"`,`value="${st.rival}" selected`)}</select></td>
    <td><button type="button" class="tog" data-a="h" aria-pressed="${st.home?"true":"false"}">${st.home?"Sí":"No"}</button></td>
@@ -408,6 +410,9 @@ if(location.hash==="#defensa")showTab("dvp");
 
 $("minmp").addEventListener("input",e=>{const v=parseFloat(e.target.value);G.minmp=isNaN(v)?0:v;render()});
 $("reset").addEventListener("click",()=>{S={};save();open.clear();render()});
+const MZ=DATA.mezcla;
+if(MZ&&MZ.activa){const m=$("mix");m.hidden=false;
+  m.innerHTML=`<b>Inicio de temporada:</b> los promedios se mezclan con la 2025-26 hasta que todos los equipos lleven ${MZ.corte} partidos (hoy el que menos lleva tiene ${MZ.minPJ}). Con 1 partido pesa 25% esta temporada, con 2 pesa 50% y con 3 pesa 75%. Debajo de PJ ves el peso de cada jugador. La defensa por posición usa solo 2026-27.`}
 render();
 
 // Botón de actualizar: arranca la tarea "Actualizar stats NBA", que baja los datos y vuelve a publicar esta página

@@ -60,41 +60,89 @@ os.makedirs(RAW,exist_ok=True)
 for _,slug in TR_STATS:
     fetch(f"https://www.teamrankings.com/nba/stat/{slug}",os.path.join(RAW,slug+".html")); time.sleep(1)
 fetch(f"https://www.basketball-reference.com/leagues/NBA_{SEASON_END}_per_game.html",os.path.join(RAW,"per_game.html"))
+
+# Inicio de temporada: mientras algún equipo lleve menos de CORTE partidos, se mezcla con la
+# temporada pasada (peso de la actual = partidos/CORTE). Cuando TODOS lleguen a CORTE, solo 2026-27.
+CORTE=4
 TRMAP={"Atlanta":"ATL","Boston":"BOS","Brooklyn":"BRK","Charlotte":"CHO","Chicago":"CHI","Cleveland":"CLE","Dallas":"DAL","Denver":"DEN","Detroit":"DET","Golden State":"GSW","Houston":"HOU","Indiana":"IND","LA Clippers":"LAC","LA Lakers":"LAL","Memphis":"MEM","Miami":"MIA","Milwaukee":"MIL","Minnesota":"MIN","New Orleans":"NOP","New York":"NYK","Okla City":"OKC","Orlando":"ORL","Philadelphia":"PHI","Phoenix":"PHO","Portland":"POR","Sacramento":"SAC","San Antonio":"SAS","Toronto":"TOR","Utah":"UTA","Washington":"WAS"}
 def num(v):
     v=str(v).strip()
+    if v in ("","--","nan"): return None
     return float(v.replace("%",""))/100 if v.endswith("%") else float(v)
-stats={}
-for key,f in TR_STATS:
-    t=pd.read_html(os.path.join(RAW,f+".html"))[0]
-    col=t.columns[2]
-    stats[key]={TRMAP[r.Team]:num(r[col]) for _,r in t.iterrows()}
-full={a:n for a,n,*_ in TEAM_NAMES}
-T=[(a,full[a],stats["pace"][a],stats["orb"][a],stats["drb"][a],stats["pts"][a],stats["ast"][a],stats["tpm"][a],stats["ppg"][a]) for a in sorted(full)]
-pg=pd.read_html(os.path.join(RAW,"per_game.html"))[0]
-pg=pg[pg.Rk.astype(str)!="Rk"]
-pg=pg[~pg.Team.astype(str).str.contains("TM")]
-pg=pg[pg.Player.astype(str)!="League Average"]
-pg=pg.drop_duplicates("Player",keep="last").drop(columns=["Awards"],errors="ignore")
-pg=pg.sort_values("Player",key=lambda c:c.str.lower()).reset_index(drop=True)
-PROWS=[]
-for _,r in pg.iterrows():
+
+def read_per_game(path):
+    pg=pd.read_html(path)[0]
+    pg=pg[pg.Rk.astype(str)!="Rk"]
+    pg=pg[pg.Player.astype(str)!="League Average"]
+    return pg.drop(columns=["Awards"],errors="ignore")
+
+def to_row(r,cols):
     row=[]
-    for c in pg.columns:
+    for c in cols:
         v=r[c]
         if c in ("Player","Team","Pos"): row.append(None if pd.isna(v) else str(v))
         else:
             try: row.append(None if pd.isna(v) or str(v)=="" else float(v))
             except ValueError: row.append(None)
-    PROWS.append(row)
+    return row
 
-# Defensa por posición desde los box scores
+cur=read_per_game(os.path.join(RAW,"per_game.html"))
+COLS=list(cur.columns)
+cur=cur[~cur.Team.astype(str).str.contains("TM")].drop_duplicates("Player",keep="last")
+cur=cur.sort_values("Player",key=lambda c:c.str.lower()).reset_index(drop=True)
+PROWS=[to_row(r,COLS) for _,r in cur.iterrows()]
+IX={c:i for i,c in enumerate(COLS)}
+
+# Defensa por posición desde los box scores (solo 2026-27)
 BOX_DIR=os.path.join(HERE,"data","boxscores")
 print("Bajando box scores nuevos…")
 print(f"  {dvp.update_boxscores(SEASON_END,BOX_DIR)} partidos nuevos")
 POSMAP={r[1]:dvp.main_position(r[4]) for r in PROWS}
 DVP=dvp.compute_dvp(BOX_DIR,POSMAP)
 DVP_GAMES=len(os.listdir(BOX_DIR))
+TEAM_GP={a:DVP.get(a,{}).get("n",0) for a,*_ in TEAM_NAMES}
+MIN_GP=min(TEAM_GP.values())
+MEZCLA=MIN_GP<CORTE
+print(f"  Mínimo de partidos por equipo: {MIN_GP} -> {'mezcla con 2025-26' if MEZCLA else 'solo 2026-27'}")
+
+# Jugadores
+PREV={}
+if MEZCLA:
+    fetch(f"https://www.basketball-reference.com/leagues/NBA_{SEASON_END-1}_per_game.html",os.path.join(RAW,"per_game_prev.html"))
+    prev=read_per_game(os.path.join(RAW,"per_game_prev.html")).drop_duplicates("Player",keep="first")  # la fila 2TM/3TM (total) va primero
+    PREV={r.Player:to_row(r,list(prev.columns)) for _,r in prev.iterrows()}
+    PIX={c:i for i,c in enumerate(prev.columns)}
+BLEND=[c for c in COLS if c not in ("Rk","Player","Age","Team","Pos","G","GS") and not c.endswith("%")]
+def ratio(a,b): return round(a/b,3) if a is not None and b else None
+for row in PROWS:
+    w=1.0
+    old=PREV.get(row[IX["Player"]])
+    if MEZCLA and old and (old[PIX["G"]] or 0)>0:
+        w=min(1.0,(row[IX["G"]] or 0)/CORTE)
+        for c in BLEND:
+            a,b=row[IX[c]] or 0.0, old[PIX[c]] or 0.0
+            row[IX[c]]=round(w*a+(1-w)*b,2)
+        row[IX["FG%"]]=ratio(row[IX["FG"]],row[IX["FGA"]]); row[IX["3P%"]]=ratio(row[IX["3P"]],row[IX["3PA"]])
+        row[IX["2P%"]]=ratio(row[IX["2P"]],row[IX["2PA"]]); row[IX["FT%"]]=ratio(row[IX["FT"]],row[IX["FTA"]])
+        row[IX["eFG%"]]=ratio(row[IX["FG"]]+0.5*row[IX["3P"]],row[IX["FGA"]])
+    row.append(round(w,3))
+
+# Equipos (teamrankings trae la temporada pasada en la última columna)
+stats={}
+for key,f in TR_STATS:
+    t=pd.read_html(os.path.join(RAW,f+".html"))[0]
+    c_now,c_prev=t.columns[2],t.columns[-1]
+    for _,r in t.iterrows():
+        a=TRMAP[r.Team]; now,old=num(r[c_now]),num(r[c_prev])
+        w=min(1.0,TEAM_GP[a]/CORTE) if MEZCLA else 1.0
+        if now is None: v=old
+        elif old is None or w>=1: v=now
+        else: v=w*now+(1-w)*old
+        stats.setdefault(key,{})[a]=round(v,4)
+full={a:n for a,n,*_ in TEAM_NAMES}
+T=[(a,full[a],stats["pace"][a],stats["orb"][a],stats["drb"][a],stats["pts"][a],stats["ast"][a],stats["tpm"][a],stats["ppg"][a]) for a in sorted(full)]
+NOTA_MEZCLA=(f"Mezclado con 2025-26 hasta que todos los equipos lleven {CORTE} partidos (hoy el mínimo es {MIN_GP}). Peso de 2026-27 = partidos/{CORTE}."
+             if MEZCLA else "Solo temporada 2026-27 (todos los equipos llevan al menos "+str(CORTE)+" partidos).")
 
 wb=Workbook()
 R=wb.active; R.title="Resultado"
@@ -102,17 +150,18 @@ SJ=wb.create_sheet("Stats Jugadores"); SE=wb.create_sheet("Stats Equipos")
 PA=wb.create_sheet("Parametros"); IN=wb.create_sheet("Instrucciones")
 
 # ---- Stats Jugadores (same column order as Basketball-Reference per game table)
-h=["Rk","Player","Age","Team","Pos","G","GS","MP","FG","FGA","FG%","3P","3PA","3P%","2P","2PA","2P%","eFG%","FT","FTA","FT%","ORB","DRB","TRB","AST","STL","BLK","TOV","PF","PTS"]
+h=["Rk","Player","Age","Team","Pos","G","GS","MP","FG","FGA","FG%","3P","3PA","3P%","2P","2PA","2P%","eFG%","FT","FTA","FT%","ORB","DRB","TRB","AST","STL","BLK","TOV","PF","PTS","Peso 2026-27"]
 for j,x in enumerate(h,1):
     c=SJ.cell(1,j,x); c.font=font(bold=True); c.fill=HDR; c.alignment=C; c.border=B
 for i,row in enumerate(PROWS,2):
     for j,x in enumerate(row,1):
         c=SJ.cell(i,j,x); c.font=font(color=BLUE); c.border=B
         if h[j-1].endswith("%"): c.number_format="0.000"
+        if h[j-1]=="Peso 2026-27": c.number_format="0%"
 SJ.column_dimensions["B"].width=26
 for col in "ACDEFGHIJKLMNOPQRSTUVWXYZ": SJ.column_dimensions[col].width=7
 SJ.freeze_panes="C2"
-SJ["B1"].comment=Comment("Fuente: basketball-reference.com, NBA 2026-27 Per Game Stats, descargado "+FECHA+". Jugadores traspasados: solo su equipo actual. Para actualizar, pega la tabla Per Game desde A1.","Modelo")
+SJ["B1"].comment=Comment("Fuente: basketball-reference.com, NBA 2026-27 Per Game Stats, descargado "+FECHA+". "+NOTA_MEZCLA+" G y GS son de 2026-27. Jugadores traspasados: solo su equipo actual. Para actualizar, pega la tabla Per Game desde A1.","Modelo")
 
 # ---- Stats Equipos
 h2=["Abrev","Equipo","Pace","ORB%","DRB%","Pts permitidos","Ast permitidas","3PM permitidos","Pts anotados"]
@@ -126,7 +175,7 @@ for i,t in enumerate(T,2):
 SE.column_dimensions["B"].width=26
 for col in "CDEFGHI": SE.column_dimensions[col].width=16
 SE.freeze_panes="C2"
-SE["A33"]="Fuente sugerida: teamrankings.com (Possessions per Game, Offensive/Defensive Rebounding %, Opponent Points/Assists/3PM per Game). Valores: temporada 2026-27, descargados "+FECHA+" (muestra muy pequeña al inicio de temporada)."
+SE["A33"]="Fuente sugerida: teamrankings.com (Possessions per Game, Offensive/Defensive Rebounding %, Opponent Points/Assists/3PM per Game). "+NOTA_MEZCLA+" Descargados "+FECHA+"."
 SE["A33"].font=font(italic=True,size=9)
 
 # ---- Parametros
@@ -252,6 +301,7 @@ R.conditional_formatting.add("N15:N24",CellIsRule(operator="equal",formula=['"OV
 R.conditional_formatting.add("N15:N24",CellIsRule(operator="equal",formula=['"UNDER"'],fill=PatternFill("solid",fgColor="FFC7CE"),font=Font(name=F,bold=True,color="9C0006")))
 
 R["B26"]="Leyenda: celdas AMARILLAS con texto azul = entradas que tú llenas (jugador, rival, minutos, local, línea y cuotas). Verde = datos jalados de otras hojas. Negro = fórmulas."
+R["B28"]=NOTA_MEZCLA; R["B28"].font=font(italic=True,size=9,bold=MEZCLA)
 R["B27"]="Datos reales 2026-27 (basketball-reference.com y teamrankings.com, "+FECHA+"). Las líneas y cuotas de ejemplo son ficticias: pon las de tu casa de apuestas."
 for a in ("B26","B27"): R[a].font=font(italic=True,size=9)
 R.freeze_panes="A6"
@@ -340,8 +390,8 @@ wb.save(OUT)
 P_JSON=[]
 for row in PROWS:
     d=dict(zip(h,row)); g=lambda k: round(float(d[k] or 0),2)
-    P_JSON.append([d["Player"],d["Team"],d["Pos"] or "",int(d["G"] or 0),g("MP"),g("2P"),g("2PA"),g("3P"),g("3PA"),g("FT"),g("FTA"),g("ORB"),g("DRB"),g("AST"),g("STL"),g("BLK"),g("PTS"),int(d["GS"] or 0)])
-data={"fecha":FECHA,"p":P_JSON,"t":[list(t) for t in T],"dvp":DVP,"dvpGames":DVP_GAMES,"shrink":dvp.SHRINK_GAMES}
+    P_JSON.append([d["Player"],d["Team"],d["Pos"] or "",int(d["G"] or 0),g("MP"),g("2P"),g("2PA"),g("3P"),g("3PA"),g("FT"),g("FTA"),g("ORB"),g("DRB"),g("AST"),g("STL"),g("BLK"),g("PTS"),int(d["GS"] or 0),d["Peso 2026-27"]])
+data={"fecha":FECHA,"p":P_JSON,"t":[list(t) for t in T],"dvp":DVP,"dvpGames":DVP_GAMES,"mezcla":{"activa":MEZCLA,"minPJ":MIN_GP,"corte":CORTE},"shrink":dvp.SHRINK_GAMES}
 with open(JSON_OUT,"w") as f: json.dump(data,f,ensure_ascii=False,separators=(",",":"))
 with open(HTML_TPL) as f: tpl=f.read()
 with open(HTML_OUT,"w") as f: f.write(tpl.replace("__DATA__",json.dumps(data,ensure_ascii=False,separators=(",",":"))).replace("__FECHA__",FECHA).replace("__DVPGAMES__",str(DVP_GAMES)))
