@@ -5,6 +5,7 @@
 <style>
 /* Layout: scoreboard header + sticky control strip + one dense sortable table; rows expand into a prop calculator */
 :root{
+  --hot:29,122,70; --cold:179,38,30;
   --bg:#f3f4f7; --surface:#ffffff; --sunk:#e9ecf1; --ink:#15202c; --muted:#5d6977; --line:#d9dee6;
   --accent:#c4541c; --accent-ink:#ffffff; --over:#1d7a46; --over-bg:#dcf1e4; --under:#b3261e; --under-bg:#f8dedb; --pass:#6b7280; --pass-bg:#eceef1;
   --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif; --body:"Barlow",system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
@@ -85,6 +86,14 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
 .upd-btn{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
 .upd-btn:hover{filter:brightness(1.08)}
 .upd-btn[disabled]{opacity:.6;cursor:default}
+.tabs{display:flex;gap:4px;border-bottom:2px solid var(--line);margin-bottom:4px}
+.tabs button{border:0;background:transparent;padding:8px 14px;font-family:var(--display);font-weight:600;font-size:1.05rem;letter-spacing:.03em;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}
+.tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent)}
+.dnote{margin:10px 0 0}
+table.dtbl{min-width:560px}
+.dtbl td.c{font-weight:600;text-align:center;min-width:70px}
+.dtbl th{text-align:center} .dtbl th.l{text-align:left}
+.dtbl tr.hl td{outline:2px solid var(--accent);outline-offset:-2px}
 .foot{color:var(--muted);font-size:.8rem;margin-top:14px;max-width:75ch;display:grid;gap:6px}
 .count{color:var(--muted);font-size:.85rem;margin-left:auto}
 @media (max-width:640px){.controls{position:static} h1{font-size:1.8rem} #q{width:100%} .f.grow{flex:1 1 100%}}
@@ -103,12 +112,19 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
   <p class="meta">Pon los minutos esperados (xMP) y el rival de cada jugador, y la tabla calcula sus stats proyectados. Toca ▸ en una fila para meter la línea y las cuotas de un prop.</p>
 </header>
 
+<nav class="tabs" role="tablist">
+  <button type="button" role="tab" id="tab-proj" aria-selected="true" aria-controls="view-proj">Proyecciones</button>
+  <button type="button" role="tab" id="tab-dvp" aria-selected="false" aria-controls="view-dvp">Defensa por posición</button>
+</nav>
+
+<div id="view-proj" role="tabpanel" aria-labelledby="tab-proj">
 <div class="controls">
   <div class="f grow"><label for="q">Buscar jugador</label><input id="q" type="text" placeholder="Ej. Edwards" autocomplete="off"></div>
   <div class="f"><label for="team">Equipo</label><select id="team"></select></div>
   <div class="f"><label for="rival">Rival</label><select id="rival"></select></div>
   <div class="f"><label>Condición</label><div class="seg" id="home"><button type="button" data-v="1" aria-pressed="true">Local</button><button type="button" data-v="0" aria-pressed="false">Visita</button></div></div>
   <div class="f"><label for="minmp">Min. prom. ≥</label><input id="minmp" type="number" min="0" max="48" step="1" value="10" style="width:70px"></div>
+  <div class="f"><label>Ajuste por posición</label><div class="seg" id="usepos"><button type="button" data-v="1" aria-pressed="true">Sí</button><button type="button" data-v="0" aria-pressed="false">No</button></div></div>
   <button class="btn" id="reset" type="button">Borrar mis cambios</button>
   <span class="count" id="count"></span>
 </div>
@@ -137,10 +153,26 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
   <tbody id="tb"></tbody>
 </table>
 </div>
+</div>
+
+<div id="view-dvp" role="tabpanel" aria-labelledby="tab-dvp" hidden>
+  <div class="controls">
+    <div class="f"><label>Stat</label><div class="seg" id="dstat">
+      <button type="button" data-v="0" aria-pressed="true">PTS</button><button type="button" data-v="1" aria-pressed="false">REB</button><button type="button" data-v="2" aria-pressed="false">AST</button><button type="button" data-v="3" aria-pressed="false">3PM</button><button type="button" data-v="4" aria-pressed="false">STL</button><button type="button" data-v="5" aria-pressed="false">BLK</button></div></div>
+    <div class="f"><label>Mostrar</label><div class="seg" id="dmode"><button type="button" data-v="g" aria-pressed="true">Por partido</button><button type="button" data-v="f" aria-pressed="false">Factor</button></div></div>
+    <span class="count" id="dcount"></span>
+  </div>
+  <p class="meta dnote">Lo que cada equipo le permite a cada posición del rival. <b class="up">Verde</b> = permite más que el promedio de liga (bueno para el Over); <b class="dn">rojo</b> = permite menos. El factor es el que usan las proyecciones: con pocos partidos se acerca a 1.00. Toca una columna para ordenar.</p>
+  <div class="tablebox"><table id="dtbl" class="dtbl"><thead><tr>
+    <th class="l" data-k="name">Equipo</th><th data-k="n">PJ</th>
+    <th data-k="0">PG</th><th data-k="1">SG</th><th data-k="2">SF</th><th data-k="3">PF</th><th data-k="4">C</th>
+  </tr></thead><tbody id="dtb"></tbody></table></div>
+</div>
 
 <div class="foot">
   <div><b>Datos:</b> basketball-reference.com (stats por partido de jugadores) y teamrankings.com (pace, % de rebote y lo que permite cada rival). Temporada 2026-27, actualizados el __FECHA__. La temporada lleva 1 o 2 partidos por equipo, así que las proyecciones todavía son muy inestables.</div>
-  <div><b>Cálculo:</b> factor base = (xMP ÷ min prom) × pace del partido × local (±1%). Puntos × defensa del rival por posesión; rebotes × % de rebote del rival; asistencias y triples × lo que permite el rival por posesión. Probabilidad Over con distribución normal (desviación = proyección × CV supuesto). Las cifras en pequeño debajo de cada stat son el promedio de la temporada. Marcador: posesiones × puntos por posesión del equipo × defensa del rival ÷ promedio de liga × local; total y spread con desviación de 12 puntos (supuesto).</div>
+  <div><b>Defensa por posición:</b> calculada con __DVPGAMES__ box scores de basketball-reference: lo que anotó, rebotó, asistió, etc. cada posición del rival, por posesión, contra el promedio de liga. La posición es la de basketball-reference (la primera si tiene dos).</div>
+  <div><b>Cálculo:</b> factor base = (xMP ÷ min prom) × pace del partido × local (±1%). Con ajuste por posición, cada stat × lo que el rival permite a la posición del jugador. Sin él: puntos × defensa del rival por posesión; rebotes × % de rebote del rival; asistencias y triples × lo que permite el rival por posesión. Probabilidad Over con distribución normal (desviación = proyección × CV supuesto). Las cifras en pequeño debajo de cada stat son el promedio de la temporada. Marcador: posesiones × puntos por posesión del equipo × defensa del rival ÷ promedio de liga × local; total y spread con desviación de 12 puntos (supuesto).</div>
   <div>Herramienta educativa: no garantiza resultados. Apuesta con responsabilidad.</div>
 </div>
 </div>
@@ -155,6 +187,7 @@ const avg=a=>a.reduce((s,x)=>s+x,0)/a.length;
 const LG={pace:avg(TL.map(t=>t.pace)),orb:avg(TL.map(t=>t.orb)),drb:avg(TL.map(t=>t.drb)),
   pts:avg(TL.map(t=>t.pts/t.pace)),ast:avg(TL.map(t=>t.ast/t.pace)),tpm:avg(TL.map(t=>t.tpm/t.pace)),off:avg(TL.map(t=>t.ppg/t.pace))};
 const SD_TOTAL=12, SD_SPREAD=12;
+const DV=DATA.dvp||{};
 const P=DATA.p.map((r,i)=>({i,name:r[0],tm:r[1],pos:r[2],g:r[3],mp:r[4],p2:r[5],a2:r[6],p3:r[7],a3:r[8],ft:r[9],fta:r[10],orb:r[11],drb:r[12],ast:r[13],stl:r[14],blk:r[15],pts:r[16]}));
 
 let S={}; const KEY="nba-proj-v1";
@@ -163,7 +196,7 @@ function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 const ov=n=>S[n]||(S[n]={});
 
 const $=id=>document.getElementById(id);
-const G={team:"MIN",rival:"WAS",home:1,q:"",minmp:10,sort:"pts",dir:-1};
+const G={usePos:1,team:"MIN",rival:"WAS",home:1,q:"",minmp:10,sort:"pts",dir:-1};
 const open=new Set();
 
 function adjFor(tm,opp){
@@ -175,10 +208,14 @@ function project(p){
   const st=rowState(p), a=adjFor(p.tm,st.rival);
   if(!a||!p.mp) return {st,ok:false};
   const base=(st.xmp/p.mp)*a.pace*(st.home?1+HOME_ADV:1-HOME_ADV);
-  const pts=(p.p2*2+p.p3*3+p.ft)*base*a.def;
-  const reb=p.orb*base*a.orb+p.drb*base*a.drb;
-  const ast=p.ast*base*a.ast, tpm=p.p3*base*a.tpm;
-  return {st,ok:true,pts,reb,ast,tpm,pra:pts+reb+ast,pr:pts+reb,pa:pts+ast,ra:reb+ast,stl:p.stl*base,blk:p.blk*base};
+  const pos=(p.pos||"").split("-")[0], dv=G.usePos&&DV[st.rival]&&DV[st.rival][pos];
+  let pts,reb,ast,tpm,stl,blk;
+  if(dv){const f=dv.slice(6);
+    pts=(p.p2*2+p.p3*3+p.ft)*base*f[0]; reb=(p.orb+p.drb)*base*f[1]; ast=p.ast*base*f[2]; tpm=p.p3*base*f[3]; stl=p.stl*base*f[4]; blk=p.blk*base*f[5];
+  }else{
+    pts=(p.p2*2+p.p3*3+p.ft)*base*a.def; reb=p.orb*base*a.orb+p.drb*base*a.drb; ast=p.ast*base*a.ast; tpm=p.p3*base*a.tpm; stl=p.stl*base; blk=p.blk*base;
+  }
+  return {st,ok:true,pos:dv?pos:"",pts,reb,ast,tpm,pra:pts+reb+ast,pr:pts+reb,pa:pts+ast,ra:reb+ast,stl,blk};
 }
 const seasonVal=(p,k)=>({pts:p.pts,reb:p.orb+p.drb,ast:p.ast,tpm:p.p3,pra:p.pts+p.orb+p.drb+p.ast,stl:p.stl,blk:p.blk})[k];
 const f1=x=>(Math.round(x*10)/10).toFixed(1);
@@ -204,7 +241,7 @@ function cellsHTML(p,pr){
 function rowHTML(p){
   const pr=project(p),st=pr.st;
   return `<tr data-i="${p.i}" class="${pr.ok?"":"warn"}">
-   <td class="l name">${esc(p.name)}<small>${p.tm}${p.pos?" · "+esc(p.pos):""}</small></td>
+   <td class="l name">${esc(p.name)}<small>${p.tm}${p.pos?" · "+esc(p.pos):""}${pr.ok&&!pr.pos&&G.usePos?" · sin ajuste por posición":""}</small></td>
    <td>${p.g}</td><td>${f1(p.mp)}</td>
    <td><input type="number" min="0" max="48" step="0.5" value="${st.xmp}" data-a="x" aria-label="Minutos esperados de ${esc(p.name)}"></td>
    <td class="l"><select data-a="r" aria-label="Rival de ${esc(p.name)}">${rivalOpts.replace(`value="${st.rival}"`,`value="${st.rival}" selected`)}</select></td>
@@ -339,6 +376,32 @@ rivalSel.addEventListener("change",e=>{G.rival=e.target.value;
 $("home").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;G.home=+b.dataset.v;
   $("home").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));
   P.forEach(p=>{if((!G.team||p.tm===G.team)&&S[p.name])delete S[p.name].h});save();render()});
+$("usepos").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;G.usePos=+b.dataset.v;
+  $("usepos").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));render()});
+// Defensa por posición
+const D={stat:0,mode:"g",sort:"0",dir:-1};
+const POS5=["PG","SG","SF","PF","C"];
+function renderDvp(){
+  const rows=TL.map(t=>({t,d:DV[t.ab]}));
+  const val=(r,pi)=>{const v=r.d&&r.d[POS5[pi]];return v?(D.mode==="g"?v[D.stat]:v[6+D.stat]):null};
+  rows.sort((a,b)=>{if(D.sort==="name")return a.t.name.localeCompare(b.t.name)*D.dir;
+    if(D.sort==="n")return ((a.d?a.d.n:0)-(b.d?b.d.n:0))*D.dir;
+    return ((val(a,+D.sort)??-1)-(val(b,+D.sort)??-1))*D.dir});
+  $("dtb").innerHTML=rows.map(r=>`<tr class="${r.t.ab===G.rival?"hl":""}"><td class="l name">${esc(r.t.name)}<small>${r.t.ab}</small></td><td>${r.d?r.d.n:0}</td>`+
+    POS5.map((p,pi)=>{const v=r.d&&r.d[p];if(!v)return `<td class="c">—</td>`;const f=v[6+D.stat],x=Math.max(-1,Math.min(1,(f-1)/0.2));
+      const bg=x>=0?`rgba(var(--hot),${(x*.45).toFixed(2)})`:`rgba(var(--cold),${(-x*.45).toFixed(2)})`;
+      return `<td class="c" style="background:${bg}">${D.mode==="g"?f1(v[D.stat]):"×"+f.toFixed(2)}</td>`}).join("")+`</tr>`).join("");
+  $("dcount").textContent=`${DATA.dvpGames||0} partidos analizados`;
+  document.querySelectorAll("#dtbl th[data-k]").forEach(th=>{th.removeAttribute("aria-sort");if(th.dataset.k===D.sort)th.setAttribute("aria-sort",D.dir<0?"descending":"ascending")});
+}
+function segPick(id,fn){$(id).addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;$(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));fn(b.dataset.v);renderDvp()})}
+segPick("dstat",v=>D.stat=+v); segPick("dmode",v=>D.mode=v);
+$("dtbl").querySelector("thead").addEventListener("click",e=>{const th=e.target.closest("th[data-k]");if(!th)return;const k=th.dataset.k;
+  if(D.sort===k)D.dir*=-1;else{D.sort=k;D.dir=k==="name"?1:-1}renderDvp()});
+function showTab(which){const dv=which==="dvp";$("view-proj").hidden=dv;$("view-dvp").hidden=!dv;
+  $("tab-proj").setAttribute("aria-selected",String(!dv));$("tab-dvp").setAttribute("aria-selected",String(dv));if(dv)renderDvp()}
+$("tab-proj").addEventListener("click",()=>showTab("proj"));$("tab-dvp").addEventListener("click",()=>showTab("dvp"));
+if(location.hash==="#defensa")showTab("dvp");
 $("minmp").addEventListener("input",e=>{const v=parseFloat(e.target.value);G.minmp=isNaN(v)?0:v;render()});
 $("reset").addEventListener("click",()=>{S={};save();open.clear();render()});
 render();

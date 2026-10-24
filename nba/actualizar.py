@@ -5,6 +5,8 @@ Fuentes: basketball-reference.com (jugadores) y teamrankings.com (equipos).
 """
 import datetime, json, os, subprocess, sys, time
 import pandas as pd
+sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
+import dvp
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -86,6 +88,14 @@ for _,r in pg.iterrows():
             except ValueError: row.append(None)
     PROWS.append(row)
 
+# Defensa por posición desde los box scores
+BOX_DIR=os.path.join(HERE,"data","boxscores")
+print("Bajando box scores nuevos…")
+print(f"  {dvp.update_boxscores(SEASON_END,BOX_DIR)} partidos nuevos")
+POSMAP={r[1]:dvp.main_position(r[4]) for r in PROWS}
+DVP=dvp.compute_dvp(BOX_DIR,POSMAP)
+DVP_GAMES=len(os.listdir(BOX_DIR))
+
 wb=Workbook()
 R=wb.active; R.title="Resultado"
 SJ=wb.create_sheet("Stats Jugadores"); SE=wb.create_sheet("Stats Equipos")
@@ -127,7 +137,8 @@ prm=[("Ventaja de local (±)",0.01,"0.0%","Supuesto: +1% local / -1% visitante")
 ("CV Rebotes",0.35,"0.00",""),("CV Asistencias",0.40,"0.00",""),("CV Triples",0.60,"0.00",""),
 ("CV PRA",0.20,"0.00",""),("CV Pts+Reb",0.23,"0.00",""),("CV Pts+Ast",0.23,"0.00",""),
 ("CV Reb+Ast",0.30,"0.00",""),("CV Robos",0.80,"0.00",""),("CV Tapones",0.80,"0.00",""),
-("Desv. estándar total del partido",12,"0.0","Supuesto: puntos")]
+("Desv. estándar total del partido",12,"0.0","Supuesto: puntos"),
+("Usar ajuste por posición","Sí","@","Sí = usa la defensa del rival contra la posición del jugador (hoja Defensa x Posicion). No = usa la defensa general del equipo.")]
 PA["A1"]="Parámetro"; PA["B1"]="Valor"; PA["C1"]="Nota"
 for c in PA[1]: c.font=font(bold=True); c.fill=HDR; c.border=B
 for i,(a,v,f,nt) in enumerate(prm,2):
@@ -174,7 +185,12 @@ R["P7"]="Fila jugador"; R["P8"]=f"=MATCH($D$2,{SJr}$B:$B,0)"
 R["P9"]="Fila equipo"; R["P10"]=f"=MATCH($F$8,{SEr}$A:$A,0)"
 R["P11"]="Fila rival"; R["P12"]=f"=MATCH($D$4,{SEr}$B:$B,0)"
 for a in ("P7","P9","P11"): R[a].font=font(size=8,color="808080")
-for a in ("P8","P10","P12"): R[a].font=font(size=8,color="808080")
+R["P13"]="Posición"; R["P14"]=f'=IFERROR(LEFT({pj("E")},FIND("-",{pj("E")})-1),{pj("E")})'
+for a in ("P8","P10","P12","P14"): R[a].font=font(size=8,color="808080")
+R["P7"].font=font(size=8,color="808080"); R["P13"].font=font(size=8,color="808080")
+DXP="'Defensa x Posicion'!"
+USEPOS='Parametros!$B$15="Sí"'
+def fx(stat): return f'IFERROR(INDEX({DXP}$C:$AF,$P$12,MATCH($P$14&" {stat}",{DXP}$C$1:$AF$1,0)),1)'
 
 def table(row,headers,formulas,fmts):
     for j,(hd,f,nf) in enumerate(zip(headers,formulas,fmts)):
@@ -185,9 +201,9 @@ R["B7"]="Ajustes"; R["B7"].font=font(bold=True)
 table(7,["Local adj.","Min. prom.","Minuto %","Equipo jugador","PACE adj.","Defensa adj.","Off Reb adj.","Def Reb adj.","Ast adj.","3PM adj.","Factor base"],
  [f'=IF($M$4="Sí",1+{HOME},1-{HOME})', f"={pj('H')}", "=IFERROR($M$2/D8,0)", f"={pj('D')}",
   f"=(({te('C','$P$10')}+{te('C','$P$12')})/2)/{te('C','$P$10')}",
-  f"=({te('F','$P$12')}/{te('C','$P$12')})/{LPTS}",
-  f"=(1-{te('E','$P$12')})/(1-{LDRB})", f"=(1-{te('D','$P$12')})/(1-{LORB})",
-  f"=({te('G','$P$12')}/{te('C','$P$12')})/{LAST}", f"=({te('H','$P$12')}/{te('C','$P$12')})/{L3PM}",
+  f"=IF({USEPOS},{fx('PTS')},({te('F','$P$12')}/{te('C','$P$12')})/{LPTS})",
+  f"=IF({USEPOS},{fx('REB')},(1-{te('E','$P$12')})/(1-{LDRB}))", f"=IF({USEPOS},{fx('REB')},(1-{te('D','$P$12')})/(1-{LORB}))",
+  f"=IF({USEPOS},{fx('AST')},({te('G','$P$12')}/{te('C','$P$12')})/{LAST})", f"=IF({USEPOS},{fx('3PM')},({te('H','$P$12')}/{te('C','$P$12')})/{L3PM})",
   "=E8*G8*C8"],
  ["0.0%","0.0","0.0%","@","0.00","0.00","0.00","0.00","0.00","0.00","0.000"])
 R["B10"]="Tiro"; R["B10"].font=font(bold=True)
@@ -212,8 +228,8 @@ mk=[("Puntos","=M11",f"={pj('AD')}","PTS",26.5,-115,-105),
 ("Pts+Reb","=C15+C16","=D15+D16","PR",None,None,None),
 ("Pts+Ast","=C15+C17","=D15+D17","PA",None,None,None),
 ("Reb+Ast","=C16+C17","=D16+D17","RA",None,None,None),
-("Robos",f"={pj('Z')}*$M$8",f"={pj('Z')}","STL",None,None,None),
-("Tapones",f"={pj('AA')}*$M$8",f"={pj('AA')}","BLK",None,None,None)]
+("Robos",f"={pj('Z')}*$M$8*IF({USEPOS},{fx('STL')},1)",f"={pj('Z')}","STL",None,None,None),
+("Tapones",f"={pj('AA')}*$M$8*IF({USEPOS},{fx('BLK')},1)",f"={pj('AA')}","BLK",None,None,None)]
 for i,(m,pf,avg,k,ln,oo,ou) in enumerate(mk,15):
     r=i
     vals=[m,pf,avg,ln,oo,ou,
@@ -257,10 +273,40 @@ for j,(v,nf) in enumerate(zip(sv,["0.0","0.0","0.0","0.0","+0.0;-0.0","0.0","0.0
 R["B32"]="Pts = posesiones × pts anotados por posesión del equipo × (pts permitidos por posesión del rival ÷ promedio de liga) × local. Spread negativo = favorito."
 R["B32"].font=font(italic=True,size=9)
 
+# ---- Defensa x Posicion
+DX=wb.create_sheet("Defensa x Posicion")
+SLAB={"pts":"PTS","reb":"REB","ast":"AST","tpm":"3PM","stl":"STL","blk":"BLK"}
+DX["A1"]="Abrev"; DX["B1"]="Equipo"
+keys=[f"{p} {SLAB[s_]}" for p in dvp.POS for s_ in dvp.STATS]
+for j,k in enumerate(keys):
+    DX.cell(1,3+j,k); DX.cell(1,34+j,k+" /partido")
+DX.cell(1,33,"Partidos")
+for c in DX[1]:
+    if c.value: c.font=font(bold=True,size=9); c.fill=HDR; c.alignment=Alignment(horizontal="center",wrap_text=True); c.border=B
+for i,t in enumerate(T,2):
+    DX.cell(i,1,t[0]).font=font(); DX.cell(i,2,t[1]).font=font()
+    d=DVP.get(t[0],{})
+    DX.cell(i,33,d.get("n",0)).font=font(color=BLUE)
+    for pi,p in enumerate(dvp.POS):
+        vals=d.get(p,[0]*6+[1]*6)
+        for k in range(6):
+            c=DX.cell(i,3+pi*6+k,vals[6+k]); c.number_format="0.00"; c.font=font(color=BLUE); c.border=B
+            c=DX.cell(i,34+pi*6+k,vals[k]); c.number_format="0.0"; c.font=font(color=BLUE); c.border=B
+from openpyxl.formatting.rule import ColorScaleRule
+DX.conditional_formatting.add("C2:AF31",ColorScaleRule(start_type="num",start_value=0.8,start_color="F8696B",mid_type="num",mid_value=1,mid_color="FFFFFF",end_type="num",end_value=1.2,end_color="63BE7B"))
+DX.column_dimensions["B"].width=24; DX.freeze_panes="C2"
+DX.row_dimensions[1].height=30
+DX["A33"]=("Factor = lo que el equipo permite a esa posición por posesión ÷ promedio de liga (1.20 = permite 20% más; verde = bueno para apostar Over). "
+  f"Con pocos partidos se acerca a 1.00 (se mezcla con {dvp.SHRINK_GAMES} partidos de promedio de liga). Calculado con {DVP_GAMES} box scores de basketball-reference.com, {FECHA}. "
+  "La posición de cada jugador es la de basketball-reference (la primera si tiene dos).")
+DX["A33"].font=font(italic=True,size=9)
+dvpar=DataValidation(type="list",formula1='"Sí,No"'); PA.add_data_validation(dvpar); dvpar.add("B15")
+
 # ---- Instrucciones
 lines=["CÓMO USAR EL MODELO DE PROPS NBA","",
 "1. Actualiza 'Stats Jugadores': en basketball-reference.com > Season > Per Game Stats, copia la tabla y pégala en A1 (mismo orden de columnas: Rk, Player, Age, Team, Pos, G, GS, MP, FG ... PTS).",
 "   Si un jugador fue traspasado aparece varias veces (2TM, 3TM): borra esas filas y deja la de su equipo actual.",
+"• Defensa por posición: la hoja 'Defensa x Posicion' se calcula sola con nba/actualizar.py a partir de los box scores. Actívala o apágala en Parametros (Usar ajuste por posición).",
 "2. Actualiza 'Stats Equipos' con teamrankings.com: Pace = Possessions per Game; ORB% = Offensive Rebounding %; DRB% = Defensive Rebounding %;",
 "   Pts/Ast/3PM permitidos = Opponent Points / Opponent Assists / Opponent Three Pointers Made per Game. La columna Abrev debe coincidir con 'Team' de basketball-reference (CHO, PHO, BRK...).",
 "3. En 'Resultado' elige jugador y rival (listas desplegables), escribe minutos esperados (xMP) y si juega de local (Sí/No).",
@@ -286,9 +332,9 @@ P_JSON=[]
 for row in PROWS:
     d=dict(zip(h,row)); g=lambda k: round(float(d[k] or 0),2)
     P_JSON.append([d["Player"],d["Team"],d["Pos"] or "",int(d["G"] or 0),g("MP"),g("2P"),g("2PA"),g("3P"),g("3PA"),g("FT"),g("FTA"),g("ORB"),g("DRB"),g("AST"),g("STL"),g("BLK"),g("PTS")])
-data={"fecha":FECHA,"p":P_JSON,"t":[list(t) for t in T]}
+data={"fecha":FECHA,"p":P_JSON,"t":[list(t) for t in T],"dvp":DVP,"dvpGames":DVP_GAMES,"shrink":dvp.SHRINK_GAMES}
 with open(JSON_OUT,"w") as f: json.dump(data,f,ensure_ascii=False,separators=(",",":"))
 with open(HTML_TPL) as f: tpl=f.read()
-with open(HTML_OUT,"w") as f: f.write(tpl.replace("__DATA__",json.dumps(data,ensure_ascii=False,separators=(",",":"))).replace("__FECHA__",FECHA))
+with open(HTML_OUT,"w") as f: f.write(tpl.replace("__DATA__",json.dumps(data,ensure_ascii=False,separators=(",",":"))).replace("__FECHA__",FECHA).replace("__DVPGAMES__",str(DVP_GAMES)))
 print(f"Listo ({FECHA}): {len(PROWS)} jugadores, {len(T)} equipos")
 print(" ", OUT); print(" ", HTML_OUT)
