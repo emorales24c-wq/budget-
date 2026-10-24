@@ -70,6 +70,8 @@ td.v small.up{color:var(--over)} td.v small.dn{color:var(--under)}
 td input[type=number]{width:70px;text-align:right;min-height:30px;padding:4px 6px}
 .exp{border:0;background:transparent;cursor:pointer;color:var(--accent);font-size:1rem;padding:2px 6px}
 tr.warn td.v{color:var(--muted)}
+tr.grp td{background:var(--sunk);font-family:var(--display);font-weight:700;font-size:1rem;letter-spacing:.03em;text-transform:uppercase;padding-top:10px}
+tr.grp td span{font-family:var(--body);font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-size:.82rem;margin-left:6px}
 .usecell{display:flex;gap:4px;justify-content:flex-end;align-items:center}
 .outb{border:1px solid var(--line);background:var(--surface);border-radius:5px;padding:3px 7px;min-height:30px;font-size:.72rem;font-weight:700;letter-spacing:.05em;color:var(--muted);cursor:pointer}
 .outb[aria-pressed=true]{background:var(--under);border-color:var(--under);color:#fff}
@@ -212,7 +214,7 @@ function computeBoost(){
 function project(p){
   const o=S[p.name]||{}, uso=usoOf(p);
   if(o.out) return {ok:false,out:true,uso};
-  const ctx=G.team?{rival:G.rival,home:p.tm===G.team?G.home:1-G.home}:(OPP[p.tm]||null);
+  const ctx=G.team?{rival:p.tm===G.team?G.rival:G.team,home:p.tm===G.team?G.home:1-G.home}:(OPP[p.tm]||null);
   if(!ctx||ctx.rival===p.tm) return {ok:false,uso};
   const rival=ctx.rival||ctx.opp, h=ctx.home?1+HOME_ADV:1-HOME_ADV;
   const pr={ok:true,uso,rival,home:ctx.home};
@@ -359,7 +361,11 @@ function render(){
   computeBoost();
   $("th").innerHTML=headHTML();
   const rows=visible();
-  $("tb").innerHTML=rows.map(rowHTML).join("")||`<tr><td colspan="20" class="l">Ningún jugador coincide.</td></tr>`;
+  let html="",cur=null;
+  rows.forEach(p=>{if(G.team&&p.tm!==cur){cur=p.tm;const opp=cur===G.team?G.rival:G.team,hm=cur===G.team?G.home:1-G.home;
+    html+=`<tr class="grp"><td colspan="20" class="l">${esc(TEAMS[cur].name)} <span>${hm?"local":"visita"} · contra la defensa de ${esc(TEAMS[opp].name)}</span></td></tr>`}
+    html+=rowHTML(p)});
+  $("tb").innerHTML=html||`<tr><td colspan="20" class="l">Ningún jugador coincide.</td></tr>`;
   $("count").textContent=rows.length+" jugadores";
   document.querySelectorAll("#th th[data-k]").forEach(th=>{if(th.dataset.k===G.sort)th.setAttribute("aria-sort",G.dir<0?"descending":"ascending")});
   syncSel(); renderScore();
