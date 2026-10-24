@@ -58,6 +58,13 @@ td select{max-width:150px;min-height:30px;padding:3px 4px}
 .tog[aria-pressed=true]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
 .exp{border:0;background:transparent;cursor:pointer;color:var(--accent);font-size:1rem;padding:2px 6px}
 tr.warn td.v{color:var(--muted)}
+.usecell{display:flex;gap:4px;justify-content:flex-end;align-items:center}
+.outb{border:1px solid var(--line);background:var(--surface);border-radius:5px;padding:3px 7px;min-height:30px;font-size:.72rem;font-weight:700;letter-spacing:.05em;color:var(--muted);cursor:pointer}
+.outb[aria-pressed=true]{background:var(--under);border-color:var(--under);color:#fff}
+tr.is-out td{opacity:.55} tr.is-out td.v{color:var(--under);font-size:.85rem}
+tr.is-out .pn{text-decoration:line-through}
+tr.is-out td:nth-child(4){opacity:1}
+td.name small.boost{color:var(--over);font-weight:600}
 tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
 .props{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;padding:6px 0}
 .prop{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px;display:grid;gap:6px}
@@ -180,6 +187,7 @@ table.dtbl{min-width:560px}
 <div class="foot">
   <div><b>Datos:</b> basketball-reference.com (stats por partido de jugadores) y teamrankings.com (pace, % de rebote y lo que permite cada rival). Temporada 2026-27, actualizados el __FECHA__. La temporada lleva 1 o 2 partidos por equipo, así que las proyecciones todavía son muy inestables.</div>
   <div><b>Defensa por posición:</b> calculada con __DVPGAMES__ box scores de basketball-reference: lo que anotó, rebotó, asistió, etc. cada posición del rival por minuto, separando titulares y suplentes, contra el promedio de liga. A cada jugador se le aplica el factor de su posición y su rol (titular si fue titular en al menos la mitad de sus partidos). La posición es la de basketball-reference (la primera si tiene dos).</div>
+  <div><b>OUT:</b> los minutos del jugador pasan a sus compañeros de rotación (10+ min de promedio) que no tengan minutos puestos a mano, en proporción a los minutos que juega cada uno, con tope de 42. Si le pones minutos a mano a alguien, se respetan tus minutos.</div>
   <div><b>Cálculo:</b> factor base = (xMP ÷ min prom) × pace del partido × local (±1%). Con ajuste por posición, cada stat × lo que el rival permite por minuto a la posición y rol del jugador. Sin él: puntos × defensa del rival por posesión; rebotes × % de rebote del rival; asistencias y triples × lo que permite el rival por posesión. Probabilidad Over con distribución normal (desviación = proyección × CV supuesto). Las cifras en pequeño debajo de cada stat son el promedio de la temporada. Marcador: posesiones × puntos por posesión del equipo × defensa del rival ÷ promedio de liga × local; total y spread con desviación de 12 puntos (supuesto).</div>
   <div>Herramienta educativa: no garantiza resultados. Apuesta con responsabilidad.</div>
 </div>
@@ -212,9 +220,26 @@ function adjFor(tm,opp){
   const t=TEAMS[tm],o=TEAMS[opp]; if(!t||!o||tm===opp) return null;
   return {pace:((t.pace+o.pace)/2)/t.pace, def:(o.pts/o.pace)/LG.pts, orb:(1-o.drb)/(1-LG.drb), drb:(1-o.orb)/(1-LG.orb), ast:(o.ast/o.pace)/LG.ast, tpm:(o.tpm/o.pace)/LG.tpm};
 }
-function rowState(p){const o=S[p.name]||{};return {xmp:o.x!=null?o.x:Math.round(p.mp), rival:o.r||G.rival, home:o.h!=null?o.h:G.home}}
+// Jugadores OUT: sus minutos pasan a los compañeros de rotación (10+ min de promedio) sin minutos
+// puestos a mano, en proporción a los minutos que ya juega cada uno, con tope de MAX_MIN.
+const MAX_MIN=42, ROT_MIN=10;
+const isOut=p=>!!(S[p.name]&&S[p.name].out);
+const baseX=p=>{const o=S[p.name]||{};return o.x!=null?o.x:Math.round(p.mp)};
+let EXTRA={}, OUTS={};
+function computeBoost(){
+  EXTRA={};OUTS={};const by={};
+  P.forEach(p=>{const b=by[p.tm]||(by[p.tm]={out:0,act:[]});
+    if(isOut(p)){b.out+=baseX(p);(OUTS[p.tm]||(OUTS[p.tm]=[])).push(p.name)}
+    else if(p.mp>=ROT_MIN&&(S[p.name]||{}).x==null)b.act.push(p)});
+  Object.values(by).forEach(b=>{if(!b.out||!b.act.length)return;
+    const tot=b.act.reduce((s,p)=>s+p.mp,0);
+    b.act.forEach(p=>{const room=Math.max(0,MAX_MIN-Math.round(p.mp));EXTRA[p.name]=Math.min(room,b.out*p.mp/tot)})});
+}
+function rowState(p){const o=S[p.name]||{};const ex=o.x==null?(EXTRA[p.name]||0):0;
+  return {xmp:o.x!=null?o.x:Math.round((Math.round(p.mp)+ex)*2)/2, extra:ex, out:!!o.out, rival:o.r||G.rival, home:o.h!=null?o.h:G.home}}
 function project(p){
   const st=rowState(p), a=adjFor(p.tm,st.rival);
+  if(st.out) return {st,ok:false,out:true};
   if(!a||!p.mp) return {st,ok:false};
   const base=(st.xmp/p.mp)*a.pace*(st.home?1+HOME_ADV:1-HOME_ADV);
   const pos=(p.pos||"").split("-")[0], role=roleOf(p), dv=G.usePos&&DV[st.rival]&&DV[st.rival][role]&&DV[st.rival][role][pos];
@@ -243,25 +268,28 @@ rivalSel.innerHTML=rivalOpts; rivalSel.value=G.rival; teamSel.value=G.team;
 const COLS=["pts","reb","ast","tpm","pra","stl","blk"];
 function cellsHTML(p,pr){
   return COLS.map(k=>{
+    if(pr.out) return `<td class="v" data-c="${k}">OUT</td>`;
     if(!pr.ok) return `<td class="v" data-c="${k}">—</td>`;
     const v=pr[k],s=seasonVal(p,k),cls=v>s+.05?"up":v<s-.05?"dn":"";
     return `<td class="v" data-c="${k}">${f1(v)}<small class="${cls}">${f1(s)}</small></td>`}).join("");
 }
 function rowHTML(p){
   const pr=project(p),st=pr.st;
-  return `<tr data-i="${p.i}" class="${pr.ok?"":"warn"}">
-   <td class="l name">${esc(p.name)}<small>${p.tm}${p.pos?" · "+esc(p.pos):""} · ${roleOf(p)==="S"?"Titular":"Suplente"}${pr.ok&&!pr.pos&&G.usePos?" · sin ajuste por posición":""}</small></td>
+  return `<tr data-i="${p.i}" class="${pr.out?"is-out":pr.ok?"":"warn"}">
+   <td class="l name"><span class="pn">${esc(p.name)}</span>${boostNote(p,st)}<small>${p.tm}${p.pos?" · "+esc(p.pos):""} · ${roleOf(p)==="S"?"Titular":"Suplente"}${pr.ok&&!pr.pos&&G.usePos?" · sin ajuste por posición":""}</small></td>
    <td>${p.g}${p.w<1?`<small class="wt" title="Peso de 2026-27 en sus promedios; el resto es 2025-26">${Math.round(p.w*100)}% 26-27</small>`:""}</td><td>${f1(p.mp)}</td>
-   <td><input type="number" min="0" max="48" step="0.5" value="${st.xmp}" data-a="x" aria-label="Minutos esperados de ${esc(p.name)}"></td>
+   <td><div class="usecell"><input type="number" min="0" max="48" step="0.5" value="${st.xmp}" data-a="x" aria-label="Minutos esperados de ${esc(p.name)}"${st.out?" disabled":""}><button type="button" class="outb" data-a="out" aria-pressed="${st.out?"true":"false"}" title="Marcar a ${esc(p.name)} como OUT">OUT</button></div></td>
    <td class="l"><select data-a="r" aria-label="Rival de ${esc(p.name)}">${rivalOpts.replace(`value="${st.rival}"`,`value="${st.rival}" selected`)}</select></td>
    <td><button type="button" class="tog" data-a="h" aria-pressed="${st.home?"true":"false"}">${st.home?"Sí":"No"}</button></td>
    ${cellsHTML(p,pr)}
    <td><button type="button" class="exp" data-a="e" aria-expanded="${open.has(p.i)}" aria-label="Props de ${esc(p.name)}">${open.has(p.i)?"▾":"▸"}</button></td></tr>`
    +(open.has(p.i)?detailHTML(p,pr):"");
 }
+function boostNote(p,st){return st.extra>0.05?`<small class="boost" title="Por jugadores OUT: ${esc((OUTS[p.tm]||[]).join(", "))}">+${f1(st.extra)} min por OUT</small>`:""}
 const PROPS=[["pts","Puntos"],["reb","Rebotes"],["ast","Asistencias"],["tpm","Triples"],["pra","PRA"],["pr","Pts+Reb"],["pa","Pts+Ast"],["ra","Reb+Ast"]];
 function propOut(p,pr,k){
   const L=(S[p.name]||{}).l||{}, l=L[k]||{};
+  if(pr.out) return `<span>Jugador OUT</span>`;
   if(!pr.ok) return `<span>Elige un rival distinto a su equipo</span>`;
   if(l.line==null||l.line==="") return `<span>Escribe la línea</span>`;
   const m=pr[k],sd=Math.max(.5,m*CV[k]),po=1-ncdf(+l.line,m,sd),pu=1-po;
@@ -293,6 +321,7 @@ function visible(){
   return rows;
 }
 function render(){
+  computeBoost();
   const rows=visible();
   $("tb").innerHTML=rows.map(rowHTML).join("")||`<tr><td colspan="14" class="l">Ningún jugador coincide con los filtros. Baja el mínimo de minutos o cambia el equipo.</td></tr>`;
   $("count").textContent=rows.length+" jugadores";
@@ -352,7 +381,10 @@ function renderAdj(){
 }
 function refreshRow(tr){
   const p=P[+tr.dataset.i],pr=project(p);
-  tr.classList.toggle("warn",!pr.ok);
+  tr.classList.toggle("warn",!pr.ok&&!pr.out);
+  const xi=tr.querySelector('input[data-a="x"]'); if(xi&&xi!==document.activeElement) xi.value=pr.st.xmp;
+  const nb=tr.querySelector("small.boost"),nn=boostNote(p,pr.st);
+  if(nb) nb.outerHTML=nn||""; else if(nn) tr.querySelector(".pn").insertAdjacentHTML("afterend",nn);
   COLS.forEach(k=>{const td=tr.querySelector(`[data-c="${k}"]`);const tmp=document.createElement("tr");tmp.innerHTML=cellsHTML(p,pr);td.replaceWith(tmp.querySelector(`[data-c="${k}"]`))});
   const d=tr.nextElementSibling;
   if(d&&d.dataset.d==tr.dataset.i) d.querySelectorAll(".prop").forEach(el=>{const k=el.dataset.k;el.querySelector("h4 span").textContent=pr.ok?f1(pr[k]):"—";el.querySelector(".out").innerHTML=propOut(p,pr,k)});
@@ -365,10 +397,12 @@ $("tb").addEventListener("input",e=>{
   const tr=el.closest("tr"),p=P[+tr.dataset.i];
   if(a==="x"){const v=parseFloat(el.value);if(isNaN(v))return;ov(p.name).x=Math.max(0,Math.min(48,v))}
   if(a==="r") ov(p.name).r=el.value;
-  save();refreshRow(tr);
+  save();computeBoost();
+  if(a==="x"&&OUTS[p.tm]) document.querySelectorAll("#tb tr[data-i]").forEach(r=>{if(P[+r.dataset.i].tm===p.tm)refreshRow(r)}); else refreshRow(tr);
 });
 $("tb").addEventListener("click",e=>{
   const b=e.target.closest("button");if(!b)return;const tr=b.closest("tr"),p=P[+tr.dataset.i];
+  if(b.dataset.a==="out"){const o=ov(p.name);if(o.out)delete o.out;else o.out=true;save();render();return}
   if(b.dataset.a==="h"){const st=rowState(p);ov(p.name).h=st.home?0:1;save();b.setAttribute("aria-pressed",String(!st.home));b.textContent=st.home?"No":"Sí";refreshRow(tr)}
   if(b.dataset.a==="e"){open.has(p.i)?open.delete(p.i):open.add(p.i);
     const d=tr.nextElementSibling; if(d&&d.classList.contains("detail")) d.remove();
