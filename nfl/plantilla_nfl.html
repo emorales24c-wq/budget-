@@ -86,6 +86,12 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
 .dtbl td.c{font-weight:600;text-align:center;min-width:76px}
 .dtbl th{text-align:center} .dtbl th.l{text-align:left}
 .dtbl tr.hl td{outline:2px solid var(--accent);outline-offset:-2px}
+.mu{margin-top:10px}
+.mu table{min-width:620px}
+.mu td,.mu th{text-align:center}
+.mu td.l,.mu th.l{text-align:left}
+.mu th{cursor:default}
+.mu td small{display:inline;margin-left:4px}
 .foot{color:var(--muted);font-size:.8rem;margin-top:14px;max-width:75ch;display:grid;gap:6px}
 @media (max-width:640px){h1{font-size:1.8rem}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -115,6 +121,7 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
   <div class="f"><label>Condición</label><div class="seg" id="home"><button type="button" data-v="1" aria-pressed="true">Local</button><button type="button" data-v="0" aria-pressed="false">Visita</button></div></div>
 </div>
 <section class="score" id="score" aria-live="polite"></section>
+<section class="mu" id="mu"></section>
 <div class="controls">
   <div class="f"><label>Posición</label><div class="seg" id="pos"><button type="button" data-v="QB" aria-pressed="false">QB</button><button type="button" data-v="RB" aria-pressed="false">RB</button><button type="button" data-v="WR" aria-pressed="true">WR</button><button type="button" data-v="TE" aria-pressed="false">TE</button></div></div>
   <div class="f"><label for="q">Buscar jugador</label><input id="q" type="text" placeholder="Ej. Jefferson" autocomplete="off"></div>
@@ -134,8 +141,8 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
 </div>
 
 <div class="foot">
-  <div><b>Datos:</b> nflverse (datos abiertos de la NFL en GitHub): stats de cada jugador por semana, marcadores y líneas de Las Vegas. Temporada regular 2026, semanas 1 a __SEMANAS__, actualizados el __FECHA__.</div>
-  <div><b>Cálculo:</b> cada stat = promedio por partido del jugador × uso esperado × lo que la defensa rival permite a su posición (÷ promedio de liga) × local (±1%). Con pocos partidos la defensa se acerca al promedio (se mezcla con __SHRINK__ partidos de liga). Marcador: puntos del equipo × puntos que permite el rival ÷ promedio de liga, +1 punto al local. Yardas, intentos y recepciones: distribución normal; touchdowns e intercepciones: Poisson. TD = probabilidad de anotar al menos un touchdown (por tierra o recepción).</div>
+  <div><b>Datos:</b> nflverse (datos abiertos de la NFL en GitHub): stats de cada jugador por semana, marcadores y líneas de Las Vegas. teamrankings.com: stats de equipo (jugadas, puntos y yardas por jugada, pase, tierra, 3ra oportunidad, zona roja). Temporada regular 2026, semanas 1 a __SEMANAS__, actualizados el __FECHA__.</div>
+  <div><b>Cálculo:</b> cada stat = promedio por partido del jugador × uso esperado × lo que la defensa rival permite a su posición (÷ promedio de liga) × local (±1%). Con pocos partidos la defensa se acerca al promedio (se mezcla con __SHRINK__ partidos de liga). Marcador (teamrankings): jugadas esperadas (promedio de las jugadas del equipo y las que permite el rival) × puntos por jugada del equipo × puntos por jugada que permite el rival ÷ promedio de liga, +1 punto al local. Yardas, intentos y recepciones: distribución normal; touchdowns e intercepciones: Poisson. TD = probabilidad de anotar al menos un touchdown (por tierra o recepción).</div>
   <div>Herramienta educativa: no garantiza resultados. Apuesta con responsabilidad.</div>
 </div>
 </div>
@@ -154,6 +161,10 @@ const TL=Object.values(TEAMS).sort((a,b)=>a.name.localeCompare(b.name));
 const played=TL.filter(t=>t.n);
 const LGPTS=played.reduce((s,t)=>s+t.pf,0)/played.length;
 const DV=DATA.dvp;
+const TRD=DATA.tr||{};
+const TRK=["plays","oplays","ppp","oppp","ypp","oypp","pass","opass","rush","orush","third","othird","rz","orz","pts","opts"];
+const LGT={};TRK.forEach(k=>{const v=Object.values(TRD).map(x=>x[k]).filter(x=>x!=null);LGT[k]=v.reduce((s,x)=>s+x,0)/v.length});
+const RANK={};TRK.forEach(k=>{const arr=Object.entries(TRD).filter(([,x])=>x[k]!=null).sort((a,b)=>b[1][k]-a[1][k]);RANK[k]={};arr.forEach(([ab],i)=>RANK[k][ab]=i+1)});
 const P=DATA.p.map((r,i)=>({i,name:r[0],tm:r[1],pos:r[2],g:r[3],wk:r[4],a:r.slice(5)}));
 const NEXT=DATA.next||[];
 const OPP={}; NEXT.forEach(g=>{OPP[g[3]]={opp:g[4],home:0,g};OPP[g[4]]={opp:g[3],home:1,g}});
@@ -203,7 +214,13 @@ function syncSel(){$("team").value=G.team;$("rival").value=G.rival;$("swap").dis
 const GL={total:"",spread:""};
 function score(){
   if(!G.team) return null; const t=TEAMS[G.team],o=TEAMS[G.rival]; if(!t||!o||t===o||!t.n||!o.n) return null;
-  const a=t.pf*(o.pa/LGPTS)+(G.home?HOME_PTS:-HOME_PTS), b=o.pf*(t.pa/LGPTS)+(G.home?-HOME_PTS:HOME_PTS);
+  const A=TRD[G.team],B=TRD[G.rival],hp=G.home?HOME_PTS:-HOME_PTS;
+  if(A&&B&&A.plays&&B.plays&&A.ppp&&B.ppp){
+    const pa=(A.plays+B.oplays)/2, pb=(B.plays+A.oplays)/2;
+    const a=pa*A.ppp*(B.oppp/LGT.oppp)+hp, b=pb*B.ppp*(A.oppp/LGT.oppp)-hp;
+    return {a,b,total:a+b,pa,pb};
+  }
+  const a=t.pf*(o.pa/LGPTS)+hp, b=o.pf*(t.pa/LGPTS)-hp;
   return {a,b,total:a+b};
 }
 function vegas(){const g=NEXT.find(g=>(g[3]===G.team&&g[4]===G.rival)||(g[4]===G.team&&g[3]===G.rival));if(!g||g[5]==null)return null;
@@ -214,7 +231,22 @@ function lineRes(sc){
   if(GL.spread!==""&&!isNaN(+GL.spread)){const pc=1-ncdf(-(+GL.spread),sc.a-sc.b,SD_SPREAD);const pk=pc>=.5+MIN_EDGE/2?"CUBRE":pc<=.5-MIN_EDGE/2?"NO CUBRE":"PASS";spr=`Cubre ${pct(pc)} <span class="pill ${pk==="CUBRE"?"OVER":pk==="NO CUBRE"?"UNDER":"PASS"}">${pk}</span>`}
   return {tot,spr};
 }
+const MUROWS=[["Puntos por partido","pts","opts",1],["Jugadas por partido","plays","oplays",1],["Yardas por jugada","ypp","oypp",2],["Puntos por jugada","ppp","oppp",3],
+  ["Yardas por pase","pass","opass",1],["Yardas por tierra","rush","orush",1],["3ra oportunidad","third","othird","%"],["Zona roja (TD)","rz","orz","%"]];
+function renderMu(){
+  const box=$("mu");
+  if(!G.team||!TRD[G.team]||!TRD[G.rival]||G.team===G.rival){box.innerHTML="";return}
+  const A=G.team,B=G.rival;
+  const fmt=(v,d)=>v==null?"—":d==="%"?(v*100).toFixed(0)+"%":v.toFixed(d);
+  const cell=(ab,k,d)=>{const v=TRD[ab][k],lg=LGT[k],x=v==null||!lg?0:Math.max(-1,Math.min(1,(v/lg-1)/.15));
+    const bg=x>=0?`rgba(var(--hot),${(x*.4).toFixed(2)})`:`rgba(var(--cold),${(-x*.4).toFixed(2)})`;
+    return `<td style="background:${bg}">${fmt(v,d)}<small>#${RANK[k][ab]||"–"}</small></td>`};
+  box.innerHTML=`<div class="tablebox"><table><thead><tr><th class="l">Cara a cara (teamrankings)</th><th>Ofensiva ${A}</th><th>Defensa ${B} permite</th><th>Ofensiva ${B}</th><th>Defensa ${A} permite</th><th>Liga</th></tr></thead><tbody>`+
+    MUROWS.map(([lab,ko,kd,d])=>`<tr><td class="l name">${lab}</td>${cell(A,ko,d)}${cell(B,kd,d)}${cell(B,ko,d)}${cell(A,kd,d)}<td>${fmt(LGT[ko],d)}</td></tr>`).join("")+
+    `</tbody></table></div><p class="meta" style="margin:6px 0 0"><b class="up">Verde</b> = más que el promedio de liga (para la ofensiva es bueno; en "permite" quiere decir que esa defensa cede más, bueno para el Over). # = lugar entre 32 equipos, de mayor a menor.</p>`;
+}
 function renderScore(){
+  renderMu();
   const box=$("score");
   if(!G.team){box.innerHTML=`<p class="hint">Mostrando a todos los jugadores contra su rival de la semana ${NEXT[0]?NEXT[0][0]:""}. Elige un partido o un equipo para ver el marcador proyectado.</p>`;return}
   const sc=score(); if(!sc){box.innerHTML=`<p class="hint">Elige dos equipos distintos.</p>`;return}
@@ -233,7 +265,7 @@ function renderScore(){
     <div><div class="k">Spread proyectado</div><div class="big">${fav}</div>
       <label class="k" for="gspr">Spread de ${esc(T1.ab)}</label><br><input id="gspr" type="number" step="0.5" value="${GL.spread}">
       <div class="res" id="rspr">${r2.spr}</div></div>
-    <div class="tag" style="grid-column:1/-1">${v?`Las Vegas: ${v.fav} -${v.spread.toFixed(1)} · total ${v.total} (ya puesto en las líneas; cámbialo por el de tu casa).`:"Sin línea de Las Vegas para este cruce."}</div></div>`;
+    <div class="tag" style="grid-column:1/-1">${sc.pa?`Jugadas esperadas: ${T1.ab} ${f1(sc.pa)} · ${T2.ab} ${f1(sc.pb)}. `:""}${v?`Las Vegas: ${v.fav} -${v.spread.toFixed(1)} · total ${v.total} (ya puesto en las líneas; cámbialo por el de tu casa).`:"Sin línea de Las Vegas para este cruce."}</div></div>`;
 }
 $("score").addEventListener("input",e=>{const id=e.target.id;if(id!=="gtot"&&id!=="gspr")return;GL[id==="gtot"?"total":"spread"]=e.target.value;const sc=score();if(!sc)return;const r=lineRes(sc);$("rtot").innerHTML=r.tot;$("rspr").innerHTML=r.spr});
 

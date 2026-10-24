@@ -19,6 +19,21 @@ FECHA = f"{HOY.day}-{['ene','feb','mar','abr','may','jun','jul','ago','sep','oct
 
 URL_STATS = f"https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_{SEASON}.csv"
 URL_GAMES = "https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv"
+# stats de equipo de teamrankings.com (temporada actual)
+TR_STATS = [("plays", "plays-per-game"), ("oplays", "opponent-plays-per-game"),
+            ("ppp", "points-per-play"), ("oppp", "opponent-points-per-play"),
+            ("ypp", "yards-per-play"), ("oypp", "opponent-yards-per-play"),
+            ("pass", "passing-yards-per-game"), ("opass", "opponent-passing-yards-per-game"),
+            ("rush", "rushing-yards-per-game"), ("orush", "opponent-rushing-yards-per-game"),
+            ("third", "third-down-conversion-pct"), ("othird", "opponent-third-down-conversion-pct"),
+            ("rz", "red-zone-scoring-pct"), ("orz", "opponent-red-zone-scoring-pct"),
+            ("pts", "points-per-game"), ("opts", "opponent-points-per-game")]
+TRMAP = {"Arizona": "ARI", "Atlanta": "ATL", "Baltimore": "BAL", "Buffalo": "BUF", "Carolina": "CAR", "Chicago": "CHI",
+         "Cincinnati": "CIN", "Cleveland": "CLE", "Dallas": "DAL", "Denver": "DEN", "Detroit": "DET", "Green Bay": "GB",
+         "Houston": "HOU", "Indianapolis": "IND", "Jacksonville": "JAX", "Kansas City": "KC", "LA Chargers": "LAC",
+         "LA Rams": "LA", "Las Vegas": "LV", "Miami": "MIA", "Minnesota": "MIN", "NY Giants": "NYG", "NY Jets": "NYJ",
+         "New England": "NE", "New Orleans": "NO", "Philadelphia": "PHI", "Pittsburgh": "PIT", "San Francisco": "SF",
+         "Seattle": "SEA", "Tampa Bay": "TB", "Tennessee": "TEN", "Washington": "WAS"}
 
 SHRINK_GAMES = 3  # con pocos partidos, el factor de defensa se acerca a 1.00
 SHRINK_RARE = 8   # touchdowns e intercepciones son raros: se encogen más
@@ -50,6 +65,27 @@ def fetch(url, path):
 os.makedirs(RAW, exist_ok=True)
 fetch(URL_STATS, os.path.join(RAW, f"stats_player_week_{SEASON}.csv"))
 fetch(URL_GAMES, os.path.join(RAW, "games.csv"))
+for _, slug in TR_STATS:
+    r = subprocess.run(["curl", "-sS", "-f", "-m", "60", "-A", "Mozilla/5.0", "-o", os.path.join(RAW, "tr_" + slug + ".html"),
+                        f"https://www.teamrankings.com/nfl/stat/{slug}"])
+    if r.returncode:
+        sys.exit(f"No se pudo descargar teamrankings {slug}")
+    time.sleep(1)
+
+
+def num(v):
+    v = str(v).strip()
+    if v in ("", "--", "nan"):
+        return None
+    return float(v.replace("%", "")) / 100 if v.endswith("%") else float(v)
+
+
+TR = {a: {} for a in TEAMS}
+for key, slug in TR_STATS:
+    t = pd.read_html(os.path.join(RAW, "tr_" + slug + ".html"))[0]
+    col = t.columns[2]
+    for _, r in t.iterrows():
+        TR[TRMAP[r.Team]][key] = num(r[col])
 
 st = pd.read_csv(os.path.join(RAW, f"stats_player_week_{SEASON}.csv"), low_memory=False)
 st = st[st.season_type == "REG"].copy()
@@ -112,7 +148,7 @@ for a, v in allowed.items():
     DVP[a] = row
 
 data = {"fecha": FECHA, "season": SEASON, "semanas": int(st.week.max()), "stats": [k for k, _ in STATS],
-        "t": T, "p": PL, "dvp": DVP, "next": NEXT, "shrink": SHRINK_GAMES}
+        "t": T, "tr": TR, "p": PL, "dvp": DVP, "next": NEXT, "shrink": SHRINK_GAMES}
 with open(JSON_OUT, "w") as f:
     json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
 with open(HTML_TPL) as f:
