@@ -112,7 +112,7 @@ table.dtbl{min-width:560px}
   <p class="meta">Pon los minutos esperados (xMP) y el rival de cada jugador, y la tabla calcula sus stats proyectados. Toca ▸ en una fila para meter la línea y las cuotas de un prop.</p>
 </header>
 
-<nav class="tabs" role="tablist">
+<nav class="tabs" role="tablist" hidden>
   <button type="button" role="tab" id="tab-proj" aria-selected="true" aria-controls="view-proj">Proyecciones</button>
   <button type="button" role="tab" id="tab-dvp" aria-selected="false" aria-controls="view-dvp">Defensa por posición</button>
 </nav>
@@ -124,7 +124,7 @@ table.dtbl{min-width:560px}
   <div class="f"><label for="rival">Rival</label><select id="rival"></select></div>
   <div class="f"><label>Condición</label><div class="seg" id="home"><button type="button" data-v="1" aria-pressed="true">Local</button><button type="button" data-v="0" aria-pressed="false">Visita</button></div></div>
   <div class="f"><label for="minmp">Min. prom. ≥</label><input id="minmp" type="number" min="0" max="48" step="1" value="10" style="width:70px"></div>
-  <div class="f"><label>Ajuste por posición</label><div class="seg" id="usepos"><button type="button" data-v="1" aria-pressed="true">Sí</button><button type="button" data-v="0" aria-pressed="false">No</button></div></div>
+  <div class="f" hidden><label>Ajuste por posición</label><div class="seg" id="usepos"><button type="button" data-v="1" aria-pressed="true">Sí</button><button type="button" data-v="0" aria-pressed="false">No</button></div></div>
   <button class="btn" id="reset" type="button">Borrar mis cambios</button>
   <span class="count" id="count"></span>
 </div>
@@ -196,7 +196,7 @@ function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 const ov=n=>S[n]||(S[n]={});
 
 const $=id=>document.getElementById(id);
-const G={usePos:1,team:"MIN",rival:"WAS",home:1,q:"",minmp:10,sort:"pts",dir:-1};
+const G={usePos:0,team:"MIN",rival:"WAS",home:1,q:"",minmp:10,sort:"pts",dir:-1};
 const open=new Set();
 
 function adjFor(tm,opp){
@@ -401,7 +401,7 @@ $("dtbl").querySelector("thead").addEventListener("click",e=>{const th=e.target.
 function showTab(which){const dv=which==="dvp";$("view-proj").hidden=dv;$("view-dvp").hidden=!dv;
   $("tab-proj").setAttribute("aria-selected",String(!dv));$("tab-dvp").setAttribute("aria-selected",String(dv));if(dv)renderDvp()}
 $("tab-proj").addEventListener("click",()=>showTab("proj"));$("tab-dvp").addEventListener("click",()=>showTab("dvp"));
-if(location.hash==="#defensa")showTab("dvp");
+
 $("minmp").addEventListener("input",e=>{const v=parseFloat(e.target.value);G.minmp=isNaN(v)?0:v;render()});
 $("reset").addEventListener("click",()=>{S={};save();open.clear();render()});
 render();

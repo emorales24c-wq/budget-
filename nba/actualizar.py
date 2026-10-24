@@ -138,7 +138,7 @@ prm=[("Ventaja de local (±)",0.01,"0.0%","Supuesto: +1% local / -1% visitante")
 ("CV PRA",0.20,"0.00",""),("CV Pts+Reb",0.23,"0.00",""),("CV Pts+Ast",0.23,"0.00",""),
 ("CV Reb+Ast",0.30,"0.00",""),("CV Robos",0.80,"0.00",""),("CV Tapones",0.80,"0.00",""),
 ("Desv. estándar total del partido",12,"0.0","Supuesto: puntos"),
-("Usar ajuste por posición","Sí","@","Sí = usa la defensa del rival contra la posición del jugador (hoja Defensa x Posicion). No = usa la defensa general del equipo.")]
+("Usar ajuste por posición","No","@","Sí = usa la defensa del rival contra la posición del jugador (hoja Defensa x Posicion). No = usa la defensa general del equipo.")]
 PA["A1"]="Parámetro"; PA["B1"]="Valor"; PA["C1"]="Nota"
 for c in PA[1]: c.font=font(bold=True); c.fill=HDR; c.border=B
 for i,(a,v,f,nt) in enumerate(prm,2):
