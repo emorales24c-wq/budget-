@@ -138,7 +138,7 @@ prm=[("Ventaja de local (±)",0.01,"0.0%","Supuesto: +1% local / -1% visitante")
 ("CV PRA",0.20,"0.00",""),("CV Pts+Reb",0.23,"0.00",""),("CV Pts+Ast",0.23,"0.00",""),
 ("CV Reb+Ast",0.30,"0.00",""),("CV Robos",0.80,"0.00",""),("CV Tapones",0.80,"0.00",""),
 ("Desv. estándar total del partido",12,"0.0","Supuesto: puntos"),
-("Usar ajuste por posición","No","@","Sí = usa la defensa del rival contra la posición del jugador (hoja Defensa x Posicion). No = usa la defensa general del equipo.")]
+("Usar ajuste por posición","Sí","@","Sí = usa lo que el rival permite por minuto a la posición y rol (titular/suplente) del jugador (hoja Defensa x Posicion). No = defensa general del equipo.")]
 PA["A1"]="Parámetro"; PA["B1"]="Valor"; PA["C1"]="Nota"
 for c in PA[1]: c.font=font(bold=True); c.fill=HDR; c.border=B
 for i,(a,v,f,nt) in enumerate(prm,2):
@@ -187,10 +187,11 @@ R["P11"]="Fila rival"; R["P12"]=f"=MATCH($D$4,{SEr}$B:$B,0)"
 for a in ("P7","P9","P11"): R[a].font=font(size=8,color="808080")
 R["P13"]="Posición"; R["P14"]=f'=IFERROR(LEFT({pj("E")},FIND("-",{pj("E")})-1),{pj("E")})'
 for a in ("P8","P10","P12","P14"): R[a].font=font(size=8,color="808080")
-R["P7"].font=font(size=8,color="808080"); R["P13"].font=font(size=8,color="808080")
+R["P15"]="Rol (S=titular, B=suplente)"; R["P16"]=f'=IF(IFERROR({pj("G")}/{pj("F")},0)>=0.5,"S","B")'
+for a in ("P7","P13","P15","P16"): R[a].font=font(size=8,color="808080")
 DXP="'Defensa x Posicion'!"
 USEPOS='Parametros!$B$15="Sí"'
-def fx(stat): return f'IFERROR(INDEX({DXP}$C:$AF,$P$12,MATCH($P$14&" {stat}",{DXP}$C$1:$AF$1,0)),1)'
+def fx(stat): return f'IFERROR(INDEX({DXP}$C:$BJ,$P$12,MATCH($P$16&" "&$P$14&" {stat}",{DXP}$C$1:$BJ$1,0)),1)'
 
 def table(row,headers,formulas,fmts):
     for j,(hd,f,nf) in enumerate(zip(headers,formulas,fmts)):
@@ -277,28 +278,36 @@ R["B32"].font=font(italic=True,size=9)
 DX=wb.create_sheet("Defensa x Posicion")
 SLAB={"pts":"PTS","reb":"REB","ast":"AST","tpm":"3PM","stl":"STL","blk":"BLK"}
 DX["A1"]="Abrev"; DX["B1"]="Equipo"
-keys=[f"{p} {SLAB[s_]}" for p in dvp.POS for s_ in dvp.STATS]
+keys=[f"{ro} {p} {SLAB[s_]}" for ro in dvp.ROLES for p in dvp.POS for s_ in dvp.STATS]
+NK=len(keys)  # 60 factores: C..BJ
 for j,k in enumerate(keys):
-    DX.cell(1,3+j,k); DX.cell(1,34+j,k+" /partido")
-DX.cell(1,33,"Partidos")
+    DX.cell(1,3+j,k); DX.cell(1,4+NK+j,k+" /36 min")
+minkeys=[f"{ro} {p}" for ro in dvp.ROLES for p in dvp.POS]
+for j,k in enumerate(minkeys): DX.cell(1,4+2*NK+j,k+" min/partido")
+DX.cell(1,3+NK,"Partidos")
 for c in DX[1]:
     if c.value: c.font=font(bold=True,size=9); c.fill=HDR; c.alignment=Alignment(horizontal="center",wrap_text=True); c.border=B
 for i,t in enumerate(T,2):
     DX.cell(i,1,t[0]).font=font(); DX.cell(i,2,t[1]).font=font()
     d=DVP.get(t[0],{})
-    DX.cell(i,33,d.get("n",0)).font=font(color=BLUE)
-    for pi,p in enumerate(dvp.POS):
-        vals=d.get(p,[0]*6+[1]*6)
-        for k in range(6):
-            c=DX.cell(i,3+pi*6+k,vals[6+k]); c.number_format="0.00"; c.font=font(color=BLUE); c.border=B
-            c=DX.cell(i,34+pi*6+k,vals[k]); c.number_format="0.0"; c.font=font(color=BLUE); c.border=B
+    DX.cell(i,3+NK,d.get("n",0)).font=font(color=BLUE)
+    j=0
+    for ro in dvp.ROLES:
+        for pi,p in enumerate(dvp.POS):
+            vals=d.get(ro,{}).get(p,[0]*6+[1]*6+[0])
+            for k in range(6):
+                c=DX.cell(i,3+j,vals[6+k]); c.number_format="0.00"; c.font=font(color=BLUE); c.border=B
+                c=DX.cell(i,4+NK+j,vals[k]); c.number_format="0.0"; c.font=font(color=BLUE); c.border=B
+                j+=1
+            c=DX.cell(i,4+2*NK+dvp.ROLES.index(ro)*5+pi,vals[12]); c.number_format="0.0"; c.font=font(color=BLUE); c.border=B
 from openpyxl.formatting.rule import ColorScaleRule
-DX.conditional_formatting.add("C2:AF31",ColorScaleRule(start_type="num",start_value=0.8,start_color="F8696B",mid_type="num",mid_value=1,mid_color="FFFFFF",end_type="num",end_value=1.2,end_color="63BE7B"))
+DX.conditional_formatting.add("C2:BJ31",ColorScaleRule(start_type="num",start_value=0.8,start_color="F8696B",mid_type="num",mid_value=1,mid_color="FFFFFF",end_type="num",end_value=1.2,end_color="63BE7B"))
 DX.column_dimensions["B"].width=24; DX.freeze_panes="C2"
 DX.row_dimensions[1].height=30
-DX["A33"]=("Factor = lo que el equipo permite a esa posición por posesión ÷ promedio de liga (1.20 = permite 20% más; verde = bueno para apostar Over). "
-  f"Con pocos partidos se acerca a 1.00 (se mezcla con {dvp.SHRINK_GAMES} partidos de promedio de liga). Calculado con {DVP_GAMES} box scores de basketball-reference.com, {FECHA}. "
-  "La posición de cada jugador es la de basketball-reference (la primera si tiene dos).")
+DX["A33"]=("S = titulares, B = suplentes. Factor = lo que el equipo permite por minuto a esa posición y rol ÷ promedio de liga (1.20 = permite 20% más; verde = bueno para el Over). "
+  "Se mide por minuto porque lo que se permite a una posición se reparte entre todos los que la juegan. "
+  f"Con pocos minutos se acerca a 1.00 (se mezcla con {dvp.SHRINK_GAMES} partidos de promedio de liga). Calculado con {DVP_GAMES} box scores de basketball-reference.com, {FECHA}. "
+  "Posición de basketball-reference (la primera si tiene dos); el rol del jugador es titular si fue titular en al menos la mitad de sus partidos.")
 DX["A33"].font=font(italic=True,size=9)
 dvpar=DataValidation(type="list",formula1='"Sí,No"'); PA.add_data_validation(dvpar); dvpar.add("B15")
 
@@ -331,7 +340,7 @@ wb.save(OUT)
 P_JSON=[]
 for row in PROWS:
     d=dict(zip(h,row)); g=lambda k: round(float(d[k] or 0),2)
-    P_JSON.append([d["Player"],d["Team"],d["Pos"] or "",int(d["G"] or 0),g("MP"),g("2P"),g("2PA"),g("3P"),g("3PA"),g("FT"),g("FTA"),g("ORB"),g("DRB"),g("AST"),g("STL"),g("BLK"),g("PTS")])
+    P_JSON.append([d["Player"],d["Team"],d["Pos"] or "",int(d["G"] or 0),g("MP"),g("2P"),g("2PA"),g("3P"),g("3PA"),g("FT"),g("FTA"),g("ORB"),g("DRB"),g("AST"),g("STL"),g("BLK"),g("PTS"),int(d["GS"] or 0)])
 data={"fecha":FECHA,"p":P_JSON,"t":[list(t) for t in T],"dvp":DVP,"dvpGames":DVP_GAMES,"shrink":dvp.SHRINK_GAMES}
 with open(JSON_OUT,"w") as f: json.dump(data,f,ensure_ascii=False,separators=(",",":"))
 with open(HTML_TPL) as f: tpl=f.read()
