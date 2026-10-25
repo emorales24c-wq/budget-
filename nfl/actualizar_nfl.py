@@ -19,6 +19,8 @@ FECHA = f"{HOY.day}-{['ene','feb','mar','abr','may','jun','jul','ago','sep','oct
 
 URL_STATS = f"https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_{SEASON}.csv"
 URL_GAMES = "https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv"
+URL_SNAPS = f"https://github.com/nflverse/nflverse-data/releases/download/snap_counts/snap_counts_{SEASON}.csv"
+URL_PLAYERS = "https://github.com/nflverse/nflverse-data/releases/download/players/players.csv"  # une IDs de snaps (pfr) y stats (gsis)
 # stats de equipo de teamrankings.com (temporada actual)
 TR_STATS = [("plays", "plays-per-game"), ("oplays", "opponent-plays-per-game"),
             ("ppp", "points-per-play"), ("oppp", "opponent-points-per-play"),
@@ -65,6 +67,8 @@ def fetch(url, path):
 os.makedirs(RAW, exist_ok=True)
 fetch(URL_STATS, os.path.join(RAW, f"stats_player_week_{SEASON}.csv"))
 fetch(URL_GAMES, os.path.join(RAW, "games.csv"))
+fetch(URL_SNAPS, os.path.join(RAW, f"snap_counts_{SEASON}.csv"))
+fetch(URL_PLAYERS, os.path.join(RAW, "players.csv"))
 for _, slug in TR_STATS:
     r = subprocess.run(["curl", "-sS", "-f", "-m", "60", "-A", "Mozilla/5.0", "-o", os.path.join(RAW, "tr_" + slug + ".html"),
                         f"https://www.teamrankings.com/nfl/stat/{slug}"])
@@ -114,13 +118,32 @@ if len(pend):
         f = lambda v: None if pd.isna(v) else float(v)
         NEXT.append([wk, g.gameday, g.gametime, g.away_team, g.home_team, f(g.spread_line), f(g.total_line)])
 
-# Jugadores: promedio por partido jugado; equipo = el de su último partido
+# Snaps: % de snaps ofensivos por partido, y snaps del equipo por partido
+ids = pd.read_csv(os.path.join(RAW, "players.csv"), low_memory=False, usecols=["gsis_id", "pfr_id"]).dropna()
+sn = pd.read_csv(os.path.join(RAW, f"snap_counts_{SEASON}.csv"), low_memory=False)
+sn = sn[sn.game_type == "REG"].copy()
+sn["gsis"] = sn.pfr_player_id.map(dict(zip(ids.pfr_id, ids.gsis_id)))
+TEAM_SNAPS = {tm: round(g.groupby("game_id").offense_snaps.max().mean(), 1) for tm, g in sn.groupby("team")}
+SNAP = {}
+for gid, d in sn[sn.offense_snaps > 0].sort_values("week").groupby("gsis"):
+    SNAP[gid] = {"pct": d.offense_pct.mean(), "pct3": d.offense_pct.tail(3).mean(), "snaps": d.offense_snaps.sum()}
+
+# Jugadores: promedio por partido jugado; equipo = el de su último partido.
+# Con snaps: producción por snap (total del stat ÷ snaps ofensivos jugados).
 PL = []
+TOT = {}
 for pid, d in st.sort_values("week").groupby("player_id"):
     last = d.iloc[-1]
     n = len(d)
     avg = [round(d[col].sum() / n, 2) for _, col in STATS]
-    PL.append([last.player_display_name, last.team, last.pos, n, int(last.week)] + avg)
+    sp = SNAP.get(pid)
+    if sp and sp["snaps"]:
+        snap = [round(sp["pct"], 3), round(sp["pct3"], 3)] + [round(d[col].sum() / sp["snaps"], 5) for _, col in STATS] + [int(sp["snaps"])]
+        TOT.setdefault(last.pos, [0.0] * (len(STATS) + 1))
+        TOT[last.pos] = [a + b for a, b in zip(TOT[last.pos], [d[col].sum() for _, col in STATS] + [sp["snaps"]])]
+    else:
+        snap = [None, None] + [None] * len(STATS) + [0]
+    PL.append([last.player_display_name, last.team, last.pos, n, int(last.week)] + avg + snap)
 PL.sort(key=lambda r: (r[1], POS.index(r[2]), -r[5 + 2] - r[5 + 6] - r[5 + 10]))
 
 # Defensa por posición: lo que cada defensa permite por partido a QB/RB/WR/TE del rival
@@ -148,7 +171,8 @@ for a, v in allowed.items():
     DVP[a] = row
 
 data = {"fecha": FECHA, "season": SEASON, "semanas": int(st.week.max()), "stats": [k for k, _ in STATS],
-        "t": T, "tr": TR, "p": PL, "dvp": DVP, "next": NEXT, "shrink": SHRINK_GAMES}
+        "t": T, "tr": TR, "p": PL, "teamSnaps": TEAM_SNAPS,
+        "posRate": {k: [round(x / v[-1], 5) for x in v[:-1]] for k, v in TOT.items()}, "dvp": DVP, "next": NEXT, "shrink": SHRINK_GAMES}
 with open(JSON_OUT, "w") as f:
     json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
 with open(HTML_TPL) as f:

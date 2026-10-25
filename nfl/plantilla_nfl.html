@@ -79,6 +79,7 @@ tr.is-out td{opacity:.55} tr.is-out td.v{color:var(--under);font-size:.85rem}
 tr.is-out .pn{text-decoration:line-through}
 tr.is-out td:nth-child(3){opacity:1}
 small.boost{color:var(--over);font-weight:600}
+small.snp b{font-weight:700}
 tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
 .props{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;padding:6px 0}
 .prop{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px;display:grid;gap:6px}
@@ -151,7 +152,7 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
 
 <div class="foot">
   <div><b>Datos:</b> nflverse (datos abiertos de la NFL en GitHub): stats de cada jugador por semana, marcadores y líneas de Las Vegas. teamrankings.com: stats de equipo (jugadas, puntos y yardas por jugada, pase, tierra, 3ra oportunidad, zona roja). Temporada regular 2026, semanas 1 a __SEMANAS__, actualizados el __FECHA__.</div>
-  <div><b>Cálculo:</b> cada stat = promedio por partido del jugador × uso esperado × lo que la defensa rival permite a su posición (÷ promedio de liga) × local (±1%). Con pocos partidos la defensa se acerca al promedio (se mezcla con __SHRINK__ partidos de liga). Marcador (teamrankings): jugadas esperadas (promedio de las jugadas del equipo y las que permite el rival) × puntos por jugada del equipo × puntos por jugada que permite el rival ÷ promedio de liga, +1 punto al local. Yardas, intentos y recepciones: distribución normal; touchdowns e intercepciones: Poisson. TD = probabilidad de anotar al menos un touchdown (por tierra o recepción). OUT: los targets del jugador se reparten entre los WR, TE y RB activos de su equipo, y sus acarreos entre los RB activos, en proporción a lo que ya recibe cada uno. Si el OUT es el QB, sube el Uso % del suplente a mano.</div>
+  <div><b>Cálculo:</b> cada stat = producción por snap del jugador (total ÷ snaps ofensivos jugados) × snaps esperados (Snaps % × snaps ofensivos por partido de su equipo) × lo que la defensa rival permite a su posición (÷ promedio de liga) × local (±1%). Con pocos partidos la defensa se acerca al promedio (se mezcla con __SHRINK__ partidos de liga). Marcador (teamrankings): jugadas esperadas (promedio de las jugadas del equipo y las que permite el rival) × puntos por jugada del equipo × puntos por jugada que permite el rival ÷ promedio de liga, +1 punto al local. Yardas, intentos y recepciones: distribución normal; touchdowns e intercepciones: Poisson. TD = probabilidad de anotar al menos un touchdown (por tierra o recepción). Snaps %: por defecto su promedio de la temporada; debajo del nombre ves el de las últimas 3 semanas (▲ sube, ▼ baja). OUT: su % de snaps pasa a los jugadores de su misma posición en su equipo, en proporción a los snaps que ya juega cada uno (máximo 100%), y cada uno produce según lo que hace por snap. Si el OUT es el QB, el suplente recibe sus snaps; como los suplentes casi no juegan, su producción por snap en el pase se mezcla con el promedio de los QB de la liga (pesa como 150 snaps). Los pocos jugadores sin datos de snaps usan Uso % sobre su promedio por partido.</div>
   <div>Herramienta educativa: no garantiza resultados. Apuesta con responsabilidad.</div>
 </div>
 </div>
@@ -174,7 +175,11 @@ const TRD=DATA.tr||{};
 const TRK=["plays","oplays","ppp","oppp","ypp","oypp","pass","opass","rush","orush","third","othird","rz","orz","pts","opts"];
 const LGT={};TRK.forEach(k=>{const v=Object.values(TRD).map(x=>x[k]).filter(x=>x!=null);LGT[k]=v.reduce((s,x)=>s+x,0)/v.length});
 const RANK={};TRK.forEach(k=>{const arr=Object.entries(TRD).filter(([,x])=>x[k]!=null).sort((a,b)=>b[1][k]-a[1][k]);RANK[k]={};arr.forEach(([ab],i)=>RANK[k][ab]=i+1)});
-const P=DATA.p.map((r,i)=>({i,name:r[0],tm:r[1],pos:r[2],g:r[3],wk:r[4],a:r.slice(5)}));
+const P=DATA.p.map((r,i)=>({i,name:r[0],tm:r[1],pos:r[2],g:r[3],wk:r[4],a:r.slice(5,17),sp:r[17],sp3:r[18],rate:r[19]==null?null:r.slice(19,31),snapsTot:r[31]||0}));
+// QB con pocos snaps (suplentes): su producción por snap en el pase se mezcla con el promedio de los QB de la liga
+const QB_K=150, PRATE=DATA.posRate||{};
+P.forEach(p=>{if(p.pos==="QB"&&p.rate&&PRATE.QB){const n=p.snapsTot;p.rate=p.rate.map((x,i)=>i<5?(n*x+QB_K*PRATE.QB[i])/(n+QB_K):x)}});
+const TSN=DATA.teamSnaps||{};
 const NEXT=DATA.next||[];
 const OPP={}; NEXT.forEach(g=>{OPP[g[3]]={opp:g[4],home:0,g};OPP[g[4]]={opp:g[3],home:1,g}});
 
@@ -198,29 +203,33 @@ function pcdf(k,l){let s=0,t=Math.exp(-l);for(let i=0;i<=k;i++){s+=t;t*=l/(i+1)}
 const impl=o=>o<0?-o/(-o+100):100/(o+100);
 
 function fac(rival,pos,k){const d=DV[rival]&&DV[rival][pos];return d?d[SK.length+IDX[k]]:1}
-// Jugadores OUT: sus targets se reparten entre los receptores activos de su equipo (WR/TE/RB)
-// y sus acarreos entre los RB activos, en proporción a lo que ya recibe cada uno.
-const REC_K=new Set(["tgt","rec","recyd","rectd"]), RUSH_K=new Set(["car","ryd","rtd"]);
+// Snaps: cada stat = producción por snap × snaps esperados (% de snaps × snaps del equipo por partido).
+// Jugadores OUT: su % de snaps pasa a los de su misma posición en su equipo que no tengan % puesto a mano,
+// en proporción a los snaps que ya juega cada uno (máximo 100%).
 const isOut=p=>!!(S[p.name]&&S[p.name].out);
-const usoOf=p=>{const o=S[p.name]||{};return (o.u!=null?o.u:100)/100};
-let BOOST={};
+const hasSnaps=p=>p.rate&&p.sp!=null&&TSN[p.tm];
+const manualPct=p=>{const o=S[p.name]||{};return o.s!=null?o.s/100:null};
+const basePct=p=>{const m=manualPct(p);return m!=null?m:(p.sp||0)};
+let EXTRA={}, OUTS={};
 function computeBoost(){
-  const by={};
-  P.forEach(p=>{const b=by[p.tm]||(by[p.tm]={outT:0,actT:0,outC:0,actC:0,outs:[]});const u=usoOf(p);
-    const tg=p.a[IDX.tgt]*u, cr=p.pos==="RB"?p.a[IDX.car]*u:0;
-    if(isOut(p)){b.outT+=tg;b.outC+=cr;b.outs.push(p.name)}else{b.actT+=tg;b.actC+=cr}});
-  BOOST={};Object.entries(by).forEach(([tm,b])=>BOOST[tm]={rec:b.actT?1+b.outT/b.actT:1,rush:b.actC?1+b.outC/b.actC:1,outs:b.outs});
+  EXTRA={};OUTS={};const by={};
+  P.forEach(p=>{if(!hasSnaps(p))return;const key=p.tm+"|"+p.pos,b=by[key]||(by[key]={out:0,act:[]});
+    if(isOut(p)){b.out+=basePct(p);(OUTS[p.tm]||(OUTS[p.tm]=[])).push(p.name)}
+    else if(manualPct(p)==null&&p.sp>0)b.act.push(p)});
+  Object.values(by).forEach(b=>{if(!b.out||!b.act.length)return;const tot=b.act.reduce((s,p)=>s+p.sp,0);
+    b.act.forEach(p=>EXTRA[p.name]=Math.min(1-p.sp,b.out*p.sp/tot))});
 }
+const expPct=p=>{const m=manualPct(p);return m!=null?m:(p.sp||0)+(EXTRA[p.name]||0)};
+const usoOf=p=>{const o=S[p.name]||{};return (o.u!=null?o.u:100)/100};
 function project(p){
-  const o=S[p.name]||{}, uso=usoOf(p);
-  if(o.out) return {ok:false,out:true,uso};
+  const o=S[p.name]||{}, snaps=hasSnaps(p), pct=snaps?expPct(p):null, uso=snaps?null:usoOf(p);
+  if(o.out) return {ok:false,out:true,pct,uso};
   const ctx=G.team?{rival:p.tm===G.team?G.rival:G.team,home:p.tm===G.team?G.home:1-G.home}:(OPP[p.tm]||null);
-  if(!ctx||ctx.rival===p.tm) return {ok:false,uso};
+  if(!ctx||ctx.rival===p.tm) return {ok:false,pct,uso};
   const rival=ctx.rival||ctx.opp, h=ctx.home?1+HOME_ADV:1-HOME_ADV;
-  const pr={ok:true,uso,rival,home:ctx.home};
-  const bo=BOOST[p.tm]||{rec:1,rush:1};
-  pr.brec=bo.rec; pr.brush=p.pos==="RB"?bo.rush:1;
-  SK.forEach((k,i)=>pr[k]=p.a[i]*uso*fac(rival,p.pos,k)*h*(REC_K.has(k)?pr.brec:RUSH_K.has(k)?pr.brush:1));
+  const pr={ok:true,pct,uso,rival,home:ctx.home};
+  if(snaps){pr.snaps=pct*TSN[p.tm];SK.forEach((k,i)=>pr[k]=p.rate[i]*pr.snaps*fac(rival,p.pos,k)*h)}
+  else SK.forEach((k,i)=>pr[k]=p.a[i]*uso*fac(rival,p.pos,k)*h);
   pr.rr=pr.ryd+pr.recyd;
   pr.td=1-Math.exp(-(pr.rtd+pr.rectd));
   return pr;
@@ -297,7 +306,7 @@ $("score").addEventListener("input",e=>{const id=e.target.id;if(id!=="gtot"&&id!
 // players table
 function headHTML(){
   const c=COLS[G.pos];
-  return `<tr><th class="l" data-k="name">Jugador</th><th data-k="g">PJ</th><th data-k="uso">Uso %</th><th class="l" data-k="rival">Rival</th>`+
+  return `<tr><th class="l" data-k="name">Jugador</th><th data-k="g">PJ</th><th data-k="uso" title="% de snaps ofensivos esperados">Snaps %</th><th class="l" data-k="rival">Rival</th>`+
     c.map(k=>`<th class="proj" data-k="${k}">${LAB[k]}</th>`).join("")+(G.pos==="QB"?"":`<th class="proj" data-k="td">TD %</th>`)+`<th aria-label="Props"></th></tr>`;
 }
 function cellsHTML(p,pr){
@@ -307,18 +316,20 @@ function cellsHTML(p,pr){
   if(G.pos!=="QB") h+=`<td class="v" data-c="td">${pr.out?"OUT":pr.ok?pct(pr.td):"—"}</td>`;
   return h;
 }
+function snapInfo(p){
+  if(!hasSnaps(p)) return `<small class="snp">sin snaps · uso %</small>`;
+  const d=p.sp3-p.sp, ar=d>0.03?`<b class="up">▲</b>`:d<-0.03?`<b class="dn">▼</b>`:"";
+  return `<small class="snp">snaps temp ${Math.round(p.sp*100)}% · últ. 3 ${Math.round(p.sp3*100)}% ${ar}</small>`;
+}
+function boostNote(p){const ex=EXTRA[p.name]||0;return ex>0.005&&!isOut(p)?`<small class="boost" title="Por jugadores OUT: ${esc((OUTS[p.tm]||[]).join(", "))}">+${Math.round(ex*100)}% snaps por OUT</small>`:""}
 function rowHTML(p){
   const pr=project(p),o=S[p.name]||{};
   const rv=pr.ok?`${pr.home?"vs":"@"} ${pr.rival}`:"—";
-  const notes=[];
-  if(pr.ok&&pr.brec>1.005)notes.push(`+${Math.round((pr.brec-1)*100)}% targets`);
-  if(pr.ok&&pr.brush>1.005)notes.push(`+${Math.round((pr.brush-1)*100)}% acarreos`);
-  const outsTm=(BOOST[p.tm]||{}).outs||[];
-  const why=notes.length?`<small class="boost" title="Por jugadores OUT: ${esc(outsTm.join(", "))}">${notes.join(" · ")} por OUT</small>`:"";
+  const why=boostNote(p);
   return `<tr data-i="${p.i}" class="${pr.out?"is-out":pr.ok?"":"warn"}">
-   <td class="l name"><span class="pn">${esc(p.name)}</span><small>${p.tm} · ${p.pos} · últ. sem ${p.wk}</small>${why}</td>
+   <td class="l name"><span class="pn">${esc(p.name)}</span><small>${p.tm} · ${p.pos} · últ. sem ${p.wk}</small>${snapInfo(p)}${why}</td>
    <td>${p.g}</td>
-   <td><div class="usecell"><input type="number" min="0" max="300" step="5" value="${o.u!=null?o.u:100}" data-a="u" aria-label="Uso esperado de ${esc(p.name)}"${pr.out?" disabled":""}><button type="button" class="outb" data-a="out" aria-pressed="${pr.out?"true":"false"}" title="Marcar a ${esc(p.name)} como OUT">OUT</button></div></td>
+   <td><div class="usecell">${hasSnaps(p)?`<input type="number" min="0" max="100" step="1" value="${Math.round(expPct(p)*100)}" data-a="s" aria-label="% de snaps esperados de ${esc(p.name)}"${pr.out?" disabled":""}>`:`<input type="number" min="0" max="300" step="5" value="${o.u!=null?o.u:100}" data-a="u" title="Sin datos de snaps: uso % de su promedio" aria-label="Uso esperado de ${esc(p.name)}"${pr.out?" disabled":""}>`}<button type="button" class="outb" data-a="out" aria-pressed="${pr.out?"true":"false"}" title="Marcar a ${esc(p.name)} como OUT">OUT</button></div></td>
    <td class="l" data-c="rv">${rv}</td>
    ${cellsHTML(p,pr)}
    <td><button type="button" class="exp" data-a="e" aria-expanded="${open.has(p.i)}" aria-label="Props de ${esc(p.name)}">${open.has(p.i)?"▾":"▸"}</button></td></tr>`+(open.has(p.i)?detailHTML(p,pr):"");
@@ -352,7 +363,7 @@ function visible(){
   let rows=P.filter(p=>p.pos===G.pos&&(!G.team||p.tm===G.team||p.tm===G.rival)&&(!q||p.name.toLowerCase().includes(q)));
   const pr=new Map(rows.map(p=>[p.i,project(p)]));
   const k=G.sort||COLS[G.pos][G.pos==="QB"?2:G.pos==="RB"?1:2];
-  const key=p=>{const r=pr.get(p.i);if(k==="name")return p.name;if(k==="g")return p.g;if(k==="uso")return r.uso;if(k==="rival")return r.ok?r.rival:"";return r.ok?r[k]:-1};
+  const key=p=>{const r=pr.get(p.i);if(k==="name")return p.name;if(k==="g")return p.g;if(k==="uso")return r.pct!=null?r.pct:(r.uso||0);if(k==="rival")return r.ok?r.rival:"";return r.ok?r[k]:-1};
   rows.sort((a,b)=>{const x=key(a),y=key(b);return (typeof x==="string"?x.localeCompare(y):x-y)*(G.sort?G.dir:-1)});
   if(G.team) rows.sort((a,b)=>(a.tm===G.team?0:1)-(b.tm===G.team?0:1));
   return rows;
@@ -372,6 +383,9 @@ function render(){
 }
 function refreshRow(tr){
   const p=P[+tr.dataset.i],pr=project(p);
+  const si=tr.querySelector('input[data-a="s"]'); if(si&&si!==document.activeElement) si.value=Math.round(expPct(p)*100);
+  const nb=tr.querySelector("small.boost"),nn=boostNote(p);
+  if(nb) nb.outerHTML=nn||""; else if(nn) tr.querySelector("td.name").insertAdjacentHTML("beforeend",nn);
   const tmp=document.createElement("tbody");tmp.innerHTML=`<tr>${cellsHTML(p,pr)}</tr>`;
   tmp.querySelectorAll("td[data-c]").forEach(td=>{const old=tr.querySelector(`[data-c="${td.dataset.c}"]`);if(old)old.replaceWith(td)});
   const d=tr.nextElementSibling;
@@ -382,8 +396,9 @@ $("tb").addEventListener("input",e=>{const el=e.target,a=el.dataset.a;if(!a)retu
   if(d){const p=P[+d.dataset.d],k=el.closest(".prop").dataset.k,o=ov(p.name);o.l=o.l||{};o.l[k]=o.l[k]||{};o.l[k][a]=el.value;save();refreshRow(d.previousElementSibling);return}
   const tr=el.closest("tr"),p=P[+tr.dataset.i];
   if(a==="u"){const v=parseFloat(el.value);if(isNaN(v))return;ov(p.name).u=Math.max(0,Math.min(300,v))}
+  if(a==="s"){const v=parseFloat(el.value);if(isNaN(v))return;ov(p.name).s=Math.max(0,Math.min(100,v))}
   save();computeBoost();
-  if(((BOOST[p.tm]||{}).outs||[]).length){document.querySelectorAll("#tb tr[data-i]").forEach(r=>{if(P[+r.dataset.i].tm===p.tm)refreshRow(r)})}else refreshRow(tr)});
+  if((OUTS[p.tm]||[]).length){document.querySelectorAll("#tb tr[data-i]").forEach(r=>{if(P[+r.dataset.i].tm===p.tm)refreshRow(r)})}else refreshRow(tr)});
 $("tb").addEventListener("click",e=>{const ob=e.target.closest("button[data-a=out]");
   if(ob){const p=P[+ob.closest("tr").dataset.i],o=ov(p.name);if(o.out)delete o.out;else o.out=true;save();render();return}
   const b=e.target.closest("button[data-a=e]");if(!b)return;const tr=b.closest("tr"),p=P[+tr.dataset.i];
