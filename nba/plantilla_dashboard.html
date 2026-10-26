@@ -106,6 +106,17 @@ table.dtbl{min-width:560px}
 .swap{align-self:end;min-height:34px;min-width:40px;border:1px solid var(--line);background:var(--surface);border-radius:6px;font-size:1.2rem;line-height:1;cursor:pointer;color:var(--accent)}
 .swap:hover:not([disabled]){border-color:var(--accent)}
 .swap[disabled]{opacity:.4;cursor:default}
+.daybox{margin-top:14px}
+.game[hidden]{display:none}
+.dayhead{font-size:.9rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px}
+.dayhead b{color:var(--ink);font-family:var(--display);font-size:1.15rem;letter-spacing:.02em}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
+.gcard{display:grid;gap:3px;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;cursor:pointer;font-variant-numeric:tabular-nums}
+.gcard:hover{border-color:var(--accent)}
+.gcard.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.gcard .gr{display:flex;justify-content:space-between;font-family:var(--display);font-weight:600;font-size:1.05rem}
+.gcard .gr small{font-family:var(--body);font-weight:400;color:var(--muted);font-size:.7rem}
+.gcard .gt{font-size:.72rem;color:var(--muted)}
 .foot{color:var(--muted);font-size:.8rem;margin-top:14px;max-width:75ch;display:grid;gap:6px}
 .count{color:var(--muted);font-size:.85rem;margin-left:auto}
 @media (max-width:640px){.controls{position:static} h1{font-size:1.8rem} #q{width:100%} .f.grow{flex:1 1 100%}}
@@ -133,6 +144,7 @@ table.dtbl{min-width:560px}
 <div id="view-proj" role="tabpanel" aria-labelledby="tab-proj">
 <div class="controls">
   <div class="f grow"><label for="q">Buscar jugador</label><input id="q" type="text" placeholder="Ej. Edwards" autocomplete="off"></div>
+  <div class="f"><label for="day">Día</label><select id="day"></select></div>
   <div class="f"><label for="team">Equipo</label><select id="team"></select></div>
   <button type="button" class="swap" id="swap" title="Intercambiar equipo y rival" aria-label="Intercambiar equipo y rival">⇄</button>
   <div class="f"><label for="rival">Rival</label><select id="rival"></select></div>
@@ -143,6 +155,7 @@ table.dtbl{min-width:560px}
   <span class="count" id="count"></span>
 </div>
 
+<section class="daybox" id="daybox" aria-live="polite"></section>
 <section class="game" id="game" aria-live="polite"></section>
 <div class="adj" id="adj"></div>
 
@@ -213,7 +226,10 @@ function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 const ov=n=>S[n]||(S[n]={});
 
 const $=id=>document.getElementById(id);
-const G={usePos:1,team:"MIN",rival:"WAS",home:1,q:"",minmp:10,sort:"pts",dir:-1};
+// Calendario: partidos por día
+const SCH=DATA.sched||[], DAYS=[...new Set(SCH.map(g=>g[0]))];
+const OPPD={}; SCH.forEach(g=>{const d=OPPD[g[0]]||(OPPD[g[0]]={});d[g[2]]={opp:g[3],home:0,g};d[g[3]]={opp:g[2],home:1,g}});
+const G={day:DAYS[0]||"",usePos:1,team:DAYS[0]?"":"MIN",rival:"WAS",home:1,q:"",minmp:10,sort:"pts",dir:-1};
 const open=new Set();
 
 function adjFor(tm,opp){
@@ -235,8 +251,13 @@ function computeBoost(){
     const tot=b.act.reduce((s,p)=>s+p.mp,0);
     b.act.forEach(p=>{const room=Math.max(0,MAX_MIN-Math.round(p.mp));EXTRA[p.name]=Math.min(room,b.out*p.mp/tot)})});
 }
-function rowState(p){const o=S[p.name]||{};const ex=o.x==null?(EXTRA[p.name]||0):0;
-  return {xmp:o.x!=null?o.x:Math.round((Math.round(p.mp)+ex)*2)/2, extra:ex, out:!!o.out, rival:o.r||G.rival, home:o.h!=null?o.h:G.home}}
+function ctxOf(p){
+  if(G.team){const other=p.tm===G.rival;return {rival:other?G.team:G.rival,home:other?1-G.home:G.home}}
+  const s=G.day&&OPPD[G.day]&&OPPD[G.day][p.tm];
+  return s?{rival:s.opp,home:s.home}:{rival:G.rival,home:G.home};
+}
+function rowState(p){const o=S[p.name]||{};const ex=o.x==null?(EXTRA[p.name]||0):0;const c=ctxOf(p);
+  return {xmp:o.x!=null?o.x:Math.round((Math.round(p.mp)+ex)*2)/2, extra:ex, out:!!o.out, rival:o.r||c.rival, home:o.h!=null?o.h:c.home}}
 function project(p){
   const st=rowState(p), a=adjFor(p.tm,st.rival);
   if(st.out) return {st,ok:false,out:true};
@@ -311,7 +332,8 @@ function detailHTML(p,pr){
 
 function visible(){
   const q=G.q.trim().toLowerCase();
-  let rows=P.filter(p=>(!G.team||p.tm===G.team)&&(!q||p.name.toLowerCase().includes(q))&&p.mp>=G.minmp);
+  const dayTeams=G.day&&OPPD[G.day]?OPPD[G.day]:null;
+  let rows=P.filter(p=>(G.team?(p.tm===G.team||(G.day&&p.tm===G.rival)):(!dayTeams||dayTeams[p.tm]))&&(!q||p.name.toLowerCase().includes(q))&&p.mp>=G.minmp);
   const proj=new Map(rows.map(p=>[p.i,project(p)]));
   const key=p=>{const pr=proj.get(p.i),k=G.sort;
     if(k==="name"||k==="rival") return k==="name"?p.name:pr.st.rival;
@@ -346,9 +368,33 @@ function gameRes(sc){
     spr=`Cubre ${pct(pc)} <span class="pill ${cls}">${pk}</span>`}
   return {tot,spr};
 }
+const fmtDay=d=>{const x=new Date(d+"T12:00:00"),now=new Date(),iso=n=>`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}-${String(n.getDate()).padStart(2,"0")}`;
+  const tom=new Date(now);tom.setDate(now.getDate()+1);
+  const lab=["dom","lun","mar","mié","jue","vie","sáb"][x.getDay()]+" "+x.getDate()+" "+["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"][x.getMonth()];
+  return (d===iso(now)?"Hoy · ":d===iso(tom)?"Mañana · ":"")+lab};
+function renderDay(){
+  const box=$("daybox");
+  if(!G.day||!OPPD[G.day]){box.innerHTML="";return}
+  const games=SCH.filter(g=>g[0]===G.day);
+  box.innerHTML=`<div class="dayhead"><b>${fmtDay(G.day)}</b> · ${games.length} partidos${G.team?` · <button type="button" class="btn" id="dayall">Ver todos los partidos del día</button>`:" · toca un partido para ver solo esos dos equipos"}</div><div class="cards">`+
+    games.map((g,i)=>{const sc=score(g[3],g[2],1);const on=G.team===g[3]&&G.rival===g[2];
+      const sp=sc?sc.spread:0, fav=!sc?"":Math.abs(sp)<.05?"Parejo":(sp<0?g[3]:g[2])+" "+(-Math.abs(sp)).toFixed(1);
+      return `<button type="button" class="gcard${on?" on":""}" data-gi="${SCH.indexOf(g)}">
+        <span class="gt">${esc(g[1])} ET</span>
+        <span class="gr"><span>${g[2]}</span><b>${sc?f1(sc.b):"—"}</b></span>
+        <span class="gr"><span>${g[3]} <small>local</small></span><b>${sc?f1(sc.a):"—"}</b></span>
+        <span class="gt">Total ${sc?f1(sc.total):"—"} · ${fav}</span></button>`}).join("")+`</div>`;
+}
+$("daybox").addEventListener("click",e=>{
+  if(e.target.closest("#dayall")){G.team="";teamSel.value="";syncSwap();render();return}
+  const c=e.target.closest(".gcard");if(!c)return;const g=SCH[+c.dataset.gi];
+  G.team=g[3];G.rival=g[2];G.home=1;GL.total="";GL.spread="";teamSel.value=G.team;rivalSel.value=G.rival;
+  $("home").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(+x.dataset.v===1)));syncSwap();render()});
 function renderGame(){
+  renderDay();
   const box=$("game");
-  if(!G.team){box.innerHTML=`<p class="hint">Elige un <b>equipo</b> arriba para ver el marcador proyectado del partido contra el rival.</p>`;return}
+  if(!G.team){box.innerHTML=G.day&&OPPD[G.day]?"":`<p class="hint">Elige un <b>día</b> o un <b>equipo</b> arriba para ver el marcador proyectado.</p>`;box.hidden=!!(G.day&&OPPD[G.day]);return}
+  box.hidden=false;
   const sc=score(G.team,G.rival,G.home);
   if(!sc){box.innerHTML=`<p class="hint">El rival no puede ser el mismo equipo.</p>`;return}
   const T1=TEAMS[G.team],T2=TEAMS[G.rival],sp=sc.spread;
@@ -372,7 +418,7 @@ $("game").addEventListener("input",e=>{const id=e.target.id;if(id!=="gtot"&&id!=
 function renderAdj(){
   renderGame();
   const box=$("adj");
-  if(!G.team){box.innerHTML=`<span class="chip">Elige un equipo para ver su partido contra el rival. Sin filtro, todos los jugadores usan el rival de arriba salvo los que cambies en su fila.</span>`;return}
+  if(!G.team){box.innerHTML=G.day&&OPPD[G.day]?`<span class="chip">Cada jugador está proyectado contra su rival de ese día, con su localía. Puedes cambiarle el rival en su fila.</span>`:`<span class="chip">Elige un equipo para ver su partido contra el rival. Sin filtro, todos los jugadores usan el rival de arriba salvo los que cambies en su fila.</span>`;return}
   const a=adjFor(G.team,G.rival);
   if(!a){box.innerHTML=`<span class="chip dn">El rival no puede ser el mismo equipo.</span>`;return}
   const c=(lab,v)=>`<span class="chip">${lab} <b class="${v>1.005?"up":v<.995?"dn":""}">×${v.toFixed(2)}</b></span>`;
@@ -412,7 +458,14 @@ $("tb").addEventListener("click",e=>{
 document.querySelector("thead").addEventListener("click",e=>{const th=e.target.closest("th[data-k]");if(!th)return;const k=th.dataset.k;
   if(G.sort===k)G.dir*=-1;else{G.sort=k;G.dir=(k==="name"||k==="rival")?1:-1}render()});
 $("q").addEventListener("input",e=>{G.q=e.target.value;render()});
-teamSel.addEventListener("change",e=>{G.team=e.target.value;if(G.team&&G.rival===G.team){G.rival=TL.find(t=>t.ab!==G.team).ab;rivalSel.value=G.rival}
+const daySel=$("day");
+daySel.innerHTML=DAYS.map(d=>`<option value="${d}">${fmtDay(d)} (${SCH.filter(g=>g[0]===d).length} partidos)</option>`).join("")+`<option value="">— Elegir equipos a mano —</option>`;
+daySel.value=G.day;
+daySel.addEventListener("change",e=>{G.day=e.target.value;if(G.day){G.team="";teamSel.value=""}else if(!G.team){G.team=TL[0].ab;teamSel.value=G.team}
+  P.forEach(p=>{if(S[p.name]){delete S[p.name].r;delete S[p.name].h}});save();syncSwap();render()});
+teamSel.addEventListener("change",e=>{G.team=e.target.value;
+  if(G.team&&G.day&&OPPD[G.day]&&OPPD[G.day][G.team]){const s=OPPD[G.day][G.team];G.rival=s.opp;G.home=s.home;rivalSel.value=G.rival;
+    $("home").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(+x.dataset.v===G.home)))}if(G.team&&G.rival===G.team){G.rival=TL.find(t=>t.ab!==G.team).ab;rivalSel.value=G.rival}
   if(G.team)P.forEach(p=>{if(p.tm===G.team&&S[p.name]){delete S[p.name].r;delete S[p.name].h}});save();render()});
 rivalSel.addEventListener("change",e=>{G.rival=e.target.value;
   P.forEach(p=>{if((!G.team||p.tm===G.team)&&S[p.name])delete S[p.name].r});save();render()});

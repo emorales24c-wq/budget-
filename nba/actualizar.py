@@ -141,6 +141,28 @@ for key,f in TR_STATS:
         stats.setdefault(key,{})[a]=round(v,4)
 full={a:n for a,n,*_ in TEAM_NAMES}
 T=[(a,full[a],stats["pace"][a],stats["orb"][a],stats["drb"][a],stats["pts"][a],stats["ast"][a],stats["tpm"][a],stats["ppg"][a]) for a in sorted(full)]
+# Calendario: próximos partidos (hasta 3 días con juegos), del calendario de basketball-reference
+MESES=["january","february","march","april","may","june","july","august","september","october","november","december"]
+FULL2AB={n:a for a,n,*_ in TEAM_NAMES}; FULL2AB["Los Angeles Clippers"]="LAC"
+SCHED=[]
+for k in range(2):
+    m=(HOY.month-1+k)%12
+    path=os.path.join(RAW,f"sched_{MESES[m]}.html")
+    r=subprocess.run(["curl","-sS","-f","-m","60","-A","Mozilla/5.0","-o",path,f"https://www.basketball-reference.com/leagues/NBA_{SEASON_END}_games-{MESES[m]}.html"])
+    time.sleep(3.5)
+    if r.returncode: continue
+    sc=pd.read_html(path)[0]
+    sc=sc[sc.Date.astype(str)!="Date"]
+    for _,g in sc.iterrows():
+        if not pd.isna(g["PTS"]): continue
+        d=datetime.datetime.strptime(str(g.Date),"%a, %b %d, %Y").date()
+        if d<HOY: continue
+        a,h=FULL2AB.get(g["Visitor/Neutral"]),FULL2AB.get(g["Home/Neutral"])
+        if a and h: SCHED.append([d.isoformat(),str(g["Start (ET)"]),a,h])
+DIAS=sorted({g[0] for g in SCHED})[:3]
+SCHED=[g for g in SCHED if g[0] in DIAS]
+print(f"  Calendario: {len(SCHED)} partidos en {len(DIAS)} días")
+
 NOTA_MEZCLA=(f"Mezclado con 2025-26 hasta que todos los equipos lleven {CORTE} partidos (hoy el mínimo es {MIN_GP}). Peso de 2026-27 = partidos/{CORTE}."
              if MEZCLA else "Solo temporada 2026-27 (todos los equipos llevan al menos "+str(CORTE)+" partidos).")
 
@@ -391,7 +413,7 @@ P_JSON=[]
 for row in PROWS:
     d=dict(zip(h,row)); g=lambda k: round(float(d[k] or 0),2)
     P_JSON.append([d["Player"],d["Team"],d["Pos"] or "",int(d["G"] or 0),g("MP"),g("2P"),g("2PA"),g("3P"),g("3PA"),g("FT"),g("FTA"),g("ORB"),g("DRB"),g("AST"),g("STL"),g("BLK"),g("PTS"),int(d["GS"] or 0),d["Peso 2026-27"]])
-data={"fecha":FECHA,"p":P_JSON,"t":[list(t) for t in T],"dvp":DVP,"dvpGames":DVP_GAMES,"mezcla":{"activa":MEZCLA,"minPJ":MIN_GP,"corte":CORTE},"shrink":dvp.SHRINK_GAMES}
+data={"fecha":FECHA,"p":P_JSON,"t":[list(t) for t in T],"dvp":DVP,"dvpGames":DVP_GAMES,"mezcla":{"activa":MEZCLA,"minPJ":MIN_GP,"corte":CORTE},"shrink":dvp.SHRINK_GAMES,"sched":SCHED}
 with open(JSON_OUT,"w") as f: json.dump(data,f,ensure_ascii=False,separators=(",",":"))
 with open(HTML_TPL) as f: tpl=f.read()
 with open(HTML_OUT,"w") as f: f.write(tpl.replace("__DATA__",json.dumps(data,ensure_ascii=False,separators=(",",":"))).replace("__FECHA__",FECHA).replace("__DVPGAMES__",str(DVP_GAMES)))
