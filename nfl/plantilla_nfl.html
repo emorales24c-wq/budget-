@@ -147,6 +147,7 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
 <section class="mu" id="mu"></section>
 <div class="controls">
   <div class="f"><label>Posición</label><div class="seg" id="pos"><button type="button" data-v="QB" aria-pressed="false">QB</button><button type="button" data-v="RB" aria-pressed="false">RB</button><button type="button" data-v="WR" aria-pressed="true">WR</button><button type="button" data-v="TE" aria-pressed="false">TE</button></div></div>
+  <div class="f"><label>Vista</label><div class="seg" id="group"><button type="button" data-v="1" aria-pressed="true">Por equipo</button><button type="button" data-v="0" aria-pressed="false">Todos juntos</button></div></div>
   <div class="f"><label for="q">Buscar jugador</label><input id="q" type="text" placeholder="Ej. Jefferson" autocomplete="off"></div>
   <button class="btn" id="reset" type="button">Borrar mis cambios</button>
   <span class="count" id="count"></span>
@@ -208,7 +209,7 @@ const f1=x=>(Math.round(x*10)/10).toFixed(1);
 const pct=x=>(x*100).toFixed(0)+"%";
 
 const first=NEXT[0];
-const G={day:DAYS[0]||"",team:DAYS[0]?"":(first?first[4]:"KC"),rival:first?first[3]:"BUF",home:1,pos:"WR",q:"",sort:null,dir:-1};
+const G={group:1,day:DAYS[0]||"",team:DAYS[0]?"":(first?first[4]:"KC"),rival:first?first[3]:"BUF",home:1,pos:"WR",q:"",sort:null,dir:-1};
 const open=new Set();
 
 // math
@@ -400,6 +401,14 @@ function detailHTML(p,pr){
    <div><label for="u${p.i}${k}">Cuota U</label><input id="u${p.i}${k}" type="number" step="5" placeholder="-110" data-a="ou" value="${l.ou??""}"></div></div>
    <div class="out">${propOut(p,pr,k)}</div></div>`}).join("")+`</div></td></tr>`;
 }
+// Agrupar por equipo: con un partido elegido, primero el equipo y luego el rival;
+// en la vista del día, por partido (orden del calendario) y dentro de cada uno visita y local.
+function groupKey(){
+  if(!G.group) return G.team?(p=>p.tm===G.team?0:1):null;
+  if(G.team) return p=>p.tm===G.team?0:1;
+  if(G.day&&OPPD[G.day]){const games=NEXT.filter(g=>g[1]===G.day);return p=>{const i=games.findIndex(g=>g[3]===p.tm||g[4]===p.tm);return i*2+(games[i]&&games[i][4]===p.tm?1:0)}}
+  return null;
+}
 function visible(){
   const q=G.q.trim().toLowerCase();
   const dayT=!G.team&&G.day&&OPPD[G.day]?OPPD[G.day]:null;
@@ -408,7 +417,7 @@ function visible(){
   const k=G.sort||COLS[G.pos][G.pos==="QB"?2:G.pos==="RB"?1:2];
   const key=p=>{const r=pr.get(p.i);if(k==="name")return p.name;if(k==="g")return p.g;if(k==="uso")return r.pct!=null?r.pct:(r.uso||0);if(k==="rival")return r.ok?r.rival:"";return r.ok?r[k]:-1};
   rows.sort((a,b)=>{const x=key(a),y=key(b);return (typeof x==="string"?x.localeCompare(y):x-y)*(G.sort?G.dir:-1)});
-  if(G.team) rows.sort((a,b)=>(a.tm===G.team?0:1)-(b.tm===G.team?0:1));
+  const gk=groupKey(); if(gk) rows.sort((a,b)=>gk(a)-gk(b));
   return rows;
 }
 function render(){
@@ -416,7 +425,8 @@ function render(){
   $("th").innerHTML=headHTML();
   const rows=visible();
   let html="",cur=null;
-  rows.forEach(p=>{if(G.team&&p.tm!==cur){cur=p.tm;const opp=cur===G.team?G.rival:G.team,hm=cur===G.team?G.home:1-G.home;
+  const gk=groupKey();
+  rows.forEach(p=>{if(gk&&p.tm!==cur){cur=p.tm;const c=G.team?{opp:cur===G.team?G.rival:G.team,home:cur===G.team?G.home:1-G.home}:(OPPD[G.day][cur]),opp=c.opp,hm=c.home;
     html+=`<tr class="grp"><td colspan="20" class="l">${esc(TEAMS[cur].name)} <span>${hm?"local":"visita"} · contra la defensa de ${esc(TEAMS[opp].name)}</span></td></tr>`}
     html+=rowHTML(p)});
   $("tb").innerHTML=html||`<tr><td colspan="20" class="l">Ningún jugador coincide.</td></tr>`;
@@ -456,6 +466,7 @@ $("rival").addEventListener("change",e=>{G.rival=e.target.value;resetLines();ren
 $("swap").addEventListener("click",()=>{if(!G.team)return;[G.team,G.rival]=[G.rival,G.team];G.home=G.home?0:1;resetLines();render()});
 $("home").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;G.home=+b.dataset.v;render()});
 function seg(id,fn){$(id).addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;$(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));fn(b.dataset.v)})}
+seg("group",v=>{G.group=+v;render()});
 seg("pos",v=>{G.pos=v;G.sort=null;render()});
 $("q").addEventListener("input",e=>{G.q=e.target.value;render()});
 $("reset").addEventListener("click",()=>{S={};save();open.clear();render()});

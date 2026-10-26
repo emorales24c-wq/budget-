@@ -107,6 +107,8 @@ table.dtbl{min-width:560px}
 .swap:hover:not([disabled]){border-color:var(--accent)}
 .swap[disabled]{opacity:.4;cursor:default}
 .daybox{margin-top:14px}
+tr.grp td{background:var(--sunk);font-family:var(--display);font-weight:700;font-size:1rem;letter-spacing:.03em;text-transform:uppercase;padding-top:10px;text-align:left}
+tr.grp td span{font-family:var(--body);font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-size:.82rem;margin-left:6px}
 .game[hidden]{display:none}
 .dayhead{font-size:.9rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px}
 .dayhead b{color:var(--ink);font-family:var(--display);font-size:1.15rem;letter-spacing:.02em}
@@ -150,6 +152,7 @@ table.dtbl{min-width:560px}
   <div class="f"><label for="rival">Rival</label><select id="rival"></select></div>
   <div class="f"><label>Condición</label><div class="seg" id="home"><button type="button" data-v="1" aria-pressed="true">Local</button><button type="button" data-v="0" aria-pressed="false">Visita</button></div></div>
   <div class="f"><label for="minmp">Min. prom. ≥</label><input id="minmp" type="number" min="0" max="48" step="1" value="10" style="width:70px"></div>
+  <div class="f"><label>Vista</label><div class="seg" id="group"><button type="button" data-v="1" aria-pressed="true">Por equipo</button><button type="button" data-v="0" aria-pressed="false">Todos juntos</button></div></div>
   <div class="f"><label>Ajuste por posición</label><div class="seg" id="usepos"><button type="button" data-v="1" aria-pressed="true">Sí</button><button type="button" data-v="0" aria-pressed="false">No</button></div></div>
   <button class="btn" id="reset" type="button">Borrar mis cambios</button>
   <span class="count" id="count"></span>
@@ -229,7 +232,7 @@ const $=id=>document.getElementById(id);
 // Calendario: partidos por día
 const SCH=DATA.sched||[], DAYS=[...new Set(SCH.map(g=>g[0]))];
 const OPPD={}; SCH.forEach(g=>{const d=OPPD[g[0]]||(OPPD[g[0]]={});d[g[2]]={opp:g[3],home:0,g};d[g[3]]={opp:g[2],home:1,g}});
-const G={day:DAYS[0]||"",usePos:1,team:DAYS[0]?"":"MIN",rival:"WAS",home:1,q:"",minmp:10,sort:"pts",dir:-1};
+const G={group:1,day:DAYS[0]||"",usePos:1,team:DAYS[0]?"":"MIN",rival:"WAS",home:1,q:"",minmp:10,sort:"pts",dir:-1};
 const open=new Set();
 
 function adjFor(tm,opp){
@@ -330,6 +333,17 @@ function detailHTML(p,pr){
    <div class="out">${propOut(p,pr,k)}</div></div>`}).join("")+`</div></td></tr>`;
 }
 
+// Agrupar por equipo: con un partido elegido, primero el equipo y luego el rival;
+// en la vista del día, por partido (orden del calendario) y dentro de cada uno visita y local.
+function groupKey(){
+  if(G.team) return p=>p.tm===G.team?0:1;
+  if(G.day&&OPPD[G.day]){const games=SCH.filter(g=>g[0]===G.day);return p=>{const i=games.findIndex(g=>g[2]===p.tm||g[3]===p.tm);return i*2+(games[i]&&games[i][3]===p.tm?1:0)}}
+  return null;
+}
+function groupHead(p){
+  const c=ctxOf(p),tn=TEAMS[p.tm]?TEAMS[p.tm].name:p.tm,rn=TEAMS[c.rival]?TEAMS[c.rival].name:c.rival;
+  return `<tr class="grp"><td colspan="14" class="l">${esc(tn)} <span>${c.home?"local":"visita"} · contra ${esc(rn)}</span></td></tr>`;
+}
 function visible(){
   const q=G.q.trim().toLowerCase();
   const dayTeams=G.day&&OPPD[G.day]?OPPD[G.day]:null;
@@ -340,12 +354,15 @@ function visible(){
     if(k==="g"||k==="mp") return p[k]; if(k==="xmp") return pr.st.xmp; if(k==="home") return pr.st.home;
     return pr.ok?pr[k]:-1};
   rows.sort((a,b)=>{const x=key(a),y=key(b);return (typeof x==="string"?x.localeCompare(y):x-y)*G.dir});
+  if(G.group){const gk=groupKey();if(gk)rows.sort((a,b)=>gk(a)-gk(b))}
   return rows;
 }
 function render(){
   computeBoost();
   const rows=visible();
-  $("tb").innerHTML=rows.map(rowHTML).join("")||`<tr><td colspan="14" class="l">Ningún jugador coincide con los filtros. Baja el mínimo de minutos o cambia el equipo.</td></tr>`;
+  const gk=G.group?groupKey():null;let html="",cur=null;
+  rows.forEach(p=>{if(gk&&p.tm!==cur){cur=p.tm;html+=groupHead(p)}html+=rowHTML(p)});
+  $("tb").innerHTML=html||`<tr><td colspan="14" class="l">Ningún jugador coincide con los filtros. Baja el mínimo de minutos o cambia el equipo.</td></tr>`;
   $("count").textContent=rows.length+" jugadores";
   document.querySelectorAll("th[data-k]").forEach(th=>{th.removeAttribute("aria-sort");if(th.dataset.k===G.sort)th.setAttribute("aria-sort",G.dir<0?"descending":"ascending")});
   renderAdj();
@@ -480,6 +497,8 @@ teamSel.addEventListener("change",syncSwap); syncSwap();
 $("home").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;G.home=+b.dataset.v;
   $("home").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));
   P.forEach(p=>{if((!G.team||p.tm===G.team)&&S[p.name])delete S[p.name].h});save();render()});
+$("group").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;G.group=+b.dataset.v;
+  $("group").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));render()});
 $("usepos").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;G.usePos=+b.dataset.v;
   $("usepos").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));render()});
 // Defensa por posición
