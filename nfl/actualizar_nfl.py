@@ -113,8 +113,13 @@ T = [[a, TEAMS[a], round(v["pf"] / v["n"], 2) if v["n"] else 0, round(v["pa"] / 
 pend = games[games.home_score.isna()]
 NEXT = []
 if len(pend):
-    wk = int(pend.week.min())
-    for _, g in pend[pend.week == wk].sort_values(["gameday", "gametime"]).iterrows():
+    # todos los partidos pendientes de los próximos 7 días (pueden cruzar de una semana a otra)
+    hoy, fin = HOY.isoformat(), (HOY + datetime.timedelta(days=7)).isoformat()
+    prox = pend[(pend.gameday >= hoy) & (pend.gameday <= fin)]
+    if not len(prox):
+        prox = pend[pend.week == pend.week.min()]
+    for _, g in prox.sort_values(["gameday", "gametime"]).iterrows():
+        wk = int(g.week)
         f = lambda v: None if pd.isna(v) else float(v)
         NEXT.append([wk, g.gameday, g.gametime, g.away_team, g.home_team, f(g.spread_line), f(g.total_line)])
 

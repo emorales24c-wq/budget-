@@ -102,6 +102,17 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
 .mu td.l,.mu th.l{text-align:left}
 .mu th{cursor:default}
 .mu td small{display:inline;margin-left:4px}
+.daybox{margin-top:14px}
+.score[hidden]{display:none}
+.dayhead{font-size:.9rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px}
+.dayhead b{color:var(--ink);font-family:var(--display);font-size:1.15rem;letter-spacing:.02em}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+.gcard{display:grid;gap:3px;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;cursor:pointer;font-variant-numeric:tabular-nums}
+.gcard:hover{border-color:var(--accent)}
+.gcard.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.gcard .gr{display:flex;justify-content:space-between;font-family:var(--display);font-weight:600;font-size:1.05rem}
+.gcard .gr small{font-family:var(--body);font-weight:400;color:var(--muted);font-size:.7rem}
+.gcard .gt{font-size:.72rem;color:var(--muted)}
 .foot{color:var(--muted);font-size:.8rem;margin-top:14px;max-width:75ch;display:grid;gap:6px}
 @media (max-width:640px){h1{font-size:1.8rem}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -124,12 +135,14 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
 
 <div id="view-proj" role="tabpanel" aria-labelledby="tab-proj">
 <div class="controls">
-  <div class="f"><label for="game">Partido de la semana</label><select id="game"></select></div>
+  <div class="f"><label for="day">Día</label><select id="day"></select></div>
+  <div class="f"><label for="game">Partido</label><select id="game"></select></div>
   <div class="f"><label for="team">Equipo</label><select id="team"></select></div>
   <button type="button" class="swap" id="swap" title="Intercambiar equipo y rival" aria-label="Intercambiar equipo y rival">⇄</button>
   <div class="f"><label for="rival">Rival</label><select id="rival"></select></div>
   <div class="f"><label>Condición</label><div class="seg" id="home"><button type="button" data-v="1" aria-pressed="true">Local</button><button type="button" data-v="0" aria-pressed="false">Visita</button></div></div>
 </div>
+<section class="daybox" id="daybox" aria-live="polite"></section>
 <section class="score" id="score" aria-live="polite"></section>
 <section class="mu" id="mu"></section>
 <div class="controls">
@@ -181,7 +194,9 @@ const QB_K=150, PRATE=DATA.posRate||{};
 P.forEach(p=>{if(p.pos==="QB"&&p.rate&&PRATE.QB){const n=p.snapsTot;p.rate=p.rate.map((x,i)=>i<5?(n*x+QB_K*PRATE.QB[i])/(n+QB_K):x)}});
 const TSN=DATA.teamSnaps||{};
 const NEXT=DATA.next||[];
-const OPP={}; NEXT.forEach(g=>{OPP[g[3]]={opp:g[4],home:0,g};OPP[g[4]]={opp:g[3],home:1,g}});
+const OPP={}; NEXT.forEach(g=>{if(!OPP[g[3]])OPP[g[3]]={opp:g[4],home:0,g};if(!OPP[g[4]])OPP[g[4]]={opp:g[3],home:1,g}});
+const DAYS=[...new Set(NEXT.map(g=>g[1]))];
+const OPPD={}; NEXT.forEach(g=>{const d=OPPD[g[1]]||(OPPD[g[1]]={});d[g[3]]={opp:g[4],home:0,g};d[g[4]]={opp:g[3],home:1,g}});
 
 let S={}; const KEY="nfl-proj-v1";
 try{S=JSON.parse(localStorage.getItem(KEY)||"{}")||{}}catch(e){S={}}
@@ -193,7 +208,7 @@ const f1=x=>(Math.round(x*10)/10).toFixed(1);
 const pct=x=>(x*100).toFixed(0)+"%";
 
 const first=NEXT[0];
-const G={team:first?first[4]:"KC",rival:first?first[3]:"BUF",home:1,pos:"WR",q:"",sort:null,dir:-1};
+const G={day:DAYS[0]||"",team:DAYS[0]?"":(first?first[4]:"KC"),rival:first?first[3]:"BUF",home:1,pos:"WR",q:"",sort:null,dir:-1};
 const open=new Set();
 
 // math
@@ -224,7 +239,7 @@ const usoOf=p=>{const o=S[p.name]||{};return (o.u!=null?o.u:100)/100};
 function project(p){
   const o=S[p.name]||{}, snaps=hasSnaps(p), pct=snaps?expPct(p):null, uso=snaps?null:usoOf(p);
   if(o.out) return {ok:false,out:true,pct,uso};
-  const ctx=G.team?{rival:p.tm===G.team?G.rival:G.team,home:p.tm===G.team?G.home:1-G.home}:(OPP[p.tm]||null);
+  const ctx=G.team?{rival:p.tm===G.team?G.rival:G.team,home:p.tm===G.team?G.home:1-G.home}:G.day&&OPPD[G.day]?(OPPD[G.day][p.tm]||null):(OPP[p.tm]||null);
   if(!ctx||ctx.rival===p.tm) return {ok:false,pct,uso};
   const rival=ctx.rival||ctx.opp, h=ctx.home?1+HOME_ADV:1-HOME_ADV;
   const pr={ok:true,pct,uso,rival,home:ctx.home};
@@ -237,18 +252,22 @@ function project(p){
 
 // selects
 const opts=TL.map(t=>`<option value="${t.ab}">${esc(t.name)}</option>`).join("");
-$("team").innerHTML=`<option value="">Todos (rival de esta semana)</option>`+opts; $("rival").innerHTML=opts;
+$("team").innerHTML=`<option value="">Todos los del día</option>`+opts; $("rival").innerHTML=opts;
 const dayName=d=>{const x=new Date(d+"T12:00:00");return ["dom","lun","mar","mié","jue","vie","sáb"][x.getDay()]};
 $("game").innerHTML=`<option value="">— Elegir equipos a mano —</option>`+NEXT.map((g,i)=>`<option value="${i}">${g[3]} @ ${g[4]} · ${dayName(g[1])} ${g[2]}</option>`).join("");
+$("day").innerHTML=DAYS.map(d=>`<option value="${d}">${fmtDay(d)} (${NEXT.filter(g=>g[1]===d).length} partido${NEXT.filter(g=>g[1]===d).length>1?"s":""})</option>`).join("")+`<option value="">Todos los próximos partidos</option>`;
+$("day").value=G.day;
+$("day").addEventListener("change",e=>{G.day=e.target.value;G.team="";resetLines();render()});
 function syncSel(){$("team").value=G.team;$("rival").value=G.rival;$("swap").disabled=!G.team;$("rival").disabled=!G.team;
   $("home").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(+x.dataset.v===G.home)));
   const gi=NEXT.findIndex(g=>(g[3]===G.team&&g[4]===G.rival)||(g[4]===G.team&&g[3]===G.rival));$("game").value=gi>=0?String(gi):""}
 
 // scoreboard
 const GL={total:"",spread:""};
-function score(){
-  if(!G.team) return null; const t=TEAMS[G.team],o=TEAMS[G.rival]; if(!t||!o||t===o||!t.n||!o.n) return null;
-  const A=TRD[G.team],B=TRD[G.rival],hp=G.home?HOME_PTS:-HOME_PTS;
+function score(){return G.team?scoreFor(G.team,G.rival,G.home):null}
+function scoreFor(tm,rv,home){
+  const t=TEAMS[tm],o=TEAMS[rv]; if(!t||!o||t===o||!t.n||!o.n) return null;
+  const A=TRD[tm],B=TRD[rv],hp=home?HOME_PTS:-HOME_PTS;
   if(A&&B&&A.plays&&B.plays&&A.ppp&&B.ppp){
     const pa=(A.plays+B.oplays)/2, pb=(B.plays+A.oplays)/2;
     const a=pa*A.ppp*(B.oppp/LGT.oppp)+hp, b=pb*B.ppp*(A.oppp/LGT.oppp)-hp;
@@ -279,10 +298,33 @@ function renderMu(){
     MUROWS.map(([lab,ko,kd,d])=>`<tr><td class="l name">${lab}</td>${cell(A,ko,d)}${cell(B,kd,d)}${cell(B,ko,d)}${cell(A,kd,d)}<td>${fmt(LGT[ko],d)}</td></tr>`).join("")+
     `</tbody></table></div><p class="meta" style="margin:6px 0 0"><b class="up">Verde</b> = más que el promedio de liga (para la ofensiva es bueno; en "permite" quiere decir que esa defensa cede más, bueno para el Over). # = lugar entre 32 equipos, de mayor a menor.</p>`;
 }
+function fmtDay(d){const MES=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];const x=new Date(d+"T12:00:00"),n=new Date(),iso=v=>`${v.getFullYear()}-${String(v.getMonth()+1).padStart(2,"0")}-${String(v.getDate()).padStart(2,"0")}`;
+  const tm=new Date(n);tm.setDate(n.getDate()+1);
+  return (d===iso(n)?"Hoy · ":d===iso(tm)?"Mañana · ":"")+dayName(d)+" "+x.getDate()+" "+MES[x.getMonth()]}
+function renderDay(){
+  const box=$("daybox");
+  if(!G.day||!OPPD[G.day]){box.innerHTML="";return}
+  const games=NEXT.filter(g=>g[1]===G.day);
+  box.innerHTML=`<div class="dayhead"><b>${fmtDay(G.day)}</b> · ${games.length} partido${games.length>1?"s":""}${G.team?` · <button type="button" class="btn" id="dayall">Ver todos los partidos del día</button>`:" · toca un partido para ver solo esos dos equipos"}</div><div class="cards">`+
+    games.map(g=>{const sc=scoreFor(g[4],g[3],1),on=G.team&&((G.team===g[4]&&G.rival===g[3])||(G.team===g[3]&&G.rival===g[4]));
+      const sp=sc?sc.b-sc.a:0, fav=!sc?"":Math.abs(sp)<.05?"Parejo":(sp<0?g[4]:g[3])+" -"+Math.abs(sp).toFixed(1);
+      const lv=g[5]==null?"":` · LV ${g[5]>0?g[4]:g[3]} -${Math.abs(g[5]).toFixed(1)}, ${g[6]}`;
+      return `<button type="button" class="gcard${on?" on":""}" data-gi="${NEXT.indexOf(g)}">
+        <span class="gt">${esc(g[2])} ET · semana ${g[0]}</span>
+        <span class="gr"><span>${g[3]}</span><b>${sc?f1(sc.b):"—"}</b></span>
+        <span class="gr"><span>${g[4]} <small>local</small></span><b>${sc?f1(sc.a):"—"}</b></span>
+        <span class="gt">Total ${sc?f1(sc.total):"—"} · ${fav}${lv}</span></button>`}).join("")+`</div>`;
+}
+$("daybox").addEventListener("click",e=>{
+  if(e.target.closest("#dayall")){G.team="";render();return}
+  const c=e.target.closest(".gcard");if(!c)return;const g=NEXT[+c.dataset.gi];
+  G.team=g[4];G.rival=g[3];G.home=1;resetLines();render()});
 function renderScore(){
+  renderDay();
   renderMu();
   const box=$("score");
-  if(!G.team){box.innerHTML=`<p class="hint">Mostrando a todos los jugadores contra su rival de la semana ${NEXT[0]?NEXT[0][0]:""}. Elige un partido o un equipo para ver el marcador proyectado.</p>`;return}
+  if(!G.team){box.hidden=!!(G.day&&OPPD[G.day]);box.innerHTML=`<p class="hint">Mostrando a todos los jugadores contra su rival de los próximos días. Elige un día, un partido o un equipo para ver el marcador proyectado.</p>`;return}
+  box.hidden=false;
   const sc=score(); if(!sc){box.innerHTML=`<p class="hint">Elige dos equipos distintos.</p>`;return}
   const T1=TEAMS[G.team],T2=TEAMS[G.rival],sp=sc.b-sc.a,v=vegas(),r=lineRes(sc);
   const fav=Math.abs(sp)<.05?"Parejo":(sp<0?T1.ab:T2.ab)+" -"+Math.abs(sp).toFixed(1);
@@ -360,7 +402,8 @@ function detailHTML(p,pr){
 }
 function visible(){
   const q=G.q.trim().toLowerCase();
-  let rows=P.filter(p=>p.pos===G.pos&&(!G.team||p.tm===G.team||p.tm===G.rival)&&(!q||p.name.toLowerCase().includes(q)));
+  const dayT=!G.team&&G.day&&OPPD[G.day]?OPPD[G.day]:null;
+  let rows=P.filter(p=>p.pos===G.pos&&(G.team?(p.tm===G.team||p.tm===G.rival):(!dayT||dayT[p.tm]))&&(!q||p.name.toLowerCase().includes(q)));
   const pr=new Map(rows.map(p=>[p.i,project(p)]));
   const k=G.sort||COLS[G.pos][G.pos==="QB"?2:G.pos==="RB"?1:2];
   const key=p=>{const r=pr.get(p.i);if(k==="name")return p.name;if(k==="g")return p.g;if(k==="uso")return r.pct!=null?r.pct:(r.uso||0);if(k==="rival")return r.ok?r.rival:"";return r.ok?r[k]:-1};
@@ -407,8 +450,8 @@ $("tb").addEventListener("click",e=>{const ob=e.target.closest("button[data-a=ou
 $("th").addEventListener("click",e=>{const th=e.target.closest("th[data-k]");if(!th)return;const k=th.dataset.k;
   if(G.sort===k)G.dir*=-1;else{G.sort=k;G.dir=(k==="name"||k==="rival")?1:-1}render()});
 function resetLines(){GL.total="";GL.spread=""}
-$("game").addEventListener("change",e=>{const g=NEXT[+e.target.value];if(!g)return;G.team=g[4];G.rival=g[3];G.home=1;resetLines();render()});
-$("team").addEventListener("change",e=>{G.team=e.target.value;if(G.team){const o=OPP[G.team];if(o){G.rival=o.opp;G.home=o.home}else if(G.rival===G.team)G.rival=TL.find(t=>t.ab!==G.team).ab}resetLines();render()});
+$("game").addEventListener("change",e=>{const g=NEXT[+e.target.value];if(!g)return;G.team=g[4];G.rival=g[3];G.home=1;G.day=g[1];$("day").value=G.day;resetLines();render()});
+$("team").addEventListener("change",e=>{G.team=e.target.value;if(G.team){const o=(G.day&&OPPD[G.day]&&OPPD[G.day][G.team])||OPP[G.team];if(o){G.rival=o.opp;G.home=o.home}else if(G.rival===G.team)G.rival=TL.find(t=>t.ab!==G.team).ab}resetLines();render()});
 $("rival").addEventListener("change",e=>{G.rival=e.target.value;resetLines();render()});
 $("swap").addEventListener("click",()=>{if(!G.team)return;[G.team,G.rival]=[G.rival,G.team];G.home=G.home?0:1;resetLines();render()});
 $("home").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;G.home=+b.dataset.v;render()});
