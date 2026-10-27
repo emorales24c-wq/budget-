@@ -64,6 +64,7 @@ fetch(f"https://www.basketball-reference.com/leagues/NBA_{SEASON_END}_per_game.h
 # Inicio de temporada: mientras algún equipo lleve menos de CORTE partidos, se mezcla con la
 # temporada pasada (peso de la actual = partidos/CORTE). Cuando TODOS lleguen a CORTE, solo 2026-27.
 CORTE=4
+USAR_TEMPORADA_PASADA=False  # apagado a pedido del usuario: solo 2026-27
 TRMAP={"Atlanta":"ATL","Boston":"BOS","Brooklyn":"BRK","Charlotte":"CHO","Chicago":"CHI","Cleveland":"CLE","Dallas":"DAL","Denver":"DEN","Detroit":"DET","Golden State":"GSW","Houston":"HOU","Indiana":"IND","LA Clippers":"LAC","LA Lakers":"LAL","Memphis":"MEM","Miami":"MIA","Milwaukee":"MIL","Minnesota":"MIN","New Orleans":"NOP","New York":"NYK","Okla City":"OKC","Orlando":"ORL","Philadelphia":"PHI","Phoenix":"PHO","Portland":"POR","Sacramento":"SAC","San Antonio":"SAS","Toronto":"TOR","Utah":"UTA","Washington":"WAS"}
 def num(v):
     v=str(v).strip()
@@ -102,7 +103,7 @@ DVP=dvp.compute_dvp(BOX_DIR,POSMAP)
 DVP_GAMES=len(os.listdir(BOX_DIR))
 TEAM_GP={a:DVP.get(a,{}).get("n",0) for a,*_ in TEAM_NAMES}
 MIN_GP=min(TEAM_GP.values())
-MEZCLA=MIN_GP<CORTE
+MEZCLA=USAR_TEMPORADA_PASADA and MIN_GP<CORTE
 print(f"  Mínimo de partidos por equipo: {MIN_GP} -> {'mezcla con 2025-26' if MEZCLA else 'solo 2026-27'}")
 
 # Jugadores
