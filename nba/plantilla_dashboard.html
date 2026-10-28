@@ -107,6 +107,12 @@ table.dtbl{min-width:560px}
 .swap:hover:not([disabled]){border-color:var(--accent)}
 .swap[disabled]{opacity:.4;cursor:default}
 .daybox{margin-top:14px}
+.mu{margin-top:10px}
+.mu table{min-width:620px}
+.mu td,.mu th{text-align:center}
+.mu td.l,.mu th.l{text-align:left}
+.mu th{cursor:default}
+.mu td small{display:inline;margin-left:4px;color:var(--muted);font-size:.72rem}
 tr.grp td{background:var(--sunk);font-family:var(--display);font-weight:700;font-size:1rem;letter-spacing:.03em;text-transform:uppercase;padding-top:10px;text-align:left}
 tr.grp td span{font-family:var(--body);font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-size:.82rem;margin-left:6px}
 .game[hidden]{display:none}
@@ -160,6 +166,7 @@ tr.grp td span{font-family:var(--body);font-weight:400;text-transform:none;lette
 
 <section class="daybox" id="daybox" aria-live="polite"></section>
 <section class="game" id="game" aria-live="polite"></section>
+<section class="mu" id="mu"></section>
 <div class="adj" id="adj"></div>
 
 <div class="tablebox">
@@ -204,7 +211,7 @@ tr.grp td span{font-family:var(--body);font-weight:400;text-transform:none;lette
   <div><b>Datos:</b> basketball-reference.com (stats por partido de jugadores) y teamrankings.com (pace, % de rebote y lo que permite cada rival). Temporada 2026-27, actualizados el __FECHA__. La temporada lleva 1 o 2 partidos por equipo, así que las proyecciones todavía son muy inestables.</div>
   <div><b>Defensa por posición:</b> calculada con __DVPGAMES__ box scores de basketball-reference: lo que anotó, rebotó, asistió, etc. cada posición del rival por minuto, separando titulares y suplentes, contra el promedio de liga. A cada jugador se le aplica el factor de su posición y su rol (titular si fue titular en al menos la mitad de sus partidos). La posición es la de basketball-reference (la primera si tiene dos).</div>
   <div><b>OUT:</b> los minutos del jugador pasan a sus compañeros de rotación (10+ min de promedio) que no tengan minutos puestos a mano, en proporción a los minutos que juega cada uno, con tope de 42. Si le pones minutos a mano a alguien, se respetan tus minutos.</div>
-  <div><b>Cálculo:</b> factor base = (xMP ÷ min prom) × pace del partido × local (±1%). Con ajuste por posición, cada stat × lo que el rival permite por minuto a la posición y rol del jugador. Sin él: puntos × defensa del rival por posesión; rebotes × % de rebote del rival; asistencias y triples × lo que permite el rival por posesión. Probabilidad Over con distribución normal (desviación = proyección × CV supuesto). Las cifras en pequeño debajo de cada stat son el promedio de la temporada. Marcador: posesiones × puntos por posesión del equipo × defensa del rival ÷ promedio de liga × local; total y spread con desviación de 12 puntos (supuesto).</div>
+  <div><b>Cálculo:</b> factor base = (xMP ÷ min prom) × pace del partido × local (±1%). Con ajuste por posición, cada stat × lo que el rival permite por minuto a la posición y rol del jugador. Sin él: puntos × defensa del rival por posesión; rebotes × % de rebote del rival; asistencias y triples × lo que permite el rival por posesión. Probabilidad Over con distribución normal (desviación = proyección × CV supuesto). Las cifras en pequeño debajo de cada stat son el promedio de la temporada. Marcador: posesiones × eficiencia ofensiva del equipo (pts por posesión, teamrankings) × eficiencia defensiva del rival ÷ promedio de liga × local, más el efecto de los jugadores OUT (lo que dejan de anotar menos lo que anotan sus compañeros con los minutos extra); total y spread con desviación de 12 puntos (supuesto).</div>
   <div>Herramienta educativa: no garantiza resultados. Apuesta con responsabilidad.</div>
 </div>
 </div>
@@ -213,11 +220,15 @@ tr.grp td span{font-family:var(--body);font-weight:400;text-transform:none;lette
 const DATA=__DATA__;
 const HOME_ADV=0.01, MIN_EDGE=0.05;
 const CV={pts:.25,reb:.35,ast:.40,tpm:.60,pra:.20,pr:.23,pa:.23,ra:.30};
-const TEAMS={}; DATA.t.forEach(t=>TEAMS[t[0]]={ab:t[0],name:t[1],pace:t[2],orb:t[3],drb:t[4],pts:t[5],ast:t[6],tpm:t[7],ppg:t[8]});
+const TRX=["oeff","deff","efg","oefg","tov","otov","ftr","oftr","tp","otp","tpa","otpa","astg","trb"];
+const TEAMS={}; DATA.t.forEach(t=>{const o={ab:t[0],name:t[1],pace:t[2],orb:t[3],drb:t[4],pts:t[5],ast:t[6],tpm:t[7],ppg:t[8]};
+  TRX.forEach((k,i)=>o[k]=t[9+i]==null?null:t[9+i]); o.oorb=1-o.drb; TEAMS[t[0]]=o});
 const TL=Object.values(TEAMS).sort((a,b)=>a.name.localeCompare(b.name));
 const avg=a=>a.reduce((s,x)=>s+x,0)/a.length;
 const LG={pace:avg(TL.map(t=>t.pace)),orb:avg(TL.map(t=>t.orb)),drb:avg(TL.map(t=>t.drb)),
   pts:avg(TL.map(t=>t.pts/t.pace)),ast:avg(TL.map(t=>t.ast/t.pace)),tpm:avg(TL.map(t=>t.tpm/t.pace)),off:avg(TL.map(t=>t.ppg/t.pace))};
+const LGT={};["ppg","pts","pace","oeff","deff","efg","oefg","tov","otov","ftr","oftr","tp","otp","tpa","otpa","astg","ast","orb","oorb","drb","trb"].forEach(k=>{const v=TL.map(t=>t[k]).filter(x=>x!=null);LGT[k]=v.length?avg(v):null});
+const RANK={};Object.keys(LGT).forEach(k=>{RANK[k]={};TL.filter(t=>t[k]!=null).sort((a,b)=>b[k]-a[k]).forEach((t,i)=>RANK[k][t.ab]=i+1)});
 const SD_TOTAL=12, SD_SPREAD=12;
 const DV=DATA.dvp||{};
 const P=DATA.p.map((r,i)=>({i,name:r[0],tm:r[1],pos:r[2],g:r[3],mp:r[4],p2:r[5],a2:r[6],p3:r[7],a3:r[8],ft:r[9],fta:r[10],orb:r[11],drb:r[12],ast:r[13],stl:r[14],blk:r[15],pts:r[16],gs:r[17]||0,w:r[18]==null?1:r[18]}));
@@ -262,18 +273,23 @@ function ctxOf(p){
 function rowState(p){const o=S[p.name]||{};const ex=o.x==null?(EXTRA[p.name]||0):0;const c=ctxOf(p);
   return {xmp:o.x!=null?o.x:Math.round((Math.round(p.mp)+ex)*2)/2, extra:ex, out:!!o.out, rival:o.r||c.rival, home:o.h!=null?o.h:c.home}}
 function project(p){
-  const st=rowState(p), a=adjFor(p.tm,st.rival);
+  const st=rowState(p);
   if(st.out) return {st,ok:false,out:true};
-  if(!a||!p.mp) return {st,ok:false};
-  const base=(st.xmp/p.mp)*a.pace*(st.home?1+HOME_ADV:1-HOME_ADV);
-  const pos=(p.pos||"").split("-")[0], role=roleOf(p), dv=G.usePos&&DV[st.rival]&&DV[st.rival][role]&&DV[st.rival][role][pos];
+  const c=core(p,st.xmp,st.rival,st.home);
+  return c?Object.assign({st,ok:true},c):{st,ok:false};
+}
+function core(p,xmp,rival,home){
+  const a=adjFor(p.tm,rival);
+  if(!a||!p.mp) return null;
+  const base=(xmp/p.mp)*a.pace*(home?1+HOME_ADV:1-HOME_ADV);
+  const pos=(p.pos||"").split("-")[0], role=roleOf(p), dv=G.usePos&&DV[rival]&&DV[rival][role]&&DV[rival][role][pos];
   let pts,reb,ast,tpm,stl,blk;
   if(dv){const f=dv.slice(6);
     pts=(p.p2*2+p.p3*3+p.ft)*base*f[0]; reb=(p.orb+p.drb)*base*f[1]; ast=p.ast*base*f[2]; tpm=p.p3*base*f[3]; stl=p.stl*base*f[4]; blk=p.blk*base*f[5];
   }else{
     pts=(p.p2*2+p.p3*3+p.ft)*base*a.def; reb=p.orb*base*a.orb+p.drb*base*a.drb; ast=p.ast*base*a.ast; tpm=p.p3*base*a.tpm; stl=p.stl*base; blk=p.blk*base;
   }
-  return {st,ok:true,pos:dv?pos:"",pts,reb,ast,tpm,pra:pts+reb+ast,pr:pts+reb,pa:pts+ast,ra:reb+ast,stl,blk};
+  return {pos:dv?pos:"",pts,reb,ast,tpm,pra:pts+reb+ast,pr:pts+reb,pa:pts+ast,ra:reb+ast,stl,blk};
 }
 const seasonVal=(p,k)=>({pts:p.pts,reb:p.orb+p.drb,ast:p.ast,tpm:p.p3,pra:p.pts+p.orb+p.drb+p.ast,stl:p.stl,blk:p.blk})[k];
 const f1=x=>(Math.round(x*10)/10).toFixed(1);
@@ -368,12 +384,26 @@ function render(){
   renderAdj();
 }
 const GL={total:"",spread:""};
+// Marcador: posesiones × eficiencia ofensiva (pts/posesión, teamrankings) × eficiencia defensiva del rival ÷ liga × local,
+// más el efecto de los jugadores OUT: lo que dejan de anotar menos lo que anotan los compañeros con sus minutos.
 function score(tm,opp,home){
   const t=TEAMS[tm],o=TEAMS[opp]; if(!t||!o||tm===opp) return null;
   const poss=(t.pace+o.pace)/2, h=home?1+HOME_ADV:1-HOME_ADV;
-  const a=poss*(t.ppg/t.pace)*((o.pts/o.pace)/LG.off)*h;
-  const b=poss*(o.ppg/o.pace)*((t.pts/t.pace)/LG.off)*(2-h);
-  return {poss,a,b,total:a+b,spread:b-a};
+  let a,b;
+  if(t.oeff&&o.oeff&&t.deff&&o.deff&&LGT.deff){a=poss*t.oeff*(o.deff/LGT.deff)*h;b=poss*o.oeff*(t.deff/LGT.deff)*(2-h)}
+  else{a=poss*(t.ppg/t.pace)*((o.pts/o.pace)/LG.off)*h;b=poss*(o.ppg/o.pace)*((t.pts/t.pace)/LG.off)*(2-h)}
+  const da=outDelta(tm,opp,home), db=outDelta(opp,tm,home?0:1);
+  a+=da; b+=db;
+  return {poss,a,b,total:a+b,spread:b-a,da,db};
+}
+function outDelta(tm,rival,home){
+  if(!OUTS[tm]) return 0;
+  let d=0;
+  P.forEach(p=>{if(p.tm!==tm||!p.mp)return;
+    const base=core(p,baseX(p),rival,home); if(!base)return;
+    const now=isOut(p)?0:(core(p,rowState(p).xmp,rival,home)||{pts:0}).pts;
+    d+=now-base.pts});
+  return d;
 }
 function gameRes(sc){
   const pct=x=>(x*100).toFixed(1)+"%";
@@ -410,7 +440,7 @@ $("daybox").addEventListener("click",e=>{
 function renderGame(){
   renderDay();
   const box=$("game");
-  if(!G.team){box.innerHTML=G.day&&OPPD[G.day]?"":`<p class="hint">Elige un <b>día</b> o un <b>equipo</b> arriba para ver el marcador proyectado.</p>`;box.hidden=!!(G.day&&OPPD[G.day]);return}
+  if(!G.team){box.innerHTML=G.day&&OPPD[G.day]?"":`<p class="hint">Elige un <b>día</b> o un <b>equipo</b> arriba para ver el marcador proyectado.</p>`;box.hidden=!!(G.day&&OPPD[G.day]);$("mu").innerHTML="";return}
   box.hidden=false;
   const sc=score(G.team,G.rival,G.home);
   if(!sc){box.innerHTML=`<p class="hint">El rival no puede ser el mismo equipo.</p>`;return}
@@ -428,7 +458,24 @@ function renderGame(){
     <div><div class="k">Spread proyectado</div><div class="big">${fav}</div>
       <label class="k" for="gspr">Spread de ${esc(T1.ab)}</label><br><input id="gspr" type="number" step="0.5" placeholder="-4.5" value="${GL.spread}">
       <div class="res" id="rspr">${r.spr}</div></div>
-    <div class="tag" style="grid-column:1/-1">${f1(sc.poss)} posesiones esperadas</div></div>`;
+    <div class="tag" style="grid-column:1/-1">${f1(sc.poss)} posesiones esperadas${outTag(G.team,sc.da)}${outTag(G.rival,sc.db)}</div></div>`;
+  renderMu();
+}
+function outTag(tm,d){return OUTS[tm]&&Math.abs(d)>=.05?` · <b class="${d<0?"dn":"up"}">${tm} ${d>0?"+":""}${f1(d)} pts por OUT</b> (${esc(OUTS[tm].join(", "))})`:""}
+const MUROWS=[["Puntos por partido","ppg","pts",1],["Posesiones por partido","pace","pace",1],["Eficiencia (pts/posesión)","oeff","deff",3],["eFG%","efg","oefg","%"],
+  ["Pérdidas %","tov","otov","%",1],["Tiros libres (FT rate)","ftr","oftr","%"],["Triples %","tp","otp","%"],["Triples intentados","tpa","otpa",1],
+  ["Asistencias","astg","ast",1],["Rebote ofensivo %","orb","oorb","%"]];
+function renderMu(){
+  const box=$("mu");
+  if(!G.team||!TEAMS[G.team]||!TEAMS[G.rival]||G.team===G.rival){box.innerHTML="";return}
+  const A=G.team,B=G.rival;
+  const fmt=(v,d)=>v==null?"—":d==="%"?(v*100).toFixed(1)+"%":v.toFixed(d);
+  const cell=(ab,k,d,inv)=>{const v=TEAMS[ab][k],lg=LGT[k];let x=v==null||!lg?0:Math.max(-1,Math.min(1,(v/lg-1)/.08));if(inv)x=-x;
+    const bg=x>=0?`rgba(var(--hot),${(x*.4).toFixed(2)})`:`rgba(var(--cold),${(-x*.4).toFixed(2)})`;
+    return `<td style="background:${bg}">${fmt(v,d)}<small>#${RANK[k][ab]||"–"}</small></td>`};
+  box.innerHTML=`<div class="tablebox"><table><thead><tr><th class="l">Cara a cara (teamrankings)</th><th>Ofensiva ${A}</th><th>Defensa ${B} permite</th><th>Ofensiva ${B}</th><th>Defensa ${A} permite</th><th>Liga</th></tr></thead><tbody>`+
+    MUROWS.map(([lab,ko,kd,d,inv])=>`<tr><td class="l name">${lab}</td>${cell(A,ko,d,inv)}${cell(B,kd,d,inv)}${cell(B,ko,d,inv)}${cell(A,kd,d,inv)}<td>${fmt(LGT[ko],d)}</td></tr>`).join("")+
+    `</tbody></table></div><p class="meta" style="margin:6px 0 0"><b class="up">Verde</b> = bueno para la ofensiva (en "permite": esa defensa cede más, bueno para el Over). En pérdidas el color va al revés: menos pérdidas es verde. # = lugar entre 30 equipos, de mayor a menor.</p>`;
 }
 $("game").addEventListener("input",e=>{const id=e.target.id;if(id!=="gtot"&&id!=="gspr")return;
   GL[id==="gtot"?"total":"spread"]=e.target.value;const sc=score(G.team,G.rival,G.home);if(!sc)return;const r=gameRes(sc);$("rtot").innerHTML=r.tot;$("rspr").innerHTML=r.spr});
@@ -461,7 +508,7 @@ $("tb").addEventListener("input",e=>{
   if(a==="x"){const v=parseFloat(el.value);if(isNaN(v))return;ov(p.name).x=Math.max(0,Math.min(48,v))}
   if(a==="r") ov(p.name).r=el.value;
   save();computeBoost();
-  if(a==="x"&&OUTS[p.tm]) document.querySelectorAll("#tb tr[data-i]").forEach(r=>{if(P[+r.dataset.i].tm===p.tm)refreshRow(r)}); else refreshRow(tr);
+  if(a==="x"&&OUTS[p.tm]){document.querySelectorAll("#tb tr[data-i]").forEach(r=>{if(P[+r.dataset.i].tm===p.tm)refreshRow(r)});renderGame()} else refreshRow(tr);
 });
 $("tb").addEventListener("click",e=>{
   const b=e.target.closest("button");if(!b)return;const tr=b.closest("tr"),p=P[+tr.dataset.i];

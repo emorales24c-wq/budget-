@@ -47,7 +47,16 @@ FECHA=f"{HOY.day}-{['ene','feb','mar','abr','may','jun','jul','ago','sep','oct',
 
 TR_STATS=[("pace","possessions-per-game"),("orb","offensive-rebounding-pct"),("drb","defensive-rebounding-pct"),
           ("pts","opponent-points-per-game"),("ast","opponent-assists-per-game"),("tpm","opponent-three-pointers-made-per-game"),
-          ("ppg","points-per-game")]
+          ("ppg","points-per-game"),
+          # más stats de equipo de teamrankings (cara a cara y marcador por eficiencia)
+          ("oeff","offensive-efficiency"),("deff","defensive-efficiency"),
+          ("efg","effective-field-goal-pct"),("oefg","opponent-effective-field-goal-pct"),
+          ("tov","turnover-pct"),("otov","opponent-turnover-pct"),
+          ("ftr","free-throw-rate"),("oftr","opponent-free-throw-rate"),
+          ("tp","three-point-pct"),("otp","opponent-three-point-pct"),
+          ("tpa","three-pointers-attempted-per-game"),("otpa","opponent-three-pointers-attempted-per-game"),
+          ("astg","assists-per-game"),("trb","total-rebounding-percentage")]
+TR_EXTRA=["oeff","deff","efg","oefg","tov","otov","ftr","oftr","tp","otp","tpa","otpa","astg","trb"]
 
 def fetch(url,path):
     for intento in range(4):
@@ -141,7 +150,7 @@ for key,f in TR_STATS:
         else: v=w*now+(1-w)*old
         stats.setdefault(key,{})[a]=round(v,4)
 full={a:n for a,n,*_ in TEAM_NAMES}
-T=[(a,full[a],stats["pace"][a],stats["orb"][a],stats["drb"][a],stats["pts"][a],stats["ast"][a],stats["tpm"][a],stats["ppg"][a]) for a in sorted(full)]
+T=[(a,full[a],stats["pace"][a],stats["orb"][a],stats["drb"][a],stats["pts"][a],stats["ast"][a],stats["tpm"][a],stats["ppg"][a])+tuple(stats[k][a] for k in TR_EXTRA) for a in sorted(full)]
 # Calendario: próximos partidos (hasta 3 días con juegos), del calendario de basketball-reference
 MESES=["january","february","march","april","may","june","july","august","september","october","november","december"]
 FULL2AB={n:a for a,n,*_ in TEAM_NAMES}; FULL2AB["Los Angeles Clippers"]="LAC"
@@ -187,18 +196,23 @@ SJ.freeze_panes="C2"
 SJ["B1"].comment=Comment("Fuente: basketball-reference.com, NBA 2026-27 Per Game Stats, descargado "+FECHA+". "+NOTA_MEZCLA+" G y GS son de 2026-27. Jugadores traspasados: solo su equipo actual. Para actualizar, pega la tabla Per Game desde A1.","Modelo")
 
 # ---- Stats Equipos
-h2=["Abrev","Equipo","Pace","ORB%","DRB%","Pts permitidos","Ast permitidas","3PM permitidos","Pts anotados"]
+h2=["Abrev","Equipo","Pace","ORB%","DRB%","Pts permitidos","Ast permitidas","3PM permitidos","Pts anotados",
+    "Ef. ofensiva (pts/pos)","Ef. defensiva (pts/pos)","eFG%","eFG% rival","Pérdidas %","Pérdidas % rival","FT rate","FT rate rival",
+    "3P%","3P% rival","3PA","3PA rival","Ast/partido","Rebote total %"]
 for j,x in enumerate(h2,1):
     c=SE.cell(1,j,x); c.font=font(bold=True); c.fill=HDR; c.alignment=C; c.border=B
 for i,t in enumerate(T,2):
     for j,x in enumerate(t,1):
         c=SE.cell(i,j,x); c.font=font(color=BLUE); c.border=B
-        if j in (4,5): c.number_format="0.0%"
-        if j in (3,6,7,8,9): c.number_format="0.0"
+        if j in (4,5,12,13,14,15,16,17,18,19,23): c.number_format="0.0%"
+        if j in (3,6,7,8,9,20,21,22): c.number_format="0.0"
+        if j in (10,11): c.number_format="0.000"
 SE.column_dimensions["B"].width=26
-for col in "CDEFGHI": SE.column_dimensions[col].width=16
+for col in "CDEFGHIJKLMNOPQRSTUVW": SE.column_dimensions[col].width=14
+SE.row_dimensions[1].height=30
+for c in SE[1]: c.alignment=Alignment(horizontal="center",vertical="center",wrap_text=True)
 SE.freeze_panes="C2"
-SE["A33"]="Fuente sugerida: teamrankings.com (Possessions per Game, Offensive/Defensive Rebounding %, Opponent Points/Assists/3PM per Game). "+NOTA_MEZCLA+" Descargados "+FECHA+"."
+SE["A33"]="Fuente: teamrankings.com (Possessions per Game, Offensive/Defensive Rebounding %, Opponent Points/Assists/3PM per Game, Points per Game, Offensive/Defensive Efficiency, eFG%, Turnover %, Free Throw Rate, 3P%, 3PA, Assists, Total Rebounding %). "+NOTA_MEZCLA+" Descargados "+FECHA+"."
 SE["A33"].font=font(italic=True,size=9)
 
 # ---- Parametros
@@ -223,13 +237,14 @@ lg=[("Pace promedio","=AVERAGE('Stats Equipos'!C2:C31)","0.0"),
 ("Pts permitidos por posesión","=SUMPRODUCT('Stats Equipos'!F2:F31/'Stats Equipos'!C2:C31)/30","0.000"),
 ("Ast permitidas por posesión","=SUMPRODUCT('Stats Equipos'!G2:G31/'Stats Equipos'!C2:C31)/30","0.000"),
 ("3PM permitidos por posesión","=SUMPRODUCT('Stats Equipos'!H2:H31/'Stats Equipos'!C2:C31)/30","0.000"),
-("Pts anotados por posesión","=SUMPRODUCT('Stats Equipos'!I2:I31/'Stats Equipos'!C2:C31)/30","0.000")]
+("Pts anotados por posesión","=SUMPRODUCT('Stats Equipos'!I2:I31/'Stats Equipos'!C2:C31)/30","0.000"),
+("Eficiencia defensiva promedio","=AVERAGE('Stats Equipos'!K2:K31)","0.000")]
 for i,(a,f,nf) in enumerate(lg,17):
     PA.cell(i,1,a).font=font(); c=PA.cell(i,2,f); c.font=font(); c.number_format=nf
 # names for clarity
 HOME,EDGE="Parametros!$B$2","Parametros!$B$3"
 CV={k:f"Parametros!$B${r}" for k,r in zip(["PTS","REB","AST","3PM","PRA","PR","PA","RA","STL","BLK"],range(4,14))}
-LPACE,LORB,LDRB,LPTS,LAST,L3PM,LOFF=[f"Parametros!$B${r}" for r in range(17,24)]
+LPACE,LORB,LDRB,LPTS,LAST,L3PM,LOFF,LDEF=[f"Parametros!$B${r}" for r in range(17,25)]
 
 # ---- Resultado
 for col,w in zip("ABCDEFGHIJKLMNOP",[2,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14]): R.column_dimensions[col].width=w
@@ -337,14 +352,14 @@ for j,hd in enumerate(sh,2):
     c.alignment=Alignment(horizontal="center",vertical="center",wrap_text=True); c.border=B
 R.row_dimensions[30].height=30
 sv=[f"=({te('C','$P$10')}+{te('C','$P$12')})/2",
-    f"=B31*({te('I','$P$10')}/{te('C','$P$10')})*(({te('F','$P$12')}/{te('C','$P$12')})/{LOFF})*C8",
-    f"=B31*({te('I','$P$12')}/{te('C','$P$12')})*(({te('F','$P$10')}/{te('C','$P$10')})/{LOFF})*(2-C8)",
+    f"=B31*{te('J','$P$10')}*({te('K','$P$12')}/{LDEF})*C8",
+    f"=B31*{te('J','$P$12')}*({te('K','$P$10')}/{LDEF})*(2-C8)",
     "=C31+D31","=D31-C31",225.5,
     f'=IF(G31="","",1-NORMDIST(G31,E31,Parametros!$B$14,TRUE))']
 for j,(v,nf) in enumerate(zip(sv,["0.0","0.0","0.0","0.0","+0.0;-0.0","0.0","0.0%"]),2):
     c=R.cell(31,j,v); c.number_format=nf; c.border=B; c.alignment=C; c.font=font(bold=j in (3,4,5))
     if j==7: c.font=font(color=BLUE); c.fill=INP
-R["B32"]="Pts = posesiones × pts anotados por posesión del equipo × (pts permitidos por posesión del rival ÷ promedio de liga) × local. Spread negativo = favorito."
+R["B32"]="Pts = posesiones × eficiencia ofensiva del equipo (pts por posesión, teamrankings) × (eficiencia defensiva del rival ÷ promedio de liga) × local. Spread negativo = favorito."
 R["B32"].font=font(italic=True,size=9)
 
 # ---- Defensa x Posicion
