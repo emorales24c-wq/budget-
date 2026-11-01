@@ -131,6 +131,7 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
 <nav class="tabs" role="tablist">
   <button type="button" role="tab" id="tab-proj" aria-selected="true" aria-controls="view-proj">Proyecciones</button>
   <button type="button" role="tab" id="tab-dvp" aria-selected="false" aria-controls="view-dvp">Defensa por posición</button>
+  <button type="button" role="tab" id="tab-td" aria-selected="false" aria-controls="view-td">Anotador de TD</button>
 </nav>
 
 <div id="view-proj" role="tabpanel" aria-labelledby="tab-proj">
@@ -153,6 +154,19 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
   <span class="count" id="count"></span>
 </div>
 <div class="tablebox"><table id="tbl"><thead id="th"></thead><tbody id="tb"></tbody></table></div>
+</div>
+
+<div id="view-td" role="tabpanel" aria-labelledby="tab-td" hidden>
+  <div class="controls">
+    <div class="f"><label for="tdday">Día</label><select id="tdday"></select></div>
+    <div class="f"><label>Posición</label><div class="seg" id="tdpos"><button type="button" data-v="" aria-pressed="true">Todas</button><button type="button" data-v="QB" aria-pressed="false">QB</button><button type="button" data-v="RB" aria-pressed="false">RB</button><button type="button" data-v="WR" aria-pressed="false">WR</button><button type="button" data-v="TE" aria-pressed="false">TE</button></div></div>
+    <div class="f"><label>Vista</label><div class="seg" id="tdgroup"><button type="button" data-v="1" aria-pressed="true">Por partido</button><button type="button" data-v="0" aria-pressed="false">Todos juntos</button></div></div>
+    <div class="f"><label for="tdmin">Prob. mínima %</label><input id="tdmin" type="number" min="0" max="100" step="1" value="10" style="width:80px"></div>
+    <div class="f"><label for="tdq">Buscar jugador</label><input id="tdq" type="text" placeholder="Ej. Barkley" autocomplete="off"></div>
+    <span class="count" id="tdcount"></span>
+  </div>
+  <p class="meta" style="margin:10px 0 0">Probabilidad de que cada jugador anote al menos un touchdown (por tierra o recepción; los TD de pase del QB no cuentan). Sale de sus TD esperados en el partido: su tasa de TD por snap (mezclada con la de su posición, porque los TD son pocos) × snaps esperados × la defensa rival contra su posición. <b>Cuota justa</b> = la cuota sin ganancia de la casa. Escribe la cuota de tu casa para ver el edge. Los OUT y los Snaps % que pongas en Proyecciones también cuentan aquí.</p>
+  <div class="tablebox"><table id="tdtbl"><thead><tr><th class="l">Jugador</th><th class="l">Rival</th><th>Snaps %</th><th>TD esperados</th><th>Prob. TD</th><th>Cuota justa</th><th>Tu cuota</th><th>Edge</th><th></th></tr></thead><tbody id="tdtb"></tbody></table></div>
 </div>
 
 <div id="view-dvp" role="tabpanel" aria-labelledby="tab-dvp" hidden>
@@ -193,6 +207,9 @@ const P=DATA.p.map((r,i)=>({i,name:r[0],tm:r[1],pos:r[2],g:r[3],wk:r[4],a:r.slic
 // QB con pocos snaps (suplentes): su producción por snap en el pase se mezcla con el promedio de los QB de la liga
 const QB_K=150, PRATE=DATA.posRate||{};
 P.forEach(p=>{if(p.pos==="QB"&&p.rate&&PRATE.QB){const n=p.snapsTot;p.rate=p.rate.map((x,i)=>i<5?(n*x+QB_K*PRATE.QB[i])/(n+QB_K):x)}});
+// TD por tierra y por recepción: son pocos por jugador, así que su tasa por snap se mezcla con la de su posición (pesa como TD_K snaps)
+const TD_K=250, TDI=[SK.indexOf("rtd"),SK.indexOf("rectd")];
+P.forEach(p=>{const lg=PRATE[p.pos];if(!p.rate||!lg)return;const n=p.snapsTot;TDI.forEach(i=>{p.rate[i]=(n*p.rate[i]+TD_K*lg[i])/(n+TD_K)})});
 const TSN=DATA.teamSnaps||{};
 const NEXT=DATA.next||[];
 const OPP={}; NEXT.forEach(g=>{if(!OPP[g[3]])OPP[g[3]]={opp:g[4],home:0,g};if(!OPP[g[4]])OPP[g[4]]={opp:g[3],home:1,g}});
@@ -237,10 +254,10 @@ function computeBoost(){
 }
 const expPct=p=>{const m=manualPct(p);return m!=null?m:(p.sp||0)+(EXTRA[p.name]||0)};
 const usoOf=p=>{const o=S[p.name]||{};return (o.u!=null?o.u:100)/100};
-function project(p){
+function project(p,ctxOverride){
   const o=S[p.name]||{}, snaps=hasSnaps(p), pct=snaps?expPct(p):null, uso=snaps?null:usoOf(p);
   if(o.out) return {ok:false,out:true,pct,uso};
-  const ctx=G.team?{rival:p.tm===G.team?G.rival:G.team,home:p.tm===G.team?G.home:1-G.home}:G.day&&OPPD[G.day]?(OPPD[G.day][p.tm]||null):(OPP[p.tm]||null);
+  const ctx=ctxOverride!==undefined?ctxOverride:G.team?{rival:p.tm===G.team?G.rival:G.team,home:p.tm===G.team?G.home:1-G.home}:G.day&&OPPD[G.day]?(OPPD[G.day][p.tm]||null):(OPP[p.tm]||null);
   if(!ctx||ctx.rival===p.tm) return {ok:false,pct,uso};
   const rival=ctx.rival||ctx.opp, h=ctx.home?1+HOME_ADV:1-HOME_ADV;
   const pr={ok:true,pct,uso,rival,home:ctx.home};
@@ -489,9 +506,58 @@ function renderDvp(){
 }
 seg("dpos",v=>{D.pos=v;D.sort=DCOLS[v][v==="QB"?2:v==="RB"?1:2];renderDvp()}); seg("dmode",v=>{D.mode=v;renderDvp()});
 $("dth").addEventListener("click",e=>{const th=e.target.closest("th[data-k]");if(!th)return;const k=th.dataset.k;if(D.sort===k)D.dir*=-1;else{D.sort=k;D.dir=k==="name"?1:-1}renderDvp()});
-function showTab(w){const dv=w==="dvp";$("view-proj").hidden=dv;$("view-dvp").hidden=!dv;$("tab-proj").setAttribute("aria-selected",String(!dv));$("tab-dvp").setAttribute("aria-selected",String(dv));if(dv)renderDvp()}
+function showTab(w){["proj","dvp","td"].forEach(k=>{$("view-"+k).hidden=k!==w;$("tab-"+k).setAttribute("aria-selected",String(k===w))});if(w==="dvp")renderDvp();if(w==="td")renderTd()}
+// Anotador de TD: probabilidad de anotar al menos un TD (tierra o recepción) en cada partido
+const TD={day:DAYS[0]||"",pos:"",group:1,min:10,q:""};
+const fairOdds=p=>p<=0||p>=1?"—":p>=.5?String(-Math.round(p/(1-p)*100)):"+"+Math.round((1-p)/p*100);
+$("tdday").innerHTML=DAYS.map(d=>`<option value="${d}">${fmtDay(d)} (${NEXT.filter(g=>g[1]===d).length} partido${NEXT.filter(g=>g[1]===d).length>1?"s":""})</option>`).join("")+`<option value="">Todos los próximos partidos</option>`;
+$("tdday").value=TD.day;
+function tdRows(){
+  const games=NEXT.filter(g=>!TD.day||g[1]===TD.day), q=TD.q.trim().toLowerCase(), rows=[];
+  games.forEach((g,gi)=>{[[g[3],g[4],0],[g[4],g[3],1]].forEach(([tm,opp,home])=>{
+    P.forEach(p=>{if(p.tm!==tm||(TD.pos&&p.pos!==TD.pos)||(q&&!p.name.toLowerCase().includes(q)))return;
+      const pr=project(p,{rival:opp,home});
+      if(pr.out){rows.push({p,g,gi,home,opp,out:true,prob:-1});return}
+      if(!pr.ok)return;
+      const lam=pr.rtd+pr.rectd, prob=1-Math.exp(-lam);
+      if(prob*100<TD.min)return;
+      rows.push({p,g,gi,home,opp,pr,lam,prob})})})});
+  return rows;
+}
+function tdEdge(r){const o=(S[r.p.name]||{}).tdo;if(o==null||o===""||isNaN(+o))return null;return r.prob-impl(+o)}
+function tdRowHTML(r){
+  const o=(S[r.p.name]||{}).tdo??"";
+  if(r.out) return `<tr class="is-out" data-tdn="${esc(r.p.name)}"><td class="l name"><span class="pn">${esc(r.p.name)}</span><small>${r.p.tm} · ${r.p.pos}</small></td><td class="l">${r.home?"vs":"@"} ${r.opp}</td><td colspan="6" class="l">OUT</td><td></td></tr>`;
+  const e=tdEdge(r), pick=e==null?"":e>=MIN_EDGE?"OVER":e<=-MIN_EDGE?"UNDER":"PASS";
+  return `<tr data-tdn="${esc(r.p.name)}"><td class="l name"><span class="pn">${esc(r.p.name)}</span><small>${r.p.tm} · ${r.p.pos}${r.p.sp!=null?` · snaps últ. 3 ${Math.round(r.p.sp3*100)}%`:""}</small></td>
+    <td class="l">${r.home?"vs":"@"} ${r.opp}</td><td>${r.pr.pct!=null?Math.round(r.pr.pct*100)+"%":"—"}</td><td>${r.lam.toFixed(2)}</td>
+    <td class="v">${(r.prob*100).toFixed(1)}%</td><td>${fairOdds(r.prob)}</td>
+    <td><input type="number" step="5" placeholder="+150" value="${esc(o)}" data-a="tdo" aria-label="Cuota de anytime TD de ${esc(r.p.name)}"></td>
+    <td data-c="edge">${e==null?"—":`<span class="${e>0?"up":"dn"}">${e>0?"+":""}${(e*100).toFixed(1)}%</span>`}</td><td data-c="pick">${pick?`<span class="pill ${pick==="OVER"?"OVER":pick==="UNDER"?"UNDER":"PASS"}">${pick==="OVER"?"SÍ":pick==="UNDER"?"NO":"PASS"}</span>`:""}</td></tr>`;
+}
+function renderTd(){
+  const rows=tdRows();
+  rows.sort((a,b)=>b.prob-a.prob);
+  let html="";
+  if(TD.group){
+    const games=NEXT.filter(g=>!TD.day||g[1]===TD.day);
+    games.forEach(g=>{const rs=rows.filter(r=>r.g===g);if(!rs.length)return;const sc=scoreFor(g[4],g[3],1);
+      html+=`<tr class="grp"><td colspan="9" class="l">${g[3]} @ ${g[4]} <span>${esc(dayName(g[1]))} ${esc(g[2])} ET${sc?` · proyectado ${g[3]} ${f1(sc.b)} – ${g[4]} ${f1(sc.a)}`:""}${g[6]!=null?` · total Las Vegas ${g[6]}`:""}</span></td></tr>`+rs.map(tdRowHTML).join("")});
+  }else html=rows.map(tdRowHTML).join("");
+  $("tdtb").innerHTML=html||`<tr><td colspan="9" class="l">Ningún jugador pasa la probabilidad mínima. Bájala o cambia los filtros.</td></tr>`;
+  $("tdcount").textContent=rows.filter(r=>!r.out).length+" jugadores";
+}
+$("tdday").addEventListener("change",e=>{TD.day=e.target.value;renderTd()});
+seg("tdpos",v=>{TD.pos=v;renderTd()}); seg("tdgroup",v=>{TD.group=+v;renderTd()});
+$("tdmin").addEventListener("input",e=>{const v=parseFloat(e.target.value);TD.min=isNaN(v)?0:v;renderTd()});
+$("tdq").addEventListener("input",e=>{TD.q=e.target.value;renderTd()});
+$("tdtb").addEventListener("input",e=>{const el=e.target;if(el.dataset.a!=="tdo")return;const tr=el.closest("tr"),n=tr.dataset.tdn;ov(n).tdo=el.value;save();
+  const r=tdRows().find(x=>x.p.name===n);if(!r||r.out)return;const tmp=document.createElement("tbody");tmp.innerHTML=tdRowHTML(r);
+  ["edge","pick"].forEach(c=>tr.querySelector(`[data-c="${c}"]`).replaceWith(tmp.querySelector(`[data-c="${c}"]`)))});
+$("tab-td").addEventListener("click",()=>showTab("td"));
 $("tab-proj").addEventListener("click",()=>showTab("proj"));$("tab-dvp").addEventListener("click",()=>showTab("dvp"));
 if(location.hash==="#defensa")showTab("dvp");
+if(location.hash==="#td")showTab("td");
 render();
 
 // Botón de actualizar: arranca la tarea "Actualizar stats NFL", que baja los datos y vuelve a publicar esta página
