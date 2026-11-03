@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content"/>
+<meta name="theme-color" content="#0a0a0f"/>
+<meta name="color-scheme" content="dark"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+<meta name="apple-mobile-web-app-title" content="Budget"/>
+<link rel="manifest" href="manifest.json"/>
+<link rel="icon" href="icon.svg" type="image/svg+xml"/>
+<title>Edwin's Budget</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#0a0a0f;--fg:#e8e0d0;--mut:#7a7060;--dim:#5a5040;--acc:#e07b54;
+  --ok:#3ecf8e;--bad:#f87171;--pur:#a78bfa;--blu:#5b8dee;
+  --line:rgba(255,255,255,0.07);--glass:rgba(255,255,255,0.03);
+  --sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);
+  --sal:env(safe-area-inset-left,0px);--sar:env(safe-area-inset-right,0px);
+  --nav-h:64px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--bg);color:var(--fg);height:100%;overscroll-behavior:none}
+body{font-family:'DM Mono',ui-monospace,monospace;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
+button{font:inherit;color:inherit;touch-action:manipulation}
+button:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+
+/* ---------- Shell ---------- */
+#shell{position:fixed;inset:0;display:flex;flex-direction:column}
+#scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+  padding:calc(var(--sat) + 16px) calc(var(--sar) + 16px) calc(var(--nav-h) + var(--sab) + 24px) calc(var(--sal) + 16px)}
+#head{text-align:center;margin-bottom:18px}
+#content{max-width:480px;margin:0 auto}
+
+/* Bottom nav (pantalla exterior / teléfono) – zona del pulgar */
+#nav{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;
+  padding:6px calc(var(--sar) + 8px) calc(var(--sab) + 6px) calc(var(--sal) + 8px);
+  background:rgba(10,10,15,0.88);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--line)}
+.tab{flex:1;min-height:52px;background:transparent;border:none;border-radius:12px;cursor:pointer;color:var(--mut);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10px;letter-spacing:.04em;transition:background .2s,color .2s}
+.tab .ic{font-size:19px;line-height:1}
+.tab.on{background:rgba(224,123,84,0.12);color:var(--fg)}
+
+/* ---------- Componentes ---------- */
+.card{background:var(--glass);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px;break-inside:avoid}
+.tag{font-size:10px;letter-spacing:.15em;text-transform:uppercase;opacity:.45}
+h1{font-family:'Playfair Display',serif;font-size:clamp(26px,7vw,38px);font-weight:900;line-height:1.1;
+  background:linear-gradient(135deg,var(--fg),var(--acc));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.pills{display:flex;gap:6px;justify-content:center;margin-top:10px;flex-wrap:wrap}
+.pill{border-radius:99px;padding:4px 12px;font-size:11px}
+.p-bad{background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.25);color:var(--bad)}
+.p-ok{background:rgba(62,207,142,0.08);border:1px solid rgba(62,207,142,0.2);color:var(--ok)}
+.wbtns{display:flex;gap:6px;justify-content:center;margin-bottom:14px;flex-wrap:wrap}
+.wbtn{min-height:40px;border:1px solid rgba(255,255,255,0.09);background:transparent;color:var(--mut);cursor:pointer;padding:8px 12px;border-radius:10px;font-size:12px}
+.wbtn.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.big{font-family:'Playfair Display',serif;font-size:clamp(44px,13vw,64px);font-weight:900;color:var(--acc);line-height:1;
+  cursor:pointer;display:inline-block;border:none;background:none;border-bottom:2px dashed rgba(224,123,84,0.3);padding:4px 6px}
+.hint{font-size:10px;color:var(--dim);margin-top:8px}
+.edit{background:none;border:none;cursor:pointer;font-weight:700;padding:8px 4px;min-height:40px;border-bottom:1px dashed currentColor;border-radius:0}
+.toggle{width:46px;height:28px;border-radius:99px;border:none;cursor:pointer;position:relative;flex-shrink:0;transition:background .2s}
+.thumb{width:22px;height:22px;border-radius:50%;background:#fff;position:absolute;top:3px;transition:left .2s}
+.btnp{background:var(--acc);border:none;color:#fff;cursor:pointer;padding:10px 16px;min-height:44px;border-radius:10px;font-size:12px}
+.btns{border:1px solid rgba(255,255,255,0.12);background:transparent;color:#a0998a;cursor:pointer;padding:10px 14px;min-height:44px;border-radius:10px;font-size:12px}
+.btnd{border:1px solid rgba(248,113,113,0.25);background:transparent;color:var(--bad);cursor:pointer;padding:6px 12px;min-height:36px;border-radius:9px;font-size:11px}
+.inp{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:var(--fg);font-family:inherit;
+  font-size:16px;padding:12px;outline:none;width:100%;margin-bottom:10px}
+.inp:focus{border-color:var(--acc)}
+.bar{background:rgba(255,255,255,0.05);border-radius:99px;height:6px;overflow:hidden}
+.bfill{height:100%;border-radius:99px;transition:width .35s}
+.row{display:flex;align-items:center;gap:10px;padding:10px 13px;border-radius:12px;margin-bottom:8px;min-height:60px}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.grow{flex:1;min-width:0}
+.name{font-size:13px;font-weight:500}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.stat{background:rgba(255,255,255,0.02);border-radius:10px;padding:11px 13px}
+.line{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid rgba(255,255,255,0.04)}
+.line:last-child{border-bottom:none}
+.warn{padding:10px 12px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.18);border-radius:10px;font-size:11px;color:var(--bad);margin-bottom:12px;break-inside:avoid}
+.foot{text-align:center;margin-top:28px;opacity:.18;font-size:9px;letter-spacing:.12em}
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+
+/* ---------- Hoja inferior para editar (reemplaza prompt()) ---------- */
+#sheet{position:fixed;inset:0;z-index:50;display:none;align-items:flex-end;justify-content:center;background:rgba(0,0,0,0.55)}
+#sheet.open{display:flex}
+#sheet .box{width:100%;max-width:440px;background:#15151c;border:1px solid var(--line);border-bottom:none;border-radius:20px 20px 0 0;
+  padding:12px 18px calc(var(--sab) + 18px);animation:up .22s ease-out}
+#sheet .grab{width:40px;height:4px;border-radius:9px;background:rgba(255,255,255,0.2);margin:0 auto 14px}
+#sheet .sinp{font-size:34px;text-align:center;font-family:'Playfair Display',serif;font-weight:900;color:var(--acc)}
+.chips{display:flex;gap:6px;justify-content:center;margin-bottom:12px;flex-wrap:wrap}
+@keyframes up{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+#toast{position:fixed;left:50%;bottom:calc(var(--nav-h) + var(--sab) + 16px);transform:translateX(-50%);z-index:60;background:#22222c;
+  border:1px solid var(--line);padding:10px 16px;border-radius:99px;font-size:12px;opacity:0;pointer-events:none;transition:opacity .25s}
+#toast.show{opacity:1}
+
+/* ---------- Pantalla interior desplegada (Fold abierto ~ 880px+) ---------- */
+@media (min-width:700px){
+  :root{--nav-h:0px}
+  #shell{flex-direction:row}
+  #nav{position:static;flex-direction:column;justify-content:flex-start;gap:6px;width:200px;flex-shrink:0;
+    padding:calc(var(--sat) + 20px) 12px calc(var(--sab) + 20px) calc(var(--sal) + 12px);border-top:none;border-right:1px solid var(--line);background:rgba(255,255,255,0.015)}
+  #nav .brand{display:block}
+  .tab{flex:0 0 auto;flex-direction:row;justify-content:flex-start;gap:12px;padding:0 14px;font-size:13px}
+  #scroll{padding:calc(var(--sat) + 22px) calc(var(--sar) + 24px) calc(var(--sab) + 28px) 24px}
+  #head{text-align:left;display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;max-width:1100px;margin:0 auto 20px}
+  #head .pills{margin-top:0}
+  /* Dos columnas: aprovecha la pantalla casi cuadrada */
+  #content{max-width:1100px;columns:2 300px;column-gap:16px}
+  #sheet{align-items:center}
+  #sheet .box{border-radius:20px;border-bottom:1px solid var(--line);padding-bottom:18px}
+  #toast{bottom:24px}
+}
+#nav .brand{display:none;padding:4px 14px 18px}
+#nav .brand b{font-family:'Playfair Display',serif;font-size:20px;color:var(--acc)}
+
+/* Pantalla interior en horizontal: sobra espacio, tres columnas */
+@media (min-width:1300px){#content{columns:3 300px}}
+
+/* ---------- Modo Flex: Fold doblado a medias (bisagra horizontal) ----------
+   Mitad de arriba = resumen grande; mitad de abajo = controles al alcance */
+@media (vertical-viewport-segments:2){
+  #shell{flex-direction:column}
+  #flexTop{display:flex!important;height:env(viewport-segment-height 0 0);flex-shrink:0}
+  #shell>.cols{display:flex;flex:1;min-height:0;margin-top:calc(env(viewport-segment-top 0 1) - env(viewport-segment-bottom 0 0))}
+  #head{display:none}
+}
+/* Fold abierto con bisagra vertical detectada: una columna por pantalla, sin cruzar la bisagra */
+@media (horizontal-viewport-segments:2){
+  #content{columns:2;column-gap:calc(env(viewport-segment-left 1 0) - env(viewport-segment-right 0 0) + 32px)}
+}
+#flexTop{display:none;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:calc(var(--sat) + 10px) 20px 10px;text-align:center;border-bottom:1px solid var(--line)}
+.cols{display:contents}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div id="shell">
+  <div id="flexTop"></div>
+  <div class="cols">
+    <nav id="nav" aria-label="Secciones"></nav>
+    <main id="scroll"><header id="head"></header><div id="content"></div></main>
+  </div>
+</div>
+<div id="sheet" role="dialog" aria-modal="true"><div class="box" id="sheetBox"></div></div>
+<div id="toast" role="status"></div>
+
+<script>
+/* ======================= Estado + persistencia ======================= */
+const KEY='edwin-budget-v2';
+const DEFAULT={
+  weeks:[{label:"Semana 1",amount:450},{label:"Semana 2",amount:345},{label:"Semana 3",amount:450},{label:"Semana 4",amount:345}],
+  accounts:[
+    {id:"villacoop",name:"VillaCoop",emoji:"🏠",amount:193,color:"#e07b54",desc:"Necesidades",active:true},
+    {id:"oriental",name:"Oriental",emoji:"🌱",amount:25,color:"#3ecf8e",desc:"Emergency Fund",active:true},
+    {id:"ally",name:"Ally",emoji:"💎",amount:25,color:"#5b8dee",desc:"Metas",active:false},
+  ],
+  debts:[
+    {id:1,name:"Tarjeta A",balance:250,min:25,color:"#f87171"},
+    {id:2,name:"Tarjeta B",balance:700,min:25,color:"#fb923c"},
+    {id:3,name:"Tarjeta C",balance:500,min:25,color:"#facc15"},
+  ],
+  debtPay:75,tab:"plan",activeWeek:0,splitAmt:450
+};
+function load(){
+  try{const raw=localStorage.getItem(KEY);if(raw)return Object.assign(structuredClone(DEFAULT),JSON.parse(raw))}catch(e){}
+  return structuredClone(DEFAULT);
+}
+let S=load();
+let addingDebt=false;
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+// Pide al navegador que no borre los datos si falta espacio
+try{navigator.storage?.persist?.()}catch(e){}
+
+const TABS=[["plan","💰","Plan"],["split","📐","50/25/25"],["debts","💳","Deudas"],["summary","📊","Resumen"]];
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const money=n=>'$'+Math.round(n).toLocaleString('en-US');
+const buzz=(ms=8)=>{try{navigator.vibrate?.(ms)}catch(e){}};
+function toast(t){const el=$('toast');el.textContent=t;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),1800)}
+
+/* ======================= Cálculos ======================= */
+function calc(){
+  const w=S.weeks[S.activeWeek]||S.weeks[0];
+  const fixedTotal=S.accounts.filter(a=>a.active).reduce((s,a)=>s+a.amount,0);
+  const popular=Math.max(0,w.amount-fixedTotal-S.debtPay);
+  const totalDebt=S.debts.reduce((s,d)=>s+d.balance,0);
+  const sorted=[...S.debts].sort((a,b)=>a.balance-b.balance);
+  const wksLeft=totalDebt>0&&S.debtPay>0?Math.ceil(totalDebt/S.debtPay):(totalDebt>0?Infinity:0);
+  const mosLeft=isFinite(wksLeft)?Math.ceil(wksLeft/4):Infinity;
+  const moIncome=S.weeks.reduce((s,w)=>s+w.amount,0);
+  return {w,popular,totalDebt,sorted,wksLeft,mosLeft,moIncome};
+}
+const fmtMos=m=>isFinite(m)?`~${m} meses`:'— sin pago';
+
+/* ======================= Render ======================= */
+function r(){
+  const C=calc();
+  $('nav').innerHTML=`<div class="brand"><div class="tag" style="margin-bottom:4px">plan financiero</div><b>Edwin's Budget</b></div>`+
+    TABS.map(([id,ic,l])=>`<button class="tab ${S.tab===id?'on':''}" aria-current="${S.tab===id}" onclick="setTab('${id}')"><span class="ic">${ic}</span>${l}</button>`).join('');
+
+  $('head').innerHTML=`<div><div class="tag" style="margin-bottom:6px">plan financiero personal</div><h1>Edwin's Budget</h1></div>
+    <div class="pills"><span class="pill p-bad">Deuda: ${money(C.totalDebt)}</span><span class="pill p-ok">Libre en ${fmtMos(C.mosLeft)}</span></div>`;
+
+  $('flexTop').innerHTML=`<div class="tag">${esc(C.w.label)} · disponible para gastar</div>
+    <div class="big" style="border:none;cursor:default">${money(C.popular)}</div>
+    <div class="pills"><span class="pill p-bad">Deuda: ${money(C.totalDebt)}</span><span class="pill p-ok">Libre en ${fmtMos(C.mosLeft)}</span></div>`;
+
+  const V={plan,split,debts,summary}[S.tab]||plan;
+  $('content').innerHTML=V(C)+`<div class="foot">EDWIN · BUDGET PLAN · 2026</div>`;
+}
+
+function weekBtns(isOn,fn){return `<div class="wbtns">${S.weeks.map((wk,i)=>`<button class="wbtn ${isOn(wk,i)?'on':''}" onclick="${fn}(${i})">S${i+1} · ${money(wk.amount)}</button>`).join('')}</div>`}
+
+function plan(C){
+  let h=`<div class="card" style="text-align:center;border-color:rgba(224,123,84,0.2)">
+      ${weekBtns((wk,i)=>S.activeWeek===i,'setWk')}
+      <div class="tag" style="margin-bottom:6px">${esc(C.w.label)} — cheque neto</div>
+      <button class="big" onclick="editWk(${S.activeWeek})">${money(C.w.amount)}</button>
+      <div class="hint">toca el monto para editar · desliza ← → para cambiar de sección</div>
+    </div>
+    <div class="card"><div class="tag" style="margin-bottom:14px">depósito directo — fijo automático</div>`;
+  S.accounts.forEach(a=>{
+    h+=`<div class="row" style="opacity:${a.active?1:0.45};border:1px solid ${a.active?'var(--line)':'rgba(255,255,255,0.03)'};background:${a.active?'var(--glass)':'rgba(0,0,0,0.15)'}">
+      <div class="dot" style="background:${a.color}"></div>
+      <div class="grow"><div class="name">${a.emoji} ${esc(a.name)}</div><div class="tag" style="margin-top:2px">${esc(a.desc)}</div></div>
+      ${a.active?`<button class="edit" style="font-size:14px;color:${a.color};margin-right:6px" onclick="editAcc('${a.id}')">${money(a.amount)}<span style="font-size:9px;opacity:.45">/sem</span></button>`:''}
+      <button class="toggle" role="switch" aria-checked="${a.active}" aria-label="${esc(a.name)}" style="background:${a.active?'var(--ok)':'rgba(255,255,255,0.1)'}" onclick="togAcc('${a.id}')"><div class="thumb" style="left:${a.active?'21px':'3px'}"></div></button>
+    </div>`;
+  });
+  h+=`<div class="row" style="background:rgba(248,113,113,0.05);border:1px solid rgba(248,113,113,0.15)">
+      <div class="dot" style="background:var(--bad)"></div>
+      <div class="grow"><div class="name">💳 Pago deudas</div><div class="tag" style="margin-top:2px">Manual → tarjeta prioritaria</div></div>
+      <button class="edit" style="font-size:14px;color:var(--bad)" onclick="editDP()">${money(S.debtPay)}<span style="font-size:9px;opacity:.45">/sem</span></button>
+    </div>
+    <div class="row" style="background:rgba(167,139,250,0.05);border:1px solid rgba(167,139,250,0.15)">
+      <div class="dot" style="background:var(--pur)"></div>
+      <div class="grow"><div class="name">💳 Popular</div><div class="tag" style="margin-top:2px">Gastos libres · Remainder</div></div>
+      <div style="font-size:19px;font-weight:700;color:${C.popular<50?'var(--bad)':'var(--pur)'}">${money(C.popular)}</div>
+    </div></div>`;
+  if(C.popular<50)h+=`<div class="warn">⚠️ Popular queda muy justo. Baja el pago de deuda a ${money(Math.max(25,S.debtPay-25))}.</div>`;
+  return h;
+}
+
+function split(){
+  const sp=S.splitAmt,spN=Math.round(sp*.5),spW=Math.round(sp*.25),spS=sp-spN-spW;
+  return `<div class="card" style="text-align:center;border-color:rgba(224,123,84,0.2)">
+      ${weekBtns(wk=>S.splitAmt===wk.amount,'setSP')}
+      <div class="tag" style="margin-bottom:6px">ingreso a dividir</div>
+      <button class="big" onclick="editSP()">${money(sp)}</button>
+      <div class="hint">toca el monto para editar</div>
+    </div>
+    <div class="card"><div class="tag" style="margin-bottom:16px">distribución 50 · 25 · 25</div>
+      ${[{l:"🏠 Necesidades",p:50,v:spN,c:"#e07b54",d:"Gastos fijos, comida, transporte"},
+         {l:"🎉 Deseos",p:25,v:spW,c:"#a78bfa",d:"Entretenimiento, gustos, salidas"},
+         {l:"💰 Ahorro",p:25,v:spS,c:"#3ecf8e",d:"Oriental + Ally"}].map(x=>`<div style="margin-bottom:16px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+            <div><div style="font-size:14px;font-weight:600">${x.l} <span style="opacity:.35;font-size:12px">${x.p}%</span></div><div class="tag" style="margin-top:2px">${x.d}</div></div>
+            <div style="font-size:22px;font-weight:700;color:${x.c}">${money(x.v)}</div>
+          </div>
+          <div class="bar"><div class="bfill" style="width:${x.p*2}%;background:${x.c}"></div></div>
+        </div>`).join('')}
+    </div>
+    <div class="card" style="border-color:rgba(62,207,142,0.12)"><div class="tag" style="margin-bottom:12px">desglose del ahorro (25%)</div>
+      <div class="line"><span style="font-size:13px">🌱 Oriental (emergency)</span><span style="font-size:15px;font-weight:700;color:var(--ok)">${money(Math.round(spS*.6))}</span></div>
+      <div class="line"><span style="font-size:13px">💎 Ally (metas)</span><span style="font-size:15px;font-weight:700;color:var(--blu)">${money(spS-Math.round(spS*.6))}</span></div>
+    </div>`;
+}
+
+function debts(C){
+  const maxBal=C.sorted[C.sorted.length-1]?.balance||1;
+  let h=`<div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div class="tag">tarjetas — de menor a mayor</div>
+        <button class="btnp" onclick="startAdd()">+ Añadir</button>
+      </div>`;
+  if(!C.sorted.length)h+=`<div style="text-align:center;padding:20px;color:var(--ok)">🎉 ¡Sin deudas!</div>`;
+  C.sorted.forEach((d,i)=>{
+    const pay=i===0?S.debtPay:d.min;
+    const wks=pay>0?Math.ceil(d.balance/pay):'∞';
+    h+=`<div style="padding:13px;border-radius:12px;background:${i===0?'rgba(248,113,113,0.06)':'rgba(255,255,255,0.02)'};border:1px solid ${i===0?'rgba(248,113,113,0.22)':'rgba(255,255,255,0.06)'};margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px">
+          <div class="grow">
+            ${i===0?'<div style="font-size:9px;background:var(--bad);color:#fff;display:inline-block;padding:2px 8px;border-radius:99px;letter-spacing:.1em;margin-bottom:6px">ATACAR AHORA</div>':''}
+            <div style="font-size:14px;font-weight:600">${esc(d.name)}</div>
+            <div class="tag" style="margin-top:3px">mín ${money(d.min)}/sem · ~${wks} semanas</div>
+          </div>
+          <div style="text-align:right">
+            <button class="edit" style="font-size:20px;color:${d.color}" onclick="editD(${d.id})">${money(d.balance)}</button><br/>
+            <button class="btnd" style="margin-top:4px" onclick="removeD(${d.id})">eliminar</button>
+          </div>
+        </div>
+        <div class="bar"><div class="bfill" style="width:${Math.max(4,100-(d.balance/maxBal)*100)}%;background:${d.color}"></div></div>
+      </div>`;
+  });
+  if(addingDebt){
+    h+=`<form onsubmit="confirmAdd(event)" style="padding:13px;background:var(--glass);border-radius:12px;border:1px solid rgba(255,255,255,0.09);margin-top:4px">
+        <div class="tag" style="margin-bottom:10px">nueva tarjeta</div>
+        <input class="inp" placeholder="Nombre" id="nn" autocomplete="off" enterkeyhint="next" required/>
+        <input class="inp" type="number" inputmode="decimal" placeholder="Balance ($)" id="nb" enterkeyhint="next" required/>
+        <input class="inp" type="number" inputmode="decimal" placeholder="Pago mínimo ($)" id="nm" value="25" enterkeyhint="done"/>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button class="btnp" style="flex:1" type="submit">Guardar</button>
+          <button class="btns" type="button" onclick="addingDebt=false;r()">Cancelar</button>
+        </div>
+      </form>`;
+  }
+  h+=`</div>
+    <div class="card" style="border-color:rgba(248,113,113,0.12)"><div class="tag" style="margin-bottom:12px">proyección total</div>
+      <div class="grid2">
+        ${[{l:"Deuda total",v:money(C.totalDebt),c:"#f87171"},{l:"Pago semanal",v:money(S.debtPay),c:"#fb923c"},
+           {l:"Semanas",v:isFinite(C.wksLeft)?`~${C.wksLeft}`:'∞',c:"#facc15"},{l:"Libre de deudas",v:fmtMos(C.mosLeft),c:"#3ecf8e"}]
+          .map(x=>`<div class="stat"><div class="tag" style="margin-bottom:4px">${x.l}</div><div style="font-size:17px;font-weight:700;color:${x.c}">${x.v}</div></div>`).join('')}
+      </div>
+    </div>`;
+  return h;
+}
+
+function summary(C){
+  const acc=id=>{const a=S.accounts.find(a=>a.id===id);return a&&a.active?a.amount*4:0};
+  const vA=acc('villacoop'),oA=acc('oriental'),alA=acc('ally'),dA=S.debtPay*4;
+  const pA=Math.max(0,C.moIncome-vA-oA-alA-dA);
+  return `<div class="card"><div class="tag" style="margin-bottom:8px">resumen mensual</div>
+      ${[{l:"Ingreso total",v:C.moIncome,c:"var(--fg)"},{l:"VillaCoop (necesidades)",v:vA,c:"#e07b54"},{l:"Pago deudas",v:dA,c:"#f87171"},
+         {l:"Oriental (ahorro)",v:oA,c:"#3ecf8e"},{l:"Ally",v:alA,c:"#5b8dee"},{l:"Popular (gastos)",v:pA,c:"#a78bfa"}]
+        .map(x=>`<div class="line"><span style="font-size:12px;color:#8a8070">${x.l}</span><span style="font-size:15px;font-weight:700;color:${x.c}">${money(Math.max(0,x.v))}</span></div>`).join('')}
+    </div>
+    <div class="card"><div class="tag" style="margin-bottom:14px">distribución visual</div>
+      ${[{l:"Necesidades",v:vA,c:"#e07b54"},{l:"Gastos libres",v:pA,c:"#a78bfa"},{l:"Deudas",v:dA,c:"#f87171"},{l:"Ahorro",v:oA+alA,c:"#3ecf8e"}]
+        .map(x=>`<div style="margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:12px">${x.l}</span>
+            <span style="font-size:12px;color:${x.c}">${money(x.v)} · ${C.moIncome>0?Math.round(x.v/C.moIncome*100):0}%</span></div>
+          <div class="bar"><div class="bfill" style="width:${C.moIncome>0?Math.max(2,x.v/C.moIncome*100):2}%;background:${x.c}"></div></div>
+        </div>`).join('')}
+      <div style="margin-top:14px;padding:11px 13px;background:rgba(62,207,142,0.05);border-radius:10px;border:1px solid rgba(62,207,142,0.12);font-size:12px;color:var(--ok);line-height:1.8">
+        💡 En ${fmtMos(C.mosLeft)} liberas <strong>${money(dA)}/mes</strong>.<br/>Ese dinero pasa a Oriental → emergency fund listo más rápido.
+      </div>
+    </div>
+    <div class="card"><div class="tag" style="margin-bottom:12px">respaldo de datos</div>
+      <div style="font-size:11px;color:var(--mut);margin-bottom:12px;line-height:1.6">Tus datos se guardan en este teléfono. Exporta un respaldo antes de cambiar de equipo o borrar el navegador.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btnp" onclick="exportData()">⬇ Exportar</button>
+        <label class="btns" style="display:inline-flex;align-items:center;cursor:pointer">⬆ Importar<input type="file" accept="application/json,.json" hidden onchange="importData(this)"/></label>
+        <button class="btnd" style="min-height:44px" onclick="resetData()">Restablecer</button>
+      </div>
+    </div>`;
+}
+
+/* ======================= Hoja de edición ======================= */
+function ask(title,value,onSave,{min=0,step=25}={}){
+  const box=$('sheetBox');
+  box.innerHTML=`<div class="grab"></div>
+    <div class="tag" style="text-align:center;margin-bottom:10px">${esc(title)}</div>
+    <form id="askF">
+      <input class="inp sinp" id="askI" type="number" inputmode="decimal" enterkeyhint="done" value="${value}" min="${min}" step="any"/>
+      <div class="chips">${[-step,-5,5,step].map(d=>`<button type="button" class="wbtn" data-d="${d}">${d>0?'+':''}${d}</button>`).join('')}</div>
+      <div style="display:flex;gap:8px"><button class="btnp" style="flex:1" type="submit">Guardar</button><button class="btns" type="button" id="askC">Cancelar</button></div>
+    </form>`;
+  const sh=$('sheet'),inp=$('askI');
+  const close=()=>{sh.classList.remove('open');document.removeEventListener('keydown',onKey)};
+  const onKey=e=>{if(e.key==='Escape')close()};
+  sh.classList.add('open');
+  document.addEventListener('keydown',onKey);
+  sh.onclick=e=>{if(e.target===sh)close()};
+  $('askC').onclick=close;
+  box.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{inp.value=Math.max(min,(parseFloat(inp.value)||0)+parseFloat(b.dataset.d));buzz(5)});
+  $('askF').onsubmit=e=>{e.preventDefault();const n=parseFloat(inp.value);if(!isNaN(n)&&n>=min){onSave(Math.round(n));close();commit()}else{inp.focus()}};
+  setTimeout(()=>{inp.focus();inp.select()},60);
+}
+
+/* ======================= Acciones ======================= */
+function commit(){save();r()}
+function setTab(t){if(S.tab===t)return;S.tab=t;buzz();commit();$('scroll').scrollTo({top:0})}
+function setWk(i){S.activeWeek=i;buzz();commit()}
+function setSP(i){S.splitAmt=S.weeks[i].amount;buzz();commit()}
+function editWk(i){ask('Monto '+S.weeks[i].label,S.weeks[i].amount,n=>{if(S.splitAmt===S.weeks[i].amount)S.splitAmt=n;S.weeks[i].amount=n},{min:1})}
+function editSP(){ask('Ingreso a dividir',S.splitAmt,n=>S.splitAmt=n,{min:1})}
+function editAcc(id){const a=S.accounts.find(a=>a.id===id);ask('Monto '+a.name+' /sem',a.amount,n=>a.amount=n,{step:10})}
+function togAcc(id){const a=S.accounts.find(a=>a.id===id);a.active=!a.active;buzz(12);commit()}
+function editDP(){ask('Pago semanal deudas',S.debtPay,n=>S.debtPay=n)}
+function editD(id){const d=S.debts.find(d=>d.id===id);ask('Balance '+d.name,d.balance,n=>d.balance=n,{step:50})}
+function removeD(id){if(confirm('¿Eliminar esta tarjeta?')){S.debts=S.debts.filter(d=>d.id!==id);commit();toast('Tarjeta eliminada')}}
+function startAdd(){addingDebt=true;r();setTimeout(()=>$('nn')?.focus(),50)}
+function confirmAdd(e){
+  e.preventDefault();
+  const name=$('nn').value.trim(),bal=parseFloat($('nb').value),min=parseFloat($('nm').value)||25;
+  if(!name||isNaN(bal))return;
+  const colors=["#f87171","#fb923c","#facc15","#34d399","#60a5fa","#c084fc"];
+  S.debts.push({id:Date.now(),name,balance:Math.round(bal),min:Math.round(min),color:colors[S.debts.length%colors.length]});
+  addingDebt=false;buzz(15);commit();toast('Tarjeta añadida');
+}
+function exportData(){
+  const blob=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`budget-respaldo-${new Date().toISOString().slice(0,10)}.json`;a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast('Respaldo descargado');
+}
+function importData(input){
+  const f=input.files[0];if(!f)return;
+  f.text().then(t=>{const d=JSON.parse(t);if(!Array.isArray(d.weeks)||!Array.isArray(d.debts))throw 0;
+    S=Object.assign(structuredClone(DEFAULT),d);commit();toast('Datos importados')}).catch(()=>toast('Archivo no válido'));
+  input.value='';
+}
+function resetData(){if(confirm('¿Volver a los valores iniciales? Se perderán tus cambios.')){S=structuredClone(DEFAULT);commit();toast('Restablecido')}}
+
+/* ======================= Gestos: deslizar entre secciones ======================= */
+(()=>{
+  let x0=null,y0=0,t0=0;
+  const el=$('scroll');
+  el.addEventListener('touchstart',e=>{if(e.touches.length!==1||$('sheet').classList.contains('open')||e.target.closest('input,form')){x0=null;return}
+    x0=e.touches[0].clientX;y0=e.touches[0].clientY;t0=Date.now()},{passive:true});
+  el.addEventListener('touchend',e=>{
+    if(x0===null)return;
+    const dx=e.changedTouches[0].clientX-x0,dy=e.changedTouches[0].clientY-y0;
+    // Ignora el borde: Android lo usa para el gesto "atrás"
+    const edge=x0<24||x0>window.innerWidth-24;
+    x0=null;
+    if(edge||Math.abs(dx)<70||Math.abs(dy)>Math.abs(dx)*0.6||Date.now()-t0>600)return;
+    const i=TABS.findIndex(t=>t[0]===S.tab),n=i+(dx<0?1:-1);
+    if(n>=0&&n<TABS.length)setTab(TABS[n][0]);
+  },{passive:true});
+})();
+
+/* Atajos del manifest (mantén presionado el ícono): ?tab=debts */
+(()=>{const t=new URLSearchParams(location.search).get('tab');if(t&&TABS.some(x=>x[0]===t))S.tab=t})();
+
+/* Re-render al plegar/desplegar (cambia el ancho y los segmentos) */
+let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(r,120)});
+
+r();
+
+if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}
+</script>
+</body>
+</html>
