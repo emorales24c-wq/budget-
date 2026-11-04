@@ -93,9 +93,18 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
 .upd-btn{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
 .upd-btn:hover{filter:brightness(1.08)}
 .upd-btn[disabled]{opacity:.6;cursor:default}
-.tabs{display:flex;gap:4px;border-bottom:2px solid var(--line);margin-bottom:4px}
-.tabs button{border:0;background:transparent;padding:8px 14px;font-family:var(--display);font-weight:600;font-size:1.05rem;letter-spacing:.03em;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}
-.tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent)}
+/* menú lateral con íconos; en el celular pasa a una barra abajo */
+.rail{position:fixed;z-index:20;left:0;top:0;bottom:0;width:88px;padding-top:calc(16px + env(safe-area-inset-top,0px));padding-left:env(safe-area-inset-left,0px);background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:6px}
+.rail button{width:74px;border:0;background:transparent;border-radius:12px;padding:9px 4px 7px;display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--muted);cursor:pointer;font-size:.72rem;font-weight:600;line-height:1.1;text-align:center}
+.rail button:hover{color:var(--ink);background:var(--sunk)}
+.rail button[aria-selected=true]{color:var(--accent);background:var(--sunk)}
+.rail button[aria-selected=true] svg{filter:drop-shadow(0 0 6px color-mix(in srgb,var(--accent) 45%,transparent))}
+@media (min-width:761px){.wrap{padding-left:calc(104px + env(safe-area-inset-left,0px))}}
+@media (max-width:760px){
+  .rail{top:auto;right:0;bottom:0;width:auto;height:auto;flex-direction:row;justify-content:space-around;padding:4px max(6px,env(safe-area-inset-right,0px)) calc(4px + env(safe-area-inset-bottom,0px)) max(6px,env(safe-area-inset-left,0px));border-right:0;border-top:1px solid var(--line)}
+  .rail button{width:auto;flex:1;padding:6px 2px;font-size:.66rem}
+  .wrap{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+}
 .dnote{margin:10px 0 0}
 table.dtbl{min-width:560px}
 .dtbl td.c{font-weight:600;text-align:center;min-width:70px}
@@ -107,6 +116,9 @@ table.dtbl{min-width:560px}
 .swap:hover:not([disabled]){border-color:var(--accent)}
 .swap[disabled]{opacity:.4;cursor:default}
 .daybox{margin-top:14px}
+#besttbl td input{width:72px}
+#bmk,#bsd{flex-wrap:wrap}
+#besttbl input.refl{border-style:dashed;color:var(--muted)}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:12px}
 .tile{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
 .tile .k{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
@@ -169,11 +181,12 @@ tr.grp td span{font-family:var(--body);font-weight:400;text-transform:none;lette
 </header>
 
 <p class="mix" id="mix" hidden></p>
-<nav class="tabs" role="tablist">
-  <button type="button" role="tab" id="tab-proj" aria-selected="true" aria-controls="view-proj">Proyecciones</button>
-  <button type="button" role="tab" id="tab-dvp" aria-selected="false" aria-controls="view-dvp">Defensa por posición</button>
-  <button type="button" role="tab" id="tab-bets" aria-selected="false" aria-controls="view-bets">Mis apuestas</button>
-  <button type="button" role="tab" id="tab-cal" aria-selected="false" aria-controls="view-cal">Precisión del modelo</button>
+<nav class="rail" role="tablist" aria-label="Secciones">
+  <button type="button" role="tab" id="tab-proj" aria-selected="true" aria-controls="view-proj"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15l3-4 3 3 5-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Proyecciones</span></button>
+  <button type="button" role="tab" id="tab-best" aria-selected="false" aria-controls="view-best"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg><span>Mejores props</span></button>
+  <button type="button" role="tab" id="tab-dvp" aria-selected="false" aria-controls="view-dvp"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Defensa</span></button>
+  <button type="button" role="tab" id="tab-bets" aria-selected="false" aria-controls="view-bets"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 4h14v16l-3-2-2 2-2-2-2 2-2-2-3 2V4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 9h6M9 13h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Apuestas</span></button>
+  <button type="button" role="tab" id="tab-cal" aria-selected="false" aria-controls="view-cal"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 15a8 8 0 1116 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12 15l4-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="15" r="1.4" fill="currentColor"/></svg><span>Precisión</span></button>
 </nav>
 
 <div id="view-proj" role="tabpanel" aria-labelledby="tab-proj">
@@ -257,6 +270,20 @@ tr.grp td span{font-family:var(--body);font-weight:400;text-transform:none;lette
     <div class="row2"><h3 style="margin:0">Historial</h3><span class="meta">Se califican solas con el box score del partido.</span></div>
     <div class="tablebox"><table class="btbl"><thead><tr><th class="l">Fecha</th><th class="l">Jugador</th><th class="l">Apuesta</th><th>Cuota</th><th>Monto</th><th>Modelo</th><th>Real</th><th class="l">Resultado</th><th>Ganancia</th><th></th></tr></thead><tbody id="btb"></tbody></table></div>
   </section>
+</div>
+
+<div id="view-best" role="tabpanel" aria-labelledby="tab-best" hidden>
+  <div class="controls">
+    <div class="f"><label for="bday">Día</label><select id="bday"></select></div>
+    <div class="f"><label>Mercado</label><div class="seg" id="bmk"><button type="button" data-v="" aria-pressed="true">Todos</button><button type="button" data-v="pts" aria-pressed="false">PTS</button><button type="button" data-v="reb" aria-pressed="false">REB</button><button type="button" data-v="ast" aria-pressed="false">AST</button><button type="button" data-v="tpm" aria-pressed="false">3PM</button><button type="button" data-v="pra" aria-pressed="false">PRA</button><button type="button" data-v="pr" aria-pressed="false">P+R</button><button type="button" data-v="pa" aria-pressed="false">P+A</button><button type="button" data-v="ra" aria-pressed="false">R+A</button><button type="button" data-v="stl" aria-pressed="false">STL</button><button type="button" data-v="blk" aria-pressed="false">BLK</button></div></div>
+    <div class="f"><label>Lado</label><div class="seg" id="bsd"><button type="button" data-v="" aria-pressed="true">Over y Under</button><button type="button" data-v="O" aria-pressed="false">Over</button><button type="button" data-v="U" aria-pressed="false">Under</button></div></div>
+    <div class="f"><label for="bminp">Prob. mínima %</label><input id="bminp" type="number" min="0" max="99" step="1" value="55" style="width:80px"></div>
+    <div class="f"><label for="bminm">Min. ≥</label><input id="bminm" type="number" min="0" max="48" step="1" value="20" style="width:70px"></div>
+    <div class="f"><label for="bq">Buscar</label><input id="bq" type="text" placeholder="Jugador o equipo" autocomplete="off"></div>
+    <span class="count" id="bcount"></span>
+  </div>
+  <p class="meta" style="margin:10px 0 0">Los props con más probabilidad de cada jugador del día, de mejor a peor. <b>Línea</b>: viene la de referencia (su promedio de la temporada redondeado al .5 más cercano); escribe la de tu casa y la cuota para que se recalcule todo. Solo salen los mercados que las casas suelen ofrecer para ese jugador (por ejemplo, tapones si promedia 0.8 o más). Las probabilidades usan el modelo calibrado (incluye minutos proyectados, defensa del rival, ritmo, lesiones y back-to-back). <b>Edge</b> = probabilidad del modelo − la que paga la cuota (-110 si no escribes una).</p>
+  <div class="tablebox"><table id="besttbl"><thead><tr><th class="l">Jugador</th><th class="l">Mercado</th><th>Línea</th><th>Proyección</th><th>Prom.</th><th>Over</th><th>Under</th><th>Pick</th><th>Cuota</th><th>Edge</th><th></th></tr></thead><tbody id="besttb"></tbody></table></div>
 </div>
 
 <div id="view-cal" role="tabpanel" aria-labelledby="tab-cal" hidden>
@@ -672,8 +699,9 @@ function segPick(id,fn){$(id).addEventListener("click",e=>{const b=e.target.clos
 segPick("dstat",v=>D.stat=+v); segPick("dmode",v=>D.mode=v); segPick("drole",v=>D.role=v);
 $("dtbl").querySelector("thead").addEventListener("click",e=>{const th=e.target.closest("th[data-k]");if(!th)return;const k=th.dataset.k;
   if(D.sort===k)D.dir*=-1;else{D.sort=k;D.dir=k==="name"?1:-1}renderDvp()});
-function showTab(which){["proj","dvp","bets","cal"].forEach(k=>{$("view-"+k).hidden=k!==which;$("tab-"+k).setAttribute("aria-selected",String(k===which))});
-  if(which==="dvp")renderDvp();if(which==="bets")renderBets();if(which==="cal")renderCal()}
+function showTab(which){["proj","best","dvp","bets","cal"].forEach(k=>{$("view-"+k).hidden=k!==which;$("tab-"+k).setAttribute("aria-selected",String(k===which))});
+  if(which==="dvp")renderDvp();if(which==="bets")renderBets();if(which==="cal")renderCal();if(which==="best")renderBest();window.scrollTo(0,0)}
+$("tab-best").addEventListener("click",()=>showTab("best"));
 $("tab-proj").addEventListener("click",()=>showTab("proj"));$("tab-dvp").addEventListener("click",()=>showTab("dvp"));
 $("tab-bets").addEventListener("click",()=>showTab("bets"));$("tab-cal").addEventListener("click",()=>showTab("cal"));
 if(location.hash==="#apuestas")showTab("bets");if(location.hash==="#precision")showTab("cal");
@@ -763,6 +791,64 @@ $("bform").addEventListener("submit",async e=>{e.preventDefault();
 let PENDDEL=null;
 $("btb").addEventListener("click",async e=>{const d=e.target.closest("[data-del]");if(!d)return;const id=d.dataset.del;
   if(PENDDEL===id){PENDDEL=null;try{await delBet(id)}catch(err){}}else{PENDDEL=id;d.textContent="¿Seguro?";setTimeout(()=>{if(PENDDEL===id){PENDDEL=null;d.textContent="Borrar"}},3000)}});
+
+// ================= Mejores props del día (todos los mercados, Over y Under) =================
+const BP={day:DAYS[0]||"",mk:"",side:"",minp:55,minm:20,q:""};
+const BMK=["pts","reb","ast","tpm","pra","pr","pa","ra","stl","blk"];
+const MINAVG={pts:8,reb:3,ast:2,tpm:1,stl:0.8,blk:0.8,pra:12,pr:10,pa:10,ra:5};
+const refLine=(p,k)=>{const v=seasonVal2(p,k);if(v==null)return null;let x=Math.round(v*2)/2;if(x%1===0)x-=.5;return Math.max(.5,x)}; // como las casas: el .5 más cercano al promedio, abajo si cae en entero
+function seasonVal2(p,k){const s={pts:p.pts,reb:p.orb+p.drb,ast:p.ast,tpm:p.p3,stl:p.stl,blk:p.blk};s.pra=s.pts+s.reb+s.ast;s.pr=s.pts+s.reb;s.pa=s.pts+s.ast;s.ra=s.reb+s.ast;return s[k]}
+$("bday").innerHTML=DAYS.map(d=>`<option value="${d}">${fmtDay(d)} (${SCH.filter(g=>g[0]===d).length} partidos)</option>`).join("");
+$("bday").value=BP.day;
+function bestRows(){
+  const day=OPPD[BP.day]||{}, q=BP.q.trim().toLowerCase(), out=[];
+  P.forEach(p=>{const s=day[p.tm];if(!s||isOut(p)||baseMin(p)<BP.minm)return;
+    if(q&&!p.name.toLowerCase().includes(q)&&!p.tm.toLowerCase().includes(q))return;
+    const st=rowState(p);const c=core(p,st.xmp,s.opp,s.home,{b2b:(s.home?s.g[5]:s.g[4])?1:0});if(!c)return;
+    const L=(S[p.name]||{}).l||{};
+    (BP.mk?[BP.mk]:BMK).forEach(k=>{const l=L[k]||{},own=l.line!=null&&l.line!=="";
+      if(!own&&(seasonVal2(p,k)||0)<MINAVG[k])return; // las casas no ofrecen ese prop a jugadores que casi no lo producen
+      const line=own?+l.line:refLine(p,k);if(line==null)return;
+      const po=probOver(k,c[k],line),pu=1-po,oo=l.oo!=null&&l.oo!==""?+l.oo:-110,ou=l.ou!=null&&l.ou!==""?+l.ou:-110;
+      const eo=po-impl(oo),eu=pu-impl(ou);let side=eo>=eu?"O":"U";if(BP.side)side=BP.side;
+      const prob=side==="O"?po:pu,edge=side==="O"?eo:eu;if(prob*100<BP.minp)return;
+      out.push({p,k,line,ref:!(l.line!=null&&l.line!==""),proj:c[k],avg:seasonVal2(p,k),po,pu,side,prob,edge,odds:side==="O"?oo:ou,opp:s.opp,home:s.home})})});
+  out.sort((a,b)=>b.edge-a.edge||b.prob-a.prob);
+  return out;
+}
+function bestRowHTML(r,i){
+  const ed=r.edge,tag=ed>=.10?"OVER":ed>=MIN_EDGE?"OVER":"PASS";
+  return `<tr data-bi="${i}"><td class="l name"><span class="pn">${esc(r.p.name)}</span>${injBadge(r.p)}<small>${r.p.tm} ${r.home?"vs":"@"} ${r.opp}</small></td>
+    <td class="l">${esc(MKLAB[r.k])}</td>
+    <td><input type="number" step="0.5" value="${r.line}" data-a="bline" class="${r.ref?"refl":""}" title="${r.ref?"Línea de referencia (promedio de temporada). Escribe la de tu casa.":"Tu línea"}" aria-label="Línea de ${esc(r.p.name)} ${esc(MKLAB[r.k])}"></td>
+    <td class="v">${f1(r.proj)}</td><td>${f1(r.avg)}</td>
+    <td class="${r.side==="O"?"v":""}">${(r.po*100).toFixed(1)}%</td><td class="${r.side==="U"?"v":""}">${(r.pu*100).toFixed(1)}%</td>
+    <td><span class="pill ${r.side==="O"?"OVER":"UNDER"}">${r.side==="O"?"OVER":"UNDER"} ${(r.prob*100).toFixed(0)}%</span></td>
+    <td><input type="number" step="5" placeholder="-110" value="${r.odds===-110&&!((S[r.p.name]||{}).l||{})[r.k]?"":r.odds}" data-a="bodds" aria-label="Cuota"></td>
+    <td class="${ed>0?"up":"dn"}">${ed>0?"+":""}${(ed*100).toFixed(1)}%</td>
+    <td><button type="button" class="exp" data-a="bsave">Guardar</button></td></tr>`;
+}
+let BROWS=[];
+function renderBest(){
+  BROWS=bestRows();const top=BROWS.slice(0,150);
+  $("besttb").innerHTML=top.map(bestRowHTML).join("")||`<tr><td colspan="11" class="l">Ningún prop pasa los filtros. Baja la probabilidad mínima o los minutos.</td></tr>`;
+  $("bcount").textContent=`${BROWS.length} props${BROWS.length>150?" (mostrando los 150 mejores)":""}`;
+}
+$("bday").addEventListener("change",e=>{BP.day=e.target.value;renderBest()});
+segPick2("bmk",v=>BP.mk=v);segPick2("bsd",v=>BP.side=v);
+function segPick2(id,fn){$(id).addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;$(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));fn(b.dataset.v);renderBest()})}
+$("bminp").addEventListener("input",e=>{const v=parseFloat(e.target.value);BP.minp=isNaN(v)?0:v;renderBest()});
+$("bminm").addEventListener("input",e=>{const v=parseFloat(e.target.value);BP.minm=isNaN(v)?0:v;renderBest()});
+$("bq").addEventListener("input",e=>{BP.q=e.target.value;renderBest()});
+$("besttb").addEventListener("change",e=>{const el=e.target,a=el.dataset.a;if(a!=="bline"&&a!=="bodds")return;const r=BROWS[+el.closest("tr").dataset.bi];if(!r)return;
+  const o=ov(r.p.name);o.l=o.l||{};const l=o.l[r.k]=o.l[r.k]||{};
+  if(a==="bline")l.line=el.value;else{if(r.side==="O")l.oo=el.value;else l.ou=el.value}
+  save();renderBest()});
+$("besttb").addEventListener("click",e=>{const b=e.target.closest("button[data-a=bsave]");if(!b)return;const r=BROWS[+b.closest("tr").dataset.bi];if(!r)return;
+  addBet({date:BP.day||todayISO(),player:r.p.name,tm:r.p.tm,mk:r.k,line:r.line,side:r.side,odds:r.odds,stake:+(BS.settings.stake||10),prob:r.prob,edge:r.edge,proj:r.proj})
+    .then(()=>{b.textContent="Guardada ✓"}).catch(()=>{b.textContent="Error"})});
+
+if(location.hash==="#props")showTab("best");
 
 // ================= Precisión del modelo (backtest) =================
 function renderCal(){
