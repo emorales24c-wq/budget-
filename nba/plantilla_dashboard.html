@@ -268,7 +268,7 @@ tr.grp td span{font-family:var(--body);font-weight:400;text-transform:none;lette
   <div><b>Modelo:</b> minutos proyectados = mezcla de los últimos 5 partidos y la temporada; producción por minuto, ajuste por rival y peso de los partidos recientes elegidos con un backtest de todos los partidos jugados (cada partido se proyecta solo con lo que se sabía antes). Se corrige el sesgo de cada stat, se aplica back-to-back y, cuando falta un jugador, el aumento de uso medido. Las probabilidades usan el error real medido y una calibración final; detalles en la pestaña Precisión del modelo.</div>
   <div><b>Lesiones:</b> los jugadores "Out" en el reporte de lesiones salen OUT solos (puedes quitarlo tocando OUT). Si la baja es nueva, sus minutos se reparten; si ya venía faltando, sus compañeros ya traen esos minutos en sus promedios recientes.</div>
   <div><b>Defensa por posición:</b> calculada con __DVPGAMES__ box scores de basketball-reference: lo que anotó, rebotó, asistió, etc. cada posición del rival por minuto, separando titulares y suplentes, contra el promedio de liga. A cada jugador se le aplica el factor de su posición y su rol (titular si fue titular en al menos la mitad de sus partidos). La posición es la de basketball-reference (la primera si tiene dos).</div>
-  <div><b>OUT:</b> los minutos del jugador pasan a sus compañeros de rotación (10+ min de promedio) que no tengan minutos puestos a mano, en proporción a los minutos que juega cada uno, con tope de 42. Si le pones minutos a mano a alguien, se respetan tus minutos.</div>
+  <div><b>OUT:</b> tus cambios a mano (OUT, minutos, rival, líneas) duran solo ese día; al día siguiente la página arranca limpia con las lesiones del reporte. Los minutos del jugador pasan a sus compañeros de rotación (10+ min de promedio) que no tengan minutos puestos a mano, en proporción a los minutos que juega cada uno, con tope de 42. Si le pones minutos a mano a alguien, se respetan tus minutos.</div>
   <div><b>Cálculo:</b> cada stat = producción por minuto × xMP × pace del partido × local (±1%) × ajuste por rival × corrección de sesgo × back-to-back × uso. Ajuste por rival: "Equipo" usa lo que permite el rival (puntos por posesión, % de rebote, asistencias y triples); "Posición" usa lo que permite a la posición y rol del jugador; "Auto" usa el que mejor funcionó en el backtest. Las cifras en pequeño debajo de cada stat son el promedio de la temporada. Marcador: posesiones × eficiencia ofensiva del equipo (pts por posesión, teamrankings) × eficiencia defensiva del rival ÷ promedio de liga × local, más el efecto de los jugadores OUT (lo que dejan de anotar menos lo que anotan sus compañeros con los minutos extra); total y spread con desviación de 12 puntos (supuesto).</div>
   <div>Herramienta educativa: no garantiza resultados. Apuesta con responsabilidad.</div>
 </div>
@@ -294,6 +294,9 @@ const roleOf=p=>p.g&&p.gs/p.g>=.5?"S":"B";
 
 let S={}; const KEY="nba-proj-v1";
 try{S=JSON.parse(localStorage.getItem(KEY)||"{}")||{}}catch(e){S={}}
+// tus cambios (OUT, minutos, rival, líneas) valen solo para el día en que los hiciste: al día siguiente se borran
+(function(){const n=new Date(),d=n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0")+"-"+String(n.getDate()).padStart(2,"0");
+  try{if(localStorage.getItem(KEY+"-dia")!==d){S={};localStorage.setItem(KEY,"{}");localStorage.setItem(KEY+"-dia",d)}}catch(e){}})();
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 const ov=n=>S[n]||(S[n]={});
 
