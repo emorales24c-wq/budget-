@@ -7,6 +7,7 @@ import datetime, json, os, subprocess, sys, time
 import pandas as pd
 sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
 import dvp
+import modelo
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -172,6 +173,45 @@ for k in range(2):
 DIAS=sorted({g[0] for g in SCHED})[:3]
 SCHED=[g for g in SCHED if g[0] in DIAS]
 print(f"  Calendario: {len(SCHED)} partidos en {len(DIAS)} días")
+
+# Modelo calibrado con los partidos ya jugados (backtest)
+GAMES=dvp.load_games(BOX_DIR)
+MODEL,LOGS,TEAM_GAMES=modelo.run(GAMES,POSMAP)
+MP=MODEL["params"] if MODEL else {"a_min":0.5,"b":0.0,"mode":"team"}
+CUR=modelo.current(LOGS,MP["a_min"],MP["b"])
+if MODEL: print(f"  Backtest: {MODEL['report']['n']} casos · ajuste por rival elegido: {MP['mode']} · peso reciente minutos {MP['a_min']}, producción {MP['b']}")
+# back-to-back: el equipo jugó el día anterior (según los partidos jugados o el mismo calendario)
+LAST_DATES={t:{d for d,_ in v} for t,v in TEAM_GAMES.items()}
+for g in SCHED:
+    prev=(datetime.date.fromisoformat(g[0])-datetime.timedelta(days=1)).isoformat()
+    for tm in (g[2],g[3]):
+        played=prev in LAST_DATES.get(tm,set()) or any(x[0]==prev and tm in (x[2],x[3]) for x in SCHED)
+        g.append(1 if played else 0)
+# historial compacto por jugador (últimos 15 partidos): fecha, rival, local, titular, min, pts, reb, ast, 3pm, stl, blk
+LOGS_JSON={n:[[e["d"],e["opp"],1 if e["home"] else 0,1 if e["role"]=="S" else 0,round(e["mp"],1)]+[round(v) for v in e["s"]] for e in ent[-15:]] for n,ent in LOGS.items()}
+TEAM_DATES={t:sorted({d for d,_ in v}) for t,v in TEAM_GAMES.items()}
+
+# Lesiones (basketball-reference): Out = OUT automático; Day To Day = en duda
+INJ={}
+try:
+    ipath=os.path.join(RAW,"injuries.html")
+    fetch("https://www.basketball-reference.com/friv/injuries.fcgi",ipath)
+    it=pd.read_html(ipath)[0]
+    for _,r in it.iterrows():
+        desc=str(r["Description"]); low=desc.lower()
+        if low.startswith("out"): st="out"
+        elif " as out" in low: st="out"
+        elif "doubtful" in low: st="dudoso"
+        elif "questionable" in low: st="duda"
+        elif "probable" in low: st="probable"
+        else: st="duda"
+        name=str(r["Player"]); tm=FULL2AB.get(str(r["Team"]),"")
+        last_team=TEAM_DATES.get(tm,[])
+        nuevo=bool(last_team) and any(e["d"]==last_team[-1] for e in LOGS.get(name,[]))  # jugó el último partido: su baja es nueva
+        INJ[name]={"st":st,"d":desc[:220],"u":str(r["Update"]),"tm":tm,"nuevo":nuevo}
+    print(f"  Lesiones: {sum(1 for v in INJ.values() if v['st']=='out')} OUT, {sum(1 for v in INJ.values() if v['st']!='out')} en duda")
+except SystemExit:
+    print("  aviso: no se pudo bajar la página de lesiones")
 
 NOTA_MEZCLA=(f"Mezclado con 2025-26 hasta que todos los equipos lleven {CORTE} partidos (hoy el mínimo es {MIN_GP}). Peso de 2026-27 = partidos/{CORTE}."
              if MEZCLA else "Solo temporada 2026-27 (todos los equipos llevan al menos "+str(CORTE)+" partidos).")
@@ -429,7 +469,8 @@ P_JSON=[]
 for row in PROWS:
     d=dict(zip(h,row)); g=lambda k: round(float(d[k] or 0),2)
     P_JSON.append([d["Player"],d["Team"],d["Pos"] or "",int(d["G"] or 0),g("MP"),g("2P"),g("2PA"),g("3P"),g("3PA"),g("FT"),g("FTA"),g("ORB"),g("DRB"),g("AST"),g("STL"),g("BLK"),g("PTS"),int(d["GS"] or 0),d["Peso 2026-27"]])
-data={"fecha":FECHA,"p":P_JSON,"t":[list(t) for t in T],"dvp":DVP,"dvpGames":DVP_GAMES,"mezcla":{"activa":MEZCLA,"minPJ":MIN_GP,"corte":CORTE},"shrink":dvp.SHRINK_GAMES,"sched":SCHED}
+data={"fecha":FECHA,"p":P_JSON,"t":[list(t) for t in T],"dvp":DVP,"dvpGames":DVP_GAMES,"mezcla":{"activa":MEZCLA,"minPJ":MIN_GP,"corte":CORTE},"shrink":dvp.SHRINK_GAMES,"sched":SCHED,
+      "mdl":MODEL,"pl":CUR,"logs":LOGS_JSON,"inj":INJ}
 with open(JSON_OUT,"w") as f: json.dump(data,f,ensure_ascii=False,separators=(",",":"))
 with open(HTML_TPL) as f: tpl=f.read()
 with open(HTML_OUT,"w") as f: f.write(tpl.replace("__DATA__",json.dumps(data,ensure_ascii=False,separators=(",",":"))).replace("__FECHA__",FECHA).replace("__DVPGAMES__",str(DVP_GAMES)))

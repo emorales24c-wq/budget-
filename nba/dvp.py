@@ -95,12 +95,21 @@ def update_boxscores(season_end, cache_dir):
     return nuevos
 
 
-def compute_dvp(cache_dir, positions):
-    """positions: {nombre: 'PG'|...}.
-    Devuelve {equipo: {'n': partidos, 'S'|'B': {POS: [6 por 36 min, 6 factores, min por partido]}}}."""
-    allowed = {}  # defensa -> rol -> pos -> [min, 6 stats]
+def load_games(cache_dir):
+    """Box scores guardados, en orden de fecha (el id empieza con AAAAMMDD)."""
+    out = []
     for fn in sorted(os.listdir(cache_dir)):
         g = json.load(open(os.path.join(cache_dir, fn)))
+        if g.get("v") == BOX_VERSION and len(g["teams"]) == 2:
+            out.append(g)
+    return out
+
+
+def compute_dvp(cache_dir, positions, games=None):
+    """positions: {nombre: 'PG'|...}. games: lista opcional de box scores (para usar solo una parte).
+    Devuelve {equipo: {'n': partidos, 'S'|'B': {POS: [6 por 36 min, 6 factores, min por partido]}}}."""
+    allowed = {}  # defensa -> rol -> pos -> [min, 6 stats]
+    for g in (games if games is not None else load_games(cache_dir)):
         tms = list(g["teams"])
         if len(tms) != 2 or g.get("v") != BOX_VERSION:
             continue
