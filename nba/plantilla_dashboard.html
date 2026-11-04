@@ -186,7 +186,7 @@ tr.grp td span{font-family:var(--body);font-weight:400;text-transform:none;lette
   <div class="f"><label>Condición</label><div class="seg" id="home"><button type="button" data-v="1" aria-pressed="true">Local</button><button type="button" data-v="0" aria-pressed="false">Visita</button></div></div>
   <div class="f"><label for="minmp">Min. prom. ≥</label><input id="minmp" type="number" min="0" max="48" step="1" value="10" style="width:70px"></div>
   <div class="f"><label>Vista</label><div class="seg" id="group"><button type="button" data-v="1" aria-pressed="true">Por equipo</button><button type="button" data-v="0" aria-pressed="false">Todos juntos</button></div></div>
-  <div class="f"><label>Ajuste por rival</label><div class="seg" id="usepos"><button type="button" data-v="auto" aria-pressed="true">Auto</button><button type="button" data-v="none" aria-pressed="false">Ninguno</button><button type="button" data-v="team" aria-pressed="false">Equipo</button><button type="button" data-v="pos" aria-pressed="false">Posición</button></div></div>
+  <div class="f"><label>Ajuste por rival</label><div class="seg" id="usepos"><button type="button" data-v="auto" aria-pressed="false">Auto</button><button type="button" data-v="none" aria-pressed="false">Ninguno</button><button type="button" data-v="team" aria-pressed="true">Equipo</button><button type="button" data-v="pos" aria-pressed="false">Posición</button></div></div>
   <button class="btn" id="reset" type="button">Borrar mis cambios</button>
   <span class="count" id="count"></span>
 </div>
@@ -304,7 +304,7 @@ const $=id=>document.getElementById(id);
 // Calendario: partidos por día
 const SCH=DATA.sched||[], DAYS=[...new Set(SCH.map(g=>g[0]))];
 const OPPD={}; SCH.forEach(g=>{const d=OPPD[g[0]]||(OPPD[g[0]]={});d[g[2]]={opp:g[3],home:0,g};d[g[3]]={opp:g[2],home:1,g}});
-const G={group:1,day:DAYS[0]||"",mode:"auto",team:DAYS[0]?"":"MIN",rival:"WAS",home:1,q:"",minmp:10,sort:"pts",dir:-1};
+const G={group:1,day:DAYS[0]||"",mode:"team",team:DAYS[0]?"":"MIN",rival:"WAS",home:1,q:"",minmp:10,sort:"pts",dir:-1};
 const open=new Set();
 
 function adjFor(tm,opp){
