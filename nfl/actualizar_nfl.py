@@ -20,6 +20,7 @@ FECHA = f"{HOY.day}-{['ene','feb','mar','abr','may','jun','jul','ago','sep','oct
 URL_STATS = f"https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_{SEASON}.csv"
 URL_GAMES = "https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv"
 URL_SNAPS = f"https://github.com/nflverse/nflverse-data/releases/download/snap_counts/snap_counts_{SEASON}.csv"
+URL_INJ = f"https://github.com/nflverse/nflverse-data/releases/download/injuries/injuries_{SEASON}.csv"
 URL_PLAYERS = "https://github.com/nflverse/nflverse-data/releases/download/players/players.csv"  # une IDs de snaps (pfr) y stats (gsis)
 # stats de equipo de teamrankings.com (temporada actual)
 TR_STATS = [("plays", "plays-per-game"), ("oplays", "opponent-plays-per-game"),
@@ -69,6 +70,10 @@ fetch(URL_STATS, os.path.join(RAW, f"stats_player_week_{SEASON}.csv"))
 fetch(URL_GAMES, os.path.join(RAW, "games.csv"))
 fetch(URL_SNAPS, os.path.join(RAW, f"snap_counts_{SEASON}.csv"))
 fetch(URL_PLAYERS, os.path.join(RAW, "players.csv"))
+try:
+    fetch(URL_INJ, os.path.join(RAW, f"injuries_{SEASON}.csv"))
+except SystemExit:
+    print("  aviso: no se pudo bajar el reporte de lesiones")
 for _, slug in TR_STATS:
     r = subprocess.run(["curl", "-sS", "-f", "-m", "60", "-A", "Mozilla/5.0", "-o", os.path.join(RAW, "tr_" + slug + ".html"),
                         f"https://www.teamrankings.com/nfl/stat/{slug}"])
@@ -203,7 +208,31 @@ for k in SDK:
     SD[k] = [round(max(0.0, c0) * kn, 3), round(max(0.0, c1) * kn, 4), n]
 print("  Error real por stat:", {k: v[:2] for k, v in SD.items()})
 
-data = {"fecha": FECHA, "sd": SD, "season": SEASON, "semanas": int(st.week.max()), "stats": [k for k, _ in STATS],
+# Reporte oficial de lesiones (nflverse): la semana más reciente de cada equipo
+INJ = {}
+ipath = os.path.join(RAW, f"injuries_{SEASON}.csv")
+if os.path.exists(ipath):
+    inj = pd.read_csv(ipath, low_memory=False)
+    inj = inj[inj.season_type == "REG"] if "season_type" in inj else inj
+    names = {r.player_id: r.player_display_name for r in st[["player_id", "player_display_name"]].drop_duplicates().itertuples()}
+    next_wk = {}
+    for g in NEXT:
+        for tm_ in (g[3], g[4]):
+            next_wk.setdefault(tm_, g[0])
+    for tm, d in inj.groupby("team"):
+        wk = d.week.max()
+        if tm in next_wk and wk < next_wk[tm]:
+            continue  # todavía no sale el reporte de su próximo partido; el anterior ya no sirve
+        for r in d[d.week == wk].itertuples():
+            stt = str(r.report_status) if not pd.isna(r.report_status) else ""
+            if stt not in ("Out", "Doubtful", "Questionable"):
+                continue
+            nm = names.get(r.gsis_id, r.full_name)
+            INJ[nm] = {"st": {"Out": "out", "Doubtful": "dudoso", "Questionable": "duda"}[stt], "les": "" if pd.isna(r.report_primary_injury) else str(r.report_primary_injury),
+                       "tm": tm, "wk": int(wk), "pr": "" if pd.isna(r.practice_status) else str(r.practice_status)}
+    print(f"  Lesiones: {sum(1 for v in INJ.values() if v['st']=='out')} OUT, {sum(1 for v in INJ.values() if v['st']!='out')} en duda")
+
+data = {"fecha": FECHA, "sd": SD, "inj": INJ, "season": SEASON, "semanas": int(st.week.max()), "stats": [k for k, _ in STATS],
         "t": T, "tr": TR, "p": PL, "teamSnaps": TEAM_SNAPS,
         "posRate": {k: [round(x / v[-1], 5) for x in v[:-1]] for k, v in TOT.items()}, "dvp": DVP, "next": NEXT, "shrink": SHRINK_GAMES}
 with open(JSON_OUT, "w") as f:

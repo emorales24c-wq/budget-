@@ -90,6 +90,9 @@ tr.is-out td{opacity:.55} tr.is-out td.v{color:var(--under);font-size:.85rem}
 tr.is-out .pn{text-decoration:line-through}
 tr.is-out td:nth-child(3){opacity:1}
 small.boost{color:var(--over);font-weight:600}
+small.qbdn{color:var(--under);font-weight:600}
+.inj{display:inline-block;margin-left:6px;border-radius:4px;padding:0 5px;font-size:.66rem;font-weight:700;letter-spacing:.04em;vertical-align:middle}
+.inj.out{background:var(--under-bg);color:var(--under)} .inj.duda{background:var(--warn-bg,#f7ead0);color:var(--warn,#8a5a00)}
 small.snp b{font-weight:700}
 tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
 .props{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;padding:6px 0}
@@ -191,7 +194,7 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
     <div class="f"><label for="bq">Buscar</label><input id="bq" type="text" placeholder="Jugador o equipo" autocomplete="off"></div>
     <span class="count" id="bcount"></span>
   </div>
-  <p class="meta" style="margin:10px 0 0">Los props con más probabilidad de cada jugador de los partidos del día, de mejor a peor. <b>Línea</b>: viene la de referencia (su producción normal: por snap × sus snaps habituales, redondeada al .5 más cercano); escribe la de tu casa y la cuota para que se recalcule todo. Solo salen jugadores con rol real (QB con 60%+ de los snaps esperados; los demás con 35%+) y los mercados que las casas suelen ofrecer. El error de cada stat se midió con todos los partidos de la temporada. Las probabilidades usan su producción por snap, snaps esperados, la defensa rival contra su posición y los OUT que marques. <b>Edge</b> = probabilidad del modelo − la que paga la cuota (-110 si no escribes una). Los TD por tierra o recepción están en Anotador TD.</p>
+  <p class="meta" style="margin:10px 0 0">Los props con más probabilidad de cada jugador de los partidos del día, de mejor a peor. <b>Línea</b>: viene la de referencia (su producción con el rol de hoy —snaps con los OUT y el QB que va a lanzar— pero sin el ajuste por la defensa rival, redondeada al .5 más cercano; así el edge sale sobre todo del matchup); escribe la de tu casa y la cuota para que se recalcule todo. Solo salen jugadores con rol real (QB con 60%+ de los snaps esperados; los demás con 35%+) y los mercados que las casas suelen ofrecer. El error de cada stat se midió con todos los partidos de la temporada. Las probabilidades usan su producción por snap, snaps esperados, la defensa rival contra su posición y los OUT que marques. <b>Edge</b> = probabilidad del modelo − la que paga la cuota (-110 si no escribes una). Los TD por tierra o recepción están en Anotador TD.</p>
   <div class="tablebox"><table id="besttbl"><thead><tr><th class="l">Jugador</th><th class="l">Mercado</th><th>Línea</th><th>Proyección</th><th>Prom.</th><th>Over</th><th>Under</th><th>Pick</th><th>Cuota</th><th>Edge</th></tr></thead><tbody id="besttb"></tbody></table></div>
 </div>
 
@@ -206,7 +209,7 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
 
 <div class="foot">
   <div><b>Datos:</b> nflverse (datos abiertos de la NFL en GitHub): stats de cada jugador por semana, marcadores y líneas de Las Vegas. teamrankings.com: stats de equipo (jugadas, puntos y yardas por jugada, pase, tierra, 3ra oportunidad, zona roja). Temporada regular 2026, semanas 1 a __SEMANAS__, actualizados el __FECHA__.</div>
-  <div><b>Cálculo:</b> cada stat = producción por snap del jugador (total ÷ snaps ofensivos jugados) × snaps esperados (Snaps % × snaps ofensivos por partido de su equipo) × lo que la defensa rival permite a su posición (÷ promedio de liga) × local (±1%). Con pocos partidos la defensa se acerca al promedio (se mezcla con __SHRINK__ partidos de liga). Marcador (teamrankings): jugadas esperadas (promedio de las jugadas del equipo y las que permite el rival) × puntos por jugada del equipo × puntos por jugada que permite el rival ÷ promedio de liga, +1 punto al local. Yardas, intentos y recepciones: distribución normal; touchdowns e intercepciones: Poisson. TD = probabilidad de anotar al menos un touchdown (por tierra o recepción). Snaps %: por defecto su promedio de la temporada; debajo del nombre ves el de las últimas 3 semanas (▲ sube, ▼ baja). OUT: su % de snaps pasa a los jugadores de su misma posición en su equipo, en proporción a los snaps que ya juega cada uno (máximo 100%), y cada uno produce según lo que hace por snap. Si el OUT es el QB, el suplente recibe sus snaps; como los suplentes casi no juegan, su producción por snap en el pase se mezcla con el promedio de los QB de la liga (pesa como 150 snaps). Los pocos jugadores sin datos de snaps usan Uso % sobre su promedio por partido.</div>
+  <div><b>Cálculo:</b> cada stat = producción por snap del jugador (total ÷ snaps ofensivos jugados) × snaps esperados (Snaps % × snaps ofensivos por partido de su equipo) × lo que la defensa rival permite a su posición (÷ promedio de liga) × local (±1%). Con pocos partidos la defensa se acerca al promedio (se mezcla con __SHRINK__ partidos de liga). Marcador (teamrankings): jugadas esperadas (promedio de las jugadas del equipo y las que permite el rival) × puntos por jugada del equipo × puntos por jugada que permite el rival ÷ promedio de liga, +1 punto al local. Yardas, intentos y recepciones: distribución normal; touchdowns e intercepciones: Poisson. Lesiones: el reporte oficial de la semana (nflverse) marca OUT solo a los jugadores "Out"; tócalo para quitarlo. QB: el pase se proyecta por intento (intentos del equipo × completos, yardas, TD e INT por intento del QB, mezclados con la liga si tiene pocos intentos); si cambia el QB titular, las recepciones, yardas y TD de sus receptores se ajustan por cómo lanza el nuevo QB contra el normal del equipo. TD = probabilidad de anotar al menos un touchdown (por tierra o recepción). Snaps %: por defecto su promedio de la temporada; debajo del nombre ves el de las últimas 3 semanas (▲ sube, ▼ baja). OUT: su % de snaps pasa a los jugadores de su misma posición en su equipo, en proporción a los snaps que ya juega cada uno (máximo 100%), y cada uno produce según lo que hace por snap. Si el OUT es el QB, el suplente recibe sus snaps; como los suplentes casi no juegan, su producción por snap en el pase se mezcla con el promedio de los QB de la liga (pesa como 150 snaps). Los pocos jugadores sin datos de snaps usan Uso % sobre su promedio por partido.</div>
   <div>Herramienta educativa: no garantiza resultados. Apuesta con responsabilidad.</div>
 </div>
 </div>
@@ -232,7 +235,7 @@ const RANK={};TRK.forEach(k=>{const arr=Object.entries(TRD).filter(([,x])=>x[k]!
 const P=DATA.p.map((r,i)=>({i,name:r[0],tm:r[1],pos:r[2],g:r[3],wk:r[4],a:r.slice(5,17),sp:r[17],sp3:r[18],rate:r[19]==null?null:r.slice(19,31),snapsTot:r[31]||0}));
 // QB con pocos snaps (suplentes): su producción por snap en el pase se mezcla con el promedio de los QB de la liga
 const QB_K=150, PRATE=DATA.posRate||{};
-P.forEach(p=>{if(p.pos==="QB"&&p.rate&&PRATE.QB){const n=p.snapsTot;p.rate=p.rate.map((x,i)=>i<5?(n*x+QB_K*PRATE.QB[i])/(n+QB_K):x)}});
+P.forEach(p=>{if(p.pos==="QB"&&p.rate&&PRATE.QB){const n=p.snapsTot;p.rate=p.rate.map((x,i)=>i<8?(n*x+QB_K*PRATE.QB[i])/(n+QB_K):x)}});
 // TD por tierra y por recepción: son pocos por jugador, así que su tasa por snap se mezcla con la de su posición (pesa como TD_K snaps)
 const TD_K=250, TDI=[SK.indexOf("rtd"),SK.indexOf("rectd")];
 P.forEach(p=>{const lg=PRATE[p.pos];if(!p.rate||!lg)return;const n=p.snapsTot;TDI.forEach(i=>{p.rate[i]=(n*p.rate[i]+TD_K*lg[i])/(n+TD_K)})});
@@ -244,6 +247,9 @@ const OPPD={}; NEXT.forEach(g=>{const d=OPPD[g[1]]||(OPPD[g[1]]={});d[g[3]]={opp
 
 let S={}; const KEY="nfl-proj-v1";
 try{S=JSON.parse(localStorage.getItem(KEY)||"{}")||{}}catch(e){S={}}
+// tus cambios (OUT, snaps, líneas) valen solo para el día en que los hiciste
+(function(){const n=new Date(),d=n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0")+"-"+String(n.getDate()).padStart(2,"0");
+  try{if(localStorage.getItem(KEY+"-dia")!==d){S={};localStorage.setItem(KEY,"{}");localStorage.setItem(KEY+"-dia",d)}}catch(e){}})();
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 const ov=n=>S[n]||(S[n]={});
 const $=id=>document.getElementById(id);
@@ -261,11 +267,16 @@ const ncdf=(x,m,sd)=>.5*(1+erf((x-m)/(sd*Math.SQRT2)));
 function pcdf(k,l){let s=0,t=Math.exp(-l);for(let i=0;i<=k;i++){s+=t;t*=l/(i+1)}return s}
 const impl=o=>o<0?-o/(-o+100):100/(o+100);
 
-function fac(rival,pos,k){const d=DV[rival]&&DV[rival][pos];return d?d[SK.length+IDX[k]]:1}
+function facD(rival,pos,k){const d=DV[rival]&&DV[rival][pos];return d?d[SK.length+IDX[k]]:1}
 // Snaps: cada stat = producción por snap × snaps esperados (% de snaps × snaps del equipo por partido).
 // Jugadores OUT: su % de snaps pasa a los de su misma posición en su equipo que no tengan % puesto a mano,
 // en proporción a los snaps que ya juega cada uno (máximo 100%).
-const isOut=p=>!!(S[p.name]&&S[p.name].out);
+// lesiones del reporte oficial: "Out" sale OUT solo (tócalo para quitarlo)
+const INJ=DATA.inj||{};
+const injOut=p=>{const j=INJ[p.name];return !!(j&&j.st==="out"&&j.tm===p.tm)};
+const isOut=p=>{const o=S[p.name]||{};return o.out===true||(o.out!==false&&injOut(p))};
+function injBadge(p){const j=INJ[p.name];if(!j||j.tm!==p.tm)return "";const lab=j.st==="out"?"Lesión: OUT":j.st==="dudoso"?"Dudoso":"En duda";
+  return `<span class="inj ${j.st==="out"?"out":"duda"}" title="${esc(j.les)}${j.pr?" · "+esc(j.pr):""} (semana ${j.wk})">${lab}</span>`}
 const hasSnaps=p=>p.rate&&p.sp!=null&&TSN[p.tm];
 const manualPct=p=>{const o=S[p.name]||{};return o.s!=null?o.s/100:null};
 const basePct=p=>{const m=manualPct(p);return m!=null?m:(p.sp||0)};
@@ -277,18 +288,49 @@ function computeBoost(){
     else if(manualPct(p)==null&&p.sp>0)b.act.push(p)});
   Object.values(by).forEach(b=>{if(!b.out||!b.act.length)return;const tot=b.act.reduce((s,p)=>s+p.sp,0);
     b.act.forEach(p=>EXTRA[p.name]=Math.min(1-p.sp,b.out*p.sp/tot))});
+  computeQB();
+}
+// QB: el pase se proyecta por intento (intentos del equipo × % de snaps × % completos, yardas, TD e INT por intento,
+// mezclados con la liga cuando tiene pocos intentos). Los receptores se ajustan por la calidad del QB que va a lanzar
+// contra la del QB normal del equipo esta temporada.
+const QB_ATT_K=80;
+const qbTot=p=>({att:p.a[IDX.att]*p.g,cmp:p.a[IDX.cmp]*p.g,pyd:p.a[IDX.pyd]*p.g,ptd:p.a[IDX.ptd]*p.g,int:p.a[IDX.int]*p.g});
+const LGQ=(()=>{const s={att:0,cmp:0,pyd:0,ptd:0,int:0};P.forEach(p=>{if(p.pos!=="QB")return;const x=qbTot(p);for(const k in s)s[k]+=x[k]});return {cmp:s.cmp/s.att,pyd:s.pyd/s.att,ptd:s.ptd/s.att,int:s.int/s.att}})();
+// con pocos intentos se mezcla con un nivel de suplente (peor que el promedio de la liga), no con el promedio
+const BACKUP={cmp:.93,pyd:.82,ptd:.65,int:1.25};
+const qbRates=p=>{const x=qbTot(p),r={};["cmp","pyd","ptd","int"].forEach(k=>r[k]=(x[k]+QB_ATT_K*LGQ[k]*BACKUP[k])/(x.att+QB_ATT_K));return r};
+let QBF={}, TEAMATT={};
+function computeQB(){
+  QBF={};TEAMATT={};const by={};
+  P.forEach(p=>{if(p.pos!=="QB")return;(by[p.tm]||(by[p.tm]=[])).push(p)});
+  Object.entries(by).forEach(([tm,qs])=>{
+    const tot={att:0,cmp:0,pyd:0,ptd:0};qs.forEach(q=>{const x=qbTot(q);for(const k in tot)tot[k]+=x[k]});
+    const n=(TEAMS[tm]&&TEAMS[tm].n)||Math.max(...qs.map(q=>q.g));TEAMATT[tm]=n?tot.att/n:0;
+    if(!tot.att)return;
+    const norm={cmp:tot.cmp/tot.att,pyd:tot.pyd/tot.att,ptd:tot.ptd/tot.att};
+    const act=qs.filter(q=>!isOut(q)&&hasSnaps(q)&&expPct(q)>0);const w=act.reduce((s,q)=>s+expPct(q),0);if(!w)return;
+    const now={cmp:0,pyd:0,ptd:0};act.forEach(q=>{const r=qbRates(q);for(const k in now)now[k]+=r[k]*expPct(q)/w});
+    const cl=x=>Math.min(1.25,Math.max(0.55,x));
+    const main=act.slice().sort((a,b)=>expPct(b)-expPct(a))[0];
+    QBF[tm]={rec:cl(now.cmp/norm.cmp),recyd:cl(now.pyd/norm.pyd),rectd:cl(norm.ptd?now.ptd/norm.ptd:1),qb:main.name,changed:qs.some(q=>isOut(q))};
+  });
 }
 const expPct=p=>{const m=manualPct(p);return m!=null?m:(p.sp||0)+(EXTRA[p.name]||0)};
 const usoOf=p=>{const o=S[p.name]||{};return (o.u!=null?o.u:100)/100};
 function project(p,ctxOverride){
   const o=S[p.name]||{}, snaps=hasSnaps(p), pct=snaps?expPct(p):null, uso=snaps?null:usoOf(p);
-  if(o.out) return {ok:false,out:true,pct,uso};
+  if(isOut(p)) return {ok:false,out:true,pct,uso};
   const ctx=ctxOverride!==undefined?ctxOverride:G.team?{rival:p.tm===G.team?G.rival:G.team,home:p.tm===G.team?G.home:1-G.home}:G.day&&OPPD[G.day]?(OPPD[G.day][p.tm]||null):(OPP[p.tm]||null);
   if(!ctx||ctx.rival===p.tm) return {ok:false,pct,uso};
-  const rival=ctx.rival||ctx.opp, h=ctx.home?1+HOME_ADV:1-HOME_ADV;
+  const rival=ctx.rival||ctx.opp, h=ctx.neutral?1:(ctx.home?1+HOME_ADV:1-HOME_ADV);
+  const fac=ctx.neutral?(()=>1):facD;
   const pr={ok:true,pct,uso,rival,home:ctx.home};
   if(snaps){pr.snaps=pct*TSN[p.tm];SK.forEach((k,i)=>pr[k]=p.rate[i]*pr.snaps*fac(rival,p.pos,k)*h)}
   else SK.forEach((k,i)=>pr[k]=p.a[i]*uso*fac(rival,p.pos,k)*h);
+  if(p.pos==="QB"&&TEAMATT[p.tm]&&(snaps||uso!=null)){ // pase por intento
+    const r=qbRates(p),share=snaps?pct:Math.min(1,uso);const att=TEAMATT[p.tm]*share;
+    pr.att=att*fac(rival,"QB","att")*h;["cmp","pyd","ptd","int"].forEach(k=>pr[k]=att*r[k]*fac(rival,"QB",k)*h);
+  }else if(p.pos!=="QB"&&QBF[p.tm]){const q=QBF[p.tm];pr.rec*=q.rec;pr.recyd*=q.recyd;pr.rectd*=q.rectd;pr.qbf=q}
   pr.rr=pr.ryd+pr.recyd;
   pr.td=1-Math.exp(-(pr.rtd+pr.rectd));
   return pr;
@@ -315,7 +357,8 @@ function scoreFor(tm,rv,home){
   if(A&&B&&A.plays&&B.plays&&A.ppp&&B.ppp){
     const pa=(A.plays+B.oplays)/2, pb=(B.plays+A.oplays)/2;
     const a=pa*A.ppp*(B.oppp/LGT.oppp)+hp, b=pb*B.ppp*(A.oppp/LGT.oppp)-hp;
-    return {a,b,total:a+b,pa,pb};
+    const qa=QBF[tm]&&QBF[tm].changed?Math.pow(QBF[tm].recyd,0.6):1, qb=QBF[rv]&&QBF[rv].changed?Math.pow(QBF[rv].recyd,0.6):1; // QB titular OUT: el equipo anota menos
+    return {a:a*qa,b:b*qb,total:a*qa+b*qb,pa,pb,qa,qb};
   }
   const a=t.pf*(o.pa/LGPTS)+hp, b=o.pf*(t.pa/LGPTS)-hp;
   return {a,b,total:a+b};
@@ -407,13 +450,15 @@ function snapInfo(p){
   const d=p.sp3-p.sp, ar=d>0.03?`<b class="up">▲</b>`:d<-0.03?`<b class="dn">▼</b>`:"";
   return `<small class="snp">snaps temp ${Math.round(p.sp*100)}% · últ. 3 ${Math.round(p.sp3*100)}% ${ar}</small>`;
 }
-function boostNote(p){const ex=EXTRA[p.name]||0;return ex>0.005&&!isOut(p)?`<small class="boost" title="Por jugadores OUT: ${esc((OUTS[p.tm]||[]).join(", "))}">+${Math.round(ex*100)}% snaps por OUT</small>`:""}
+function boostNote(p){const ex=EXTRA[p.name]||0,parts=[];if(ex>0.005&&!isOut(p))parts.push(`<small class="boost" title="Por jugadores OUT: ${esc((OUTS[p.tm]||[]).join(", "))}">+${Math.round(ex*100)}% snaps por OUT</small>`);
+  const q=QBF[p.tm];if(q&&q.changed&&p.pos!=="QB"&&!isOut(p)&&Math.abs(q.recyd-1)>.02)parts.push(`<small class="${q.recyd<1?"qbdn":"boost"}">QB ${esc(q.qb)}: ${q.recyd<1?"":"+"}${Math.round((q.recyd-1)*100)}% yds recibidas</small>`);
+  return parts.join("")}
 function rowHTML(p){
   const pr=project(p),o=S[p.name]||{};
   const rv=pr.ok?`${pr.home?"vs":"@"} ${pr.rival}`:"—";
   const why=boostNote(p);
   return `<tr data-i="${p.i}" class="${pr.out?"is-out":pr.ok?"":"warn"}">
-   <td class="l name"><span class="pn">${esc(p.name)}</span><small>${p.tm} · ${p.pos} · últ. sem ${p.wk}</small>${snapInfo(p)}${why}</td>
+   <td class="l name"><span class="pn">${esc(p.name)}</span>${injBadge(p)}<small>${p.tm} · ${p.pos} · últ. sem ${p.wk}</small>${snapInfo(p)}${why}</td>
    <td>${p.g}</td>
    <td><div class="usecell">${hasSnaps(p)?`<input type="number" min="0" max="100" step="1" value="${Math.round(expPct(p)*100)}" data-a="s" aria-label="% de snaps esperados de ${esc(p.name)}"${pr.out?" disabled":""}>`:`<input type="number" min="0" max="300" step="5" value="${o.u!=null?o.u:100}" data-a="u" title="Sin datos de snaps: uso % de su promedio" aria-label="Uso esperado de ${esc(p.name)}"${pr.out?" disabled":""}>`}<button type="button" class="outb" data-a="out" aria-pressed="${pr.out?"true":"false"}" title="Marcar a ${esc(p.name)} como OUT">OUT</button></div></td>
    <td class="l" data-c="rv">${rv}</td>
@@ -499,7 +544,7 @@ $("tb").addEventListener("input",e=>{const el=e.target,a=el.dataset.a;if(!a)retu
   save();computeBoost();
   if((OUTS[p.tm]||[]).length){document.querySelectorAll("#tb tr[data-i]").forEach(r=>{if(P[+r.dataset.i].tm===p.tm)refreshRow(r)})}else refreshRow(tr)});
 $("tb").addEventListener("click",e=>{const ob=e.target.closest("button[data-a=out]");
-  if(ob){const p=P[+ob.closest("tr").dataset.i],o=ov(p.name);if(o.out)delete o.out;else o.out=true;save();render();return}
+  if(ob){const p=P[+ob.closest("tr").dataset.i],o=ov(p.name);if(isOut(p)){if(injOut(p))o.out=false;else delete o.out}else{if(injOut(p))delete o.out;else o.out=true}save();render();return}
   const b=e.target.closest("button[data-a=e]");if(!b)return;const tr=b.closest("tr"),p=P[+tr.dataset.i];
   open.has(p.i)?open.delete(p.i):open.add(p.i);const d=tr.nextElementSibling;if(d&&d.classList.contains("detail"))d.remove();
   if(open.has(p.i))tr.insertAdjacentHTML("afterend",detailHTML(p,project(p)));b.textContent=open.has(p.i)?"▾":"▸";b.setAttribute("aria-expanded",String(open.has(p.i)))});
@@ -595,7 +640,8 @@ const BMLAB={pyd:"Yds pase",cmp:"Pases completos",att:"Intentos de pase",ptd:"TD
 const avgOf=(p,k)=>k==="rr"?p.a[IDX.ryd]+p.a[IDX.recyd]:p.a[IDX[k]];
 const refLine=v=>{let x=Math.round(v*2)/2;if(x%1===0)x-=.5;return Math.max(.5,x)};
 // producción "normal": por snap × sus snaps habituales de la temporada (sin rival); si no hay snaps, su promedio
-const normalOf=(p,k)=>{if(!p.rate||p.sp==null||!TSN[p.tm])return avgOf(p,k);const n=p.sp*TSN[p.tm];return k==="rr"?(p.rate[IDX.ryd]+p.rate[IDX.recyd])*n:p.rate[IDX[k]]*n};
+// línea de referencia: su rol de hoy (snaps con los OUT, QB que va a lanzar) sin el ajuste por la defensa rival ni localía
+const normalOf=(p,k,s)=>{const n=project(p,{rival:s.opp,home:s.home,neutral:true});return n.ok?n[k]:avgOf(p,k)};
 const MINPCT={QB:.6,RB:.35,WR:.35,TE:.35};
 $("bday").innerHTML=DAYS.map(d=>`<option value="${d}">${fmtDay(d)} (${NEXT.filter(g=>g[1]===d).length} partido${NEXT.filter(g=>g[1]===d).length>1?"s":""})</option>`).join("");
 $("bday").value=BP.day;
@@ -606,7 +652,7 @@ function bestRows(){
     const pr=project(p,{rival:s.opp,home:s.home});if(!pr.ok)return;
     if(pr.pct!=null&&pr.pct<MINPCT[p.pos])return; // solo jugadores con rol real en el partido
     const L=(S[p.name]||{}).l||{};
-    PROPS[p.pos].filter(k=>!BP.mk||k===BP.mk).forEach(k=>{const l=L[k]||{},own=l.line!=null&&l.line!=="",avg=avgOf(p,k),norm=normalOf(p,k);
+    PROPS[p.pos].filter(k=>!BP.mk||k===BP.mk).forEach(k=>{const l=L[k]||{},own=l.line!=null&&l.line!=="",avg=avgOf(p,k),norm=normalOf(p,k,s);
       if(!own&&norm<MINAVG[k])return; // las casas no ofrecen ese prop a jugadores con poco volumen
       const line=own?+l.line:refLine(norm),po=probOverN(k,pr[k],line),pu=1-po;
       const oo=l.oo!=null&&l.oo!==""?+l.oo:-110,ou=l.ou!=null&&l.ou!==""?+l.ou:-110,eo=po-impl(oo),eu=pu-impl(ou);
@@ -620,7 +666,7 @@ let BROWS=[];
 function renderBest(){
   BROWS=bestRows();const top=BROWS.slice(0,150);
   $("besttb").innerHTML=top.map((r,i)=>{const L=((S[r.p.name]||{}).l||{})[r.k]||{};
-    return `<tr data-bi="${i}"><td class="l name"><span class="pn">${esc(r.p.name)}</span><small>${r.p.tm} · ${r.p.pos} · ${r.home?"vs":"@"} ${r.opp}</small></td>
+    return `<tr data-bi="${i}"><td class="l name"><span class="pn">${esc(r.p.name)}</span>${injBadge(r.p)}<small>${r.p.tm} · ${r.p.pos} · ${r.home?"vs":"@"} ${r.opp}</small></td>
     <td class="l">${esc(BMLAB[r.k])}</td>
     <td><input type="number" step="0.5" value="${r.line}" data-a="bline" class="${r.ref?"refl":""}" title="${r.ref?"Línea de referencia (su promedio). Escribe la de tu casa.":"Tu línea"}" aria-label="Línea"></td>
     <td class="v">${f1(r.proj)}</td><td>${f1(r.avg)}</td>
