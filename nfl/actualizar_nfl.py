@@ -175,7 +175,35 @@ for a, v in allowed.items():
         row[p] = pg + fac
     DVP[a] = row
 
-data = {"fecha": FECHA, "season": SEASON, "semanas": int(st.week.max()), "stats": [k for k, _ in STATS],
+# Error real por stat (semana a semana): cada partido contra el promedio del jugador en sus OTROS partidos.
+# Desviación = c0 + c1 × proyección, ajustada con |error| (en una normal E|e| = sd·√(2/π)).
+import math
+SDK = [k for k, _ in STATS if k not in ("ptd", "int", "rtd", "rectd")] + ["rr"]
+SD = {}
+st["rr_"] = st["rushing_yards"] + st["receiving_yards"]
+colmap = dict(STATS); colmap["rr"] = "rr_"
+for k in SDK:
+    col = colmap[k]
+    mus, res = [], []
+    for pid, d in st.groupby("player_id"):
+        if len(d) < 4:
+            continue
+        vals = d[col].tolist(); tot = sum(vals)
+        for v in vals:
+            mu = (tot - v) / (len(vals) - 1)
+            if mu > 0:
+                mus.append(mu); res.append(abs(v - mu))
+    if len(mus) < 100:
+        continue
+    n = len(mus); mx = sum(mus) / n; my = sum(res) / n
+    vxx = sum((m - mx) ** 2 for m in mus) or 1
+    c1 = sum((m - mx) * (r - my) for m, r in zip(mus, res)) / vxx
+    c0 = my - c1 * mx
+    kn = math.sqrt(math.pi / 2)
+    SD[k] = [round(max(0.0, c0) * kn, 3), round(max(0.0, c1) * kn, 4), n]
+print("  Error real por stat:", {k: v[:2] for k, v in SD.items()})
+
+data = {"fecha": FECHA, "sd": SD, "season": SEASON, "semanas": int(st.week.max()), "stats": [k for k, _ in STATS],
         "t": T, "tr": TR, "p": PL, "teamSnaps": TEAM_SNAPS,
         "posRate": {k: [round(x / v[-1], 5) for x in v[:-1]] for k, v in TOT.items()}, "dvp": DVP, "next": NEXT, "shrink": SHRINK_GAMES}
 with open(JSON_OUT, "w") as f:
