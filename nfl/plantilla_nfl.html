@@ -209,7 +209,7 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
 
 <div class="foot">
   <div><b>Datos:</b> nflverse (datos abiertos de la NFL en GitHub): stats de cada jugador por semana, marcadores y líneas de Las Vegas. teamrankings.com: stats de equipo (jugadas, puntos y yardas por jugada, pase, tierra, 3ra oportunidad, zona roja). Temporada regular 2026, semanas 1 a __SEMANAS__, actualizados el __FECHA__.</div>
-  <div><b>Cálculo:</b> cada stat = producción por snap del jugador (total ÷ snaps ofensivos jugados) × snaps esperados (Snaps % × snaps ofensivos por partido de su equipo) × lo que la defensa rival permite a su posición (÷ promedio de liga) × local (±1%). Con pocos partidos la defensa se acerca al promedio (se mezcla con __SHRINK__ partidos de liga). Marcador (teamrankings): jugadas esperadas (promedio de las jugadas del equipo y las que permite el rival) × puntos por jugada del equipo × puntos por jugada que permite el rival ÷ promedio de liga, +1 punto al local. Yardas, intentos y recepciones: distribución normal; touchdowns e intercepciones: Poisson. Lesiones: el reporte oficial de la semana (nflverse) marca OUT solo a los jugadores "Out"; tócalo para quitarlo. QB: el pase se proyecta por intento (intentos del equipo × completos, yardas, TD e INT por intento del QB, mezclados con la liga si tiene pocos intentos); si cambia el QB titular, las recepciones, yardas y TD de sus receptores se ajustan por cómo lanza el nuevo QB contra el normal del equipo. TD = probabilidad de anotar al menos un touchdown (por tierra o recepción). Snaps %: por defecto su promedio de la temporada; debajo del nombre ves el de las últimas 3 semanas (▲ sube, ▼ baja). OUT: su % de snaps pasa a los jugadores de su misma posición en su equipo, en proporción a los snaps que ya juega cada uno (máximo 100%), y cada uno produce según lo que hace por snap. Si el OUT es el QB, el suplente recibe sus snaps; como los suplentes casi no juegan, su producción por snap en el pase se mezcla con el promedio de los QB de la liga (pesa como 150 snaps). Los pocos jugadores sin datos de snaps usan Uso % sobre su promedio por partido.</div>
+  <div><b>Cálculo:</b> cada stat = producción por snap del jugador (total ÷ snaps ofensivos jugados) × snaps esperados (Snaps % × snaps ofensivos por partido de su equipo) × lo que la defensa rival permite a su posición (÷ promedio de liga) × local (±1%). Con pocos partidos la defensa se acerca al promedio (se mezcla con __SHRINK__ partidos de liga). Marcador (teamrankings): jugadas esperadas (promedio de las jugadas del equipo y las que permite el rival) × puntos por jugada del equipo × puntos por jugada que permite el rival ÷ promedio de liga, +1 punto al local. Yardas, intentos y recepciones: distribución normal; touchdowns e intercepciones: Poisson. Lesiones: el reporte oficial de la semana (nflverse) marca OUT solo a los jugadores "Out"; tócalo para quitarlo. QB: el pase se proyecta por intento (intentos del equipo × completos, yardas, TD e INT por intento del QB, mezclados con la liga si tiene pocos intentos); si cambia el QB titular, las recepciones, yardas y TD de sus receptores se ajustan por cómo lanza el nuevo QB contra el normal del equipo, y el equipo lanza ~10% menos. TD = probabilidad de anotar al menos un touchdown (por tierra o recepción). Snaps %: por defecto su promedio de la temporada; debajo del nombre ves el de las últimas 3 semanas (▲ sube, ▼ baja). OUT: su % de snaps pasa a los jugadores de su misma posición en su equipo, en proporción a los snaps que ya juega cada uno (máximo 100%), y cada uno produce según lo que hace por snap. Si el OUT es el QB, el suplente recibe sus snaps; como los suplentes casi no juegan, su producción por snap en el pase se mezcla con el promedio de los QB de la liga (pesa como 150 snaps). Los pocos jugadores sin datos de snaps usan Uso % sobre su promedio por partido.</div>
   <div>Herramienta educativa: no garantiza resultados. Apuesta con responsabilidad.</div>
 </div>
 </div>
@@ -293,7 +293,8 @@ function computeBoost(){
 // QB: el pase se proyecta por intento (intentos del equipo × % de snaps × % completos, yardas, TD e INT por intento,
 // mezclados con la liga cuando tiene pocos intentos). Los receptores se ajustan por la calidad del QB que va a lanzar
 // contra la del QB normal del equipo esta temporada.
-const QB_ATT_K=80;
+const QB_ATT_K=40; // pesa como 40 intentos: un partido real de un suplente ya cuenta bastante
+const BACKUP_ATT=0.9; // con un QB suplente el equipo lanza ~10% menos y corre más
 const qbTot=p=>({att:p.a[IDX.att]*p.g,cmp:p.a[IDX.cmp]*p.g,pyd:p.a[IDX.pyd]*p.g,ptd:p.a[IDX.ptd]*p.g,int:p.a[IDX.int]*p.g});
 const LGQ=(()=>{const s={att:0,cmp:0,pyd:0,ptd:0,int:0};P.forEach(p=>{if(p.pos!=="QB")return;const x=qbTot(p);for(const k in s)s[k]+=x[k]});return {cmp:s.cmp/s.att,pyd:s.pyd/s.att,ptd:s.ptd/s.att,int:s.int/s.att}})();
 // con pocos intentos se mezcla con un nivel de suplente (peor que el promedio de la liga), no con el promedio
@@ -312,7 +313,8 @@ function computeQB(){
     const now={cmp:0,pyd:0,ptd:0};act.forEach(q=>{const r=qbRates(q);for(const k in now)now[k]+=r[k]*expPct(q)/w});
     const cl=x=>Math.min(1.25,Math.max(0.55,x));
     const main=act.slice().sort((a,b)=>expPct(b)-expPct(a))[0];
-    QBF[tm]={rec:cl(now.cmp/norm.cmp),recyd:cl(now.pyd/norm.pyd),rectd:cl(norm.ptd?now.ptd/norm.ptd:1),qb:main.name,changed:qs.some(q=>isOut(q))};
+    const changed=qs.some(q=>isOut(q)&&q.sp>=.5), va=changed?BACKUP_ATT:1;
+    QBF[tm]={rec:cl(now.cmp/norm.cmp)*va,recyd:cl(now.pyd/norm.pyd)*va,rectd:cl(norm.ptd?now.ptd/norm.ptd:1)*va,tgt:va,att:va,qb:main.name,changed};
   });
 }
 const expPct=p=>{const m=manualPct(p);return m!=null?m:(p.sp||0)+(EXTRA[p.name]||0)};
@@ -328,9 +330,9 @@ function project(p,ctxOverride){
   if(snaps){pr.snaps=pct*TSN[p.tm];SK.forEach((k,i)=>pr[k]=p.rate[i]*pr.snaps*fac(rival,p.pos,k)*h)}
   else SK.forEach((k,i)=>pr[k]=p.a[i]*uso*fac(rival,p.pos,k)*h);
   if(p.pos==="QB"&&TEAMATT[p.tm]&&(snaps||uso!=null)){ // pase por intento
-    const r=qbRates(p),share=snaps?pct:Math.min(1,uso);const att=TEAMATT[p.tm]*share;
+    const r=qbRates(p),share=snaps?pct:Math.min(1,uso);const att=TEAMATT[p.tm]*share*((QBF[p.tm]&&QBF[p.tm].att)||1);
     pr.att=att*fac(rival,"QB","att")*h;["cmp","pyd","ptd","int"].forEach(k=>pr[k]=att*r[k]*fac(rival,"QB",k)*h);
-  }else if(p.pos!=="QB"&&QBF[p.tm]){const q=QBF[p.tm];pr.rec*=q.rec;pr.recyd*=q.recyd;pr.rectd*=q.rectd;pr.qbf=q}
+  }else if(p.pos!=="QB"&&QBF[p.tm]){const q=QBF[p.tm];pr.rec*=q.rec;pr.recyd*=q.recyd;pr.rectd*=q.rectd;pr.tgt*=q.tgt||1;pr.qbf=q}
   pr.rr=pr.ryd+pr.recyd;
   pr.td=1-Math.exp(-(pr.rtd+pr.rectd));
   return pr;
