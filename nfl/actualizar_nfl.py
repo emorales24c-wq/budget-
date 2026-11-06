@@ -221,8 +221,8 @@ if os.path.exists(ipath):
             next_wk.setdefault(tm_, g[0])
     for tm, d in inj.groupby("team"):
         wk = d.week.max()
-        if tm in next_wk and wk < next_wk[tm]:
-            continue  # todavía no sale el reporte de su próximo partido; el anterior ya no sirve
+        if tm not in next_wk or wk < next_wk[tm]:
+            continue  # sin partido pronto, o todavía no sale el reporte de su próximo partido: el anterior ya no sirve
         for r in d[d.week == wk].itertuples():
             stt = str(r.report_status) if not pd.isna(r.report_status) else ""
             if stt not in ("Out", "Doubtful", "Questionable"):
