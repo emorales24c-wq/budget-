@@ -53,7 +53,7 @@ input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid 
 }
 #besttbl td input{width:76px}
 #besttbl input.refl{border-style:dashed;color:var(--muted)}
-#bmk,#bsd,#bpos{flex-wrap:wrap}
+#bmk,#bsd,#bpos,#bview{flex-wrap:wrap}
 .score{margin-top:14px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:14px 24px;align-items:center}
 .score .hint{grid-column:1/-1;color:var(--muted);margin:0}
 .board{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;text-align:center}
@@ -190,6 +190,7 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
     <div class="f"><label>Posición</label><div class="seg" id="bpos"><button type="button" data-v="" aria-pressed="true">Todas</button><button type="button" data-v="QB" aria-pressed="false">QB</button><button type="button" data-v="RB" aria-pressed="false">RB</button><button type="button" data-v="WR" aria-pressed="false">WR</button><button type="button" data-v="TE" aria-pressed="false">TE</button></div></div>
     <div class="f"><label>Mercado</label><div class="seg" id="bmk"><button type="button" data-v="" aria-pressed="true">Todos</button><button type="button" data-v="pyd" aria-pressed="false">Yds pase</button><button type="button" data-v="cmp" aria-pressed="false">Comp</button><button type="button" data-v="att" aria-pressed="false">Int. pase</button><button type="button" data-v="ptd" aria-pressed="false">TD pase</button><button type="button" data-v="int" aria-pressed="false">INT</button><button type="button" data-v="ryd" aria-pressed="false">Yds tierra</button><button type="button" data-v="car" aria-pressed="false">Acarreos</button><button type="button" data-v="rec" aria-pressed="false">Recep.</button><button type="button" data-v="recyd" aria-pressed="false">Yds recep.</button><button type="button" data-v="rr" aria-pressed="false">Tierra+recep.</button><button type="button" data-v="tgt" aria-pressed="false">Targets</button></div></div>
     <div class="f"><label>Lado</label><div class="seg" id="bsd"><button type="button" data-v="" aria-pressed="true">Over y Under</button><button type="button" data-v="O" aria-pressed="false">Over</button><button type="button" data-v="U" aria-pressed="false">Under</button></div></div>
+    <div class="f"><label>Vista</label><div class="seg" id="bview"><button type="button" data-v="mk" aria-pressed="true">Por mercado</button><button type="button" data-v="pl" aria-pressed="false">Por jugador</button><button type="button" data-v="all" aria-pressed="false">Todos juntos</button></div></div>
     <div class="f"><label for="bminp">Prob. mínima %</label><input id="bminp" type="number" min="0" max="99" step="1" value="55" style="width:80px"></div>
     <div class="f"><label for="bq">Buscar</label><input id="bq" type="text" placeholder="Jugador o equipo" autocomplete="off"></div>
     <span class="count" id="bcount"></span>
@@ -636,7 +637,7 @@ if(location.hash==="#defensa")showTab("dvp");
 if(location.hash==="#td")showTab("td");
 
 // ================= Mejores props del día (Over y Under, todos los mercados) =================
-const BP={day:DAYS[0]||"",pos:"",mk:"",side:"",minp:55,q:""};
+const BP={day:DAYS[0]||"",pos:"",mk:"",side:"",minp:55,q:"",view:"mk"};
 const MINAVG={pyd:120,cmp:10,att:15,ptd:0.8,int:0.4,ryd:15,car:6,rec:2,recyd:20,rr:35,tgt:3};
 const BMLAB={pyd:"Yds pase",cmp:"Pases completos",att:"Intentos de pase",ptd:"TD de pase",int:"Intercepciones",ryd:"Yds por tierra",car:"Acarreos",rec:"Recepciones",recyd:"Yds recibidas",rr:"Yds tierra+recep.",tgt:"Targets"};
 const avgOf=(p,k)=>k==="rr"?p.a[IDX.ryd]+p.a[IDX.recyd]:p.a[IDX[k]];
@@ -665,9 +666,22 @@ function bestRows(){
   return out;
 }
 let BROWS=[];
+// Vista de Mejores props: por mercado (los 10 mejores de cada uno), por jugador (todos sus props juntos) o todos juntos
+function groupedBest(rows,rowFn,ncol,order,labels){
+  rows.forEach((r,i)=>r._i=i);
+  const head=(t,s)=>`<tr class="grp"><td colspan="${ncol}" class="l">${t} <span>${s}</span></td></tr>`;
+  if(BP.view==="all") return rows.slice(0,150).map(r=>rowFn(r,r._i)).join("");
+  if(BP.view==="pl"){
+    const by=new Map();rows.forEach(r=>{if(!by.has(r.p.name))by.set(r.p.name,[]);by.get(r.p.name).push(r)});
+    return [...by.values()].slice(0,40).map(rs=>{const r0=rs[0];
+      return head(esc(r0.p.name),`${r0.p.tm} ${r0.home?"vs":"@"} ${r0.opp} · ${rs.length} prop${rs.length>1?"s":""} · mejor: ${labels[r0.k]} ${r0.side==="O"?"Over":"Under"} ${(r0.prob*100).toFixed(0)}%`)+rs.slice(0,8).map(r=>rowFn(r,r._i)).join("")}).join("");
+  }
+  return order.map(k=>{const rs=rows.filter(r=>r.k===k);if(!rs.length)return "";
+    return head(labels[k],`${rs.length} props · ${rs.length>10?"los 10 mejores":"todos"}`)+rs.slice(0,10).map(r=>rowFn(r,r._i)).join("")}).join("");
+}
 function renderBest(){
-  BROWS=bestRows();const top=BROWS.slice(0,150);
-  $("besttb").innerHTML=top.map((r,i)=>{const L=((S[r.p.name]||{}).l||{})[r.k]||{};
+  BROWS=bestRows();
+  const rowFn=(r,i)=>{const L=((S[r.p.name]||{}).l||{})[r.k]||{};
     return `<tr data-bi="${i}"><td class="l name"><span class="pn">${esc(r.p.name)}</span>${injBadge(r.p)}<small>${r.p.tm} · ${r.p.pos} · ${r.home?"vs":"@"} ${r.opp}</small></td>
     <td class="l">${esc(BMLAB[r.k])}</td>
     <td><input type="number" step="0.5" value="${r.line}" data-a="bline" class="${r.ref?"refl":""}" title="${r.ref?"Línea de referencia (su promedio). Escribe la de tu casa.":"Tu línea"}" aria-label="Línea"></td>
@@ -675,11 +689,12 @@ function renderBest(){
     <td class="${r.side==="O"?"v":""}">${(r.po*100).toFixed(1)}%</td><td class="${r.side==="U"?"v":""}">${(r.pu*100).toFixed(1)}%</td>
     <td><span class="pill ${r.side==="O"?"OVER":"UNDER"}">${r.side==="O"?"OVER":"UNDER"} ${(r.prob*100).toFixed(0)}%</span></td>
     <td><input type="number" step="5" placeholder="-110" value="${(r.side==="O"?L.oo:L.ou)??""}" data-a="bodds" aria-label="Cuota"></td>
-    <td class="${r.edge>0?"up":"dn"}">${r.edge>0?"+":""}${(r.edge*100).toFixed(1)}%</td></tr>`}).join("")||`<tr><td colspan="10" class="l">Ningún prop pasa los filtros. Baja la probabilidad mínima o cambia el día.</td></tr>`;
-  $("bcount").textContent=`${BROWS.length} props${BROWS.length>150?" (mostrando los 150 mejores)":""}`;
+    <td class="${r.edge>0?"up":"dn"}">${r.edge>0?"+":""}${(r.edge*100).toFixed(1)}%</td></tr>`};
+  $("besttb").innerHTML=groupedBest(BROWS,rowFn,10,["pyd","cmp","att","ptd","int","ryd","car","rec","recyd","rr","tgt"],BMLAB)||`<tr><td colspan="10" class="l">Ningún prop pasa los filtros. Baja la probabilidad mínima o cambia el día.</td></tr>`;
+  $("bcount").textContent=`${BROWS.length} props`+(BP.view==="all"&&BROWS.length>150?" (mostrando los 150 mejores)":"");
 }
 $("bday").addEventListener("change",e=>{BP.day=e.target.value;renderBest()});
-["bpos","bmk","bsd"].forEach(id=>$(id).addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;$(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));BP[{bpos:"pos",bmk:"mk",bsd:"side"}[id]]=b.dataset.v;renderBest()}));
+["bpos","bmk","bsd","bview"].forEach(id=>$(id).addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;$(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));BP[{bpos:"pos",bmk:"mk",bsd:"side",bview:"view"}[id]]=b.dataset.v;renderBest()}));
 $("bminp").addEventListener("input",e=>{const v=parseFloat(e.target.value);BP.minp=isNaN(v)?0:v;renderBest()});
 $("bq").addEventListener("input",e=>{BP.q=e.target.value;renderBest()});
 $("besttb").addEventListener("change",e=>{const el=e.target,a=el.dataset.a;if(a!=="bline"&&a!=="bodds")return;const r=BROWS[+el.closest("tr").dataset.bi];if(!r)return;
