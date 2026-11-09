@@ -190,7 +190,7 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
     <div class="f"><label>Posición</label><div class="seg" id="bpos"><button type="button" data-v="" aria-pressed="true">Todas</button><button type="button" data-v="QB" aria-pressed="false">QB</button><button type="button" data-v="RB" aria-pressed="false">RB</button><button type="button" data-v="WR" aria-pressed="false">WR</button><button type="button" data-v="TE" aria-pressed="false">TE</button></div></div>
     <div class="f"><label>Mercado</label><div class="seg" id="bmk"><button type="button" data-v="" aria-pressed="true">Todos</button><button type="button" data-v="pyd" aria-pressed="false">Yds pase</button><button type="button" data-v="cmp" aria-pressed="false">Comp</button><button type="button" data-v="att" aria-pressed="false">Int. pase</button><button type="button" data-v="ptd" aria-pressed="false">TD pase</button><button type="button" data-v="int" aria-pressed="false">INT</button><button type="button" data-v="ryd" aria-pressed="false">Yds tierra</button><button type="button" data-v="car" aria-pressed="false">Acarreos</button><button type="button" data-v="rec" aria-pressed="false">Recep.</button><button type="button" data-v="recyd" aria-pressed="false">Yds recep.</button><button type="button" data-v="rr" aria-pressed="false">Tierra+recep.</button><button type="button" data-v="tgt" aria-pressed="false">Targets</button></div></div>
     <div class="f"><label>Lado</label><div class="seg" id="bsd"><button type="button" data-v="" aria-pressed="true">Over y Under</button><button type="button" data-v="O" aria-pressed="false">Over</button><button type="button" data-v="U" aria-pressed="false">Under</button></div></div>
-    <div class="f"><label>Vista</label><div class="seg" id="bview"><button type="button" data-v="mk" aria-pressed="true">Por mercado</button><button type="button" data-v="pl" aria-pressed="false">Por jugador</button><button type="button" data-v="all" aria-pressed="false">Todos juntos</button></div></div>
+    <div class="f"><label>Vista</label><div class="seg" id="bview"><button type="button" data-v="tm" aria-pressed="true">Por equipo</button><button type="button" data-v="mk" aria-pressed="false">Por mercado</button><button type="button" data-v="pl" aria-pressed="false">Por jugador</button><button type="button" data-v="all" aria-pressed="false">Todos juntos</button></div></div>
     <div class="f"><label for="bminp">Prob. mínima %</label><input id="bminp" type="number" min="0" max="99" step="1" value="55" style="width:80px"></div>
     <div class="f"><label for="bq">Buscar</label><input id="bq" type="text" placeholder="Jugador o equipo" autocomplete="off"></div>
     <span class="count" id="bcount"></span>
@@ -637,7 +637,7 @@ if(location.hash==="#defensa")showTab("dvp");
 if(location.hash==="#td")showTab("td");
 
 // ================= Mejores props del día (Over y Under, todos los mercados) =================
-const BP={day:DAYS[0]||"",pos:"",mk:"",side:"",minp:55,q:"",view:"mk"};
+const BP={day:DAYS[0]||"",pos:"",mk:"",side:"",minp:55,q:"",view:"tm"};
 const MINAVG={pyd:120,cmp:10,att:15,ptd:0.8,int:0.4,ryd:15,car:6,rec:2,recyd:20,rr:35,tgt:3};
 const BMLAB={pyd:"Yds pase",cmp:"Pases completos",att:"Intentos de pase",ptd:"TD de pase",int:"Intercepciones",ryd:"Yds por tierra",car:"Acarreos",rec:"Recepciones",recyd:"Yds recibidas",rr:"Yds tierra+recep.",tgt:"Targets"};
 const avgOf=(p,k)=>k==="rr"?p.a[IDX.ryd]+p.a[IDX.recyd]:p.a[IDX[k]];
@@ -666,11 +666,18 @@ function bestRows(){
   return out;
 }
 let BROWS=[];
-// Vista de Mejores props: por mercado (los 10 mejores de cada uno), por jugador (todos sus props juntos) o todos juntos
+// Vista de Mejores props: por equipo (cada jugador con sus props juntos), por mercado (los 10 mejores de cada uno), por jugador (todos sus props juntos) o todos juntos
 function groupedBest(rows,rowFn,ncol,order,labels){
   rows.forEach((r,i)=>r._i=i);
   const head=(t,s)=>`<tr class="grp"><td colspan="${ncol}" class="l">${t} <span>${s}</span></td></tr>`;
   if(BP.view==="all") return rows.slice(0,150).map(r=>rowFn(r,r._i)).join("");
+  if(BP.view==="tm"){
+    const by=new Map();rows.forEach(r=>{if(!by.has(r.p.tm))by.set(r.p.tm,[]);by.get(r.p.tm).push(r)});
+    const gk=r=>[r.p.tm,r.opp].sort().join("-"),gb=new Map();
+    by.forEach(rs=>{const k=gk(rs[0]);gb.set(k,Math.min(gb.has(k)?gb.get(k):1e9,rows.indexOf(rs[0])))});
+    return [...by.values()].sort((a,b)=>gb.get(gk(a[0]))-gb.get(gk(b[0]))||(a[0].home-b[0].home)).map(rs=>{const r0=rs[0];
+      return head(`${r0.p.tm} <span>${r0.home?"vs":"@"}</span> ${r0.opp}`,`${rs.length} prop${rs.length>1?"s":""} · ${new Set(rs.map(r=>r.p.name)).size} jugadores`)+(()=>{const f=new Map();rs.forEach((r,i)=>{if(!f.has(r.p.name))f.set(r.p.name,i)});return rs.slice().sort((x,y)=>f.get(x.p.name)-f.get(y.p.name)||x._i-y._i)})().map(r=>rowFn(r,r._i)).join("")}).join("");
+  }
   if(BP.view==="pl"){
     const by=new Map();rows.forEach(r=>{if(!by.has(r.p.name))by.set(r.p.name,[]);by.get(r.p.name).push(r)});
     return [...by.values()].slice(0,40).map(rs=>{const r0=rs[0];
