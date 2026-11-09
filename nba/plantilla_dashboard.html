@@ -284,6 +284,7 @@ tr.grp td span{font-family:var(--body);font-weight:400;text-transform:none;lette
     <span class="count" id="bcount"></span>
   </div>
   <p class="meta" style="margin:10px 0 0">Los props con más probabilidad de cada jugador del día, de mejor a peor. <b>Línea</b>: viene la de referencia (su promedio de la temporada redondeado al .5 más cercano); escribe la de tu casa y la cuota para que se recalcule todo. Solo salen los mercados que las casas suelen ofrecer para ese jugador (por ejemplo, tapones si promedia 0.8 o más). Las probabilidades usan el modelo calibrado (incluye minutos proyectados, defensa del rival, ritmo, lesiones y back-to-back). <b>Edge</b> = probabilidad del modelo − la que paga la cuota (-110 si no escribes una).</p>
+  <section class="daybox" id="bcards" aria-live="polite"></section>
   <div class="tablebox"><table id="besttbl"><thead><tr><th class="l">Jugador</th><th class="l">Mercado</th><th>Línea</th><th>Proyección</th><th>Prom.</th><th>Over</th><th>Under</th><th>Pick</th><th>Cuota</th><th>Edge</th><th></th></tr></thead><tbody id="besttb"></tbody></table></div>
 </div>
 
@@ -794,7 +795,7 @@ $("btb").addEventListener("click",async e=>{const d=e.target.closest("[data-del]
   if(PENDDEL===id){PENDDEL=null;try{await delBet(id)}catch(err){}}else{PENDDEL=id;d.textContent="¿Seguro?";setTimeout(()=>{if(PENDDEL===id){PENDDEL=null;d.textContent="Borrar"}},3000)}});
 
 // ================= Mejores props del día (todos los mercados, Over y Under) =================
-const BP={day:DAYS[0]||"",mk:"",side:"",minp:55,minm:20,q:"",view:"tm"};
+const BP={day:DAYS[0]||"",mk:"",side:"",minp:55,minm:20,q:"",view:"tm",game:""};
 const BMK=["pts","reb","ast","tpm","pra","pr","pa","ra","stl","blk"];
 const MINAVG={pts:8,reb:3,ast:2,tpm:1,stl:0.8,blk:0.8,pra:12,pr:10,pa:10,ra:5};
 const refLine=(p,k)=>{const v=seasonVal2(p,k);if(v==null)return null;let x=Math.round(v*2)/2;if(x%1===0)x-=.5;return Math.max(.5,x)}; // como las casas: el .5 más cercano al promedio, abajo si cae en entero
@@ -831,6 +832,18 @@ function bestRowHTML(r,i){
 }
 let BROWS=[];
 // Vista de Mejores props: por equipo (cada jugador con sus props juntos), por mercado (los 10 mejores de cada uno), por jugador (todos sus props juntos) o todos juntos
+const GAMES_OF=d=>SCH.filter(g=>g[0]===d).map(g=>[g[2],g[3],g[1],score(g[3],g[2],1)]);
+// tarjetas de los partidos del día: toca una para ver solo los props de ese partido
+function renderBestCards(all){
+  const games=GAMES_OF(BP.day),cnt={};all.forEach(r=>cnt[r.p.tm]=(cnt[r.p.tm]||0)+1);
+  $("bcards").innerHTML=!games.length?"":`<div class="dayhead"><b>${fmtDay(BP.day)}</b> · ${games.length} partido${games.length>1?"s":""}${BP.game?` · <button type="button" class="btn" id="ball">Ver todos los partidos</button>`:" · toca un partido para ver solo sus props"}</div><div class="cards">`+
+    games.map(([away,home,time,sc])=>{const k=away+"-"+home,n=(cnt[away]||0)+(cnt[home]||0);
+      return `<button type="button" class="gcard${BP.game===k?" on":""}" data-g="${k}">
+        <span class="gt">${esc(time)} ET</span>
+        <span class="gr"><span>${away}</span><b>${sc?f1(sc.b):"—"}</b></span>
+        <span class="gr"><span>${home} <small>local</small></span><b>${sc?f1(sc.a):"—"}</b></span>
+        <span class="gt"><b>${n} props</b> · Total ${sc?f1(sc.total):"—"}</span></button>`}).join("")+`</div>`;
+}
 function groupedBest(rows,rowFn,ncol,order,labels){
   rows.forEach((r,i)=>r._i=i);
   const head=(t,s)=>`<tr class="grp"><td colspan="${ncol}" class="l">${t} <span>${s}</span></td></tr>`;
@@ -851,11 +864,15 @@ function groupedBest(rows,rowFn,ncol,order,labels){
     return head(labels[k],`${rs.length} props · ${rs.length>10?"los 10 mejores":"todos"}`)+rs.slice(0,10).map(r=>rowFn(r,r._i)).join("")}).join("");
 }
 function renderBest(){
-  BROWS=bestRows();
+  const ALL=bestRows();renderBestCards(ALL);BROWS=BP.game?ALL.filter(r=>BP.game.split("-").includes(r.p.tm)):ALL;
   $("besttb").innerHTML=groupedBest(BROWS,bestRowHTML,11,BMK,MKLAB)||`<tr><td colspan="11" class="l">Ningún prop pasa los filtros. Baja la probabilidad mínima o los minutos.</td></tr>`;
   $("bcount").textContent=`${BROWS.length} props`+(BP.view==="all"&&BROWS.length>150?" (mostrando los 150 mejores)":"");
 }
-$("bday").addEventListener("change",e=>{BP.day=e.target.value;renderBest()});
+$("bday").addEventListener("change",e=>{BP.day=e.target.value;BP.game="";renderBest()});
+$("bcards").addEventListener("click",e=>{
+  if(e.target.closest("#ball")){BP.game="";renderBest();return}
+  const c=e.target.closest(".gcard");if(!c)return;BP.game=BP.game===c.dataset.g?"":c.dataset.g;renderBest()});
+
 segPick2("bmk",v=>BP.mk=v);segPick2("bsd",v=>BP.side=v);segPick2("bview",v=>BP.view=v);
 function segPick2(id,fn){$(id).addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;$(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));fn(b.dataset.v);renderBest()})}
 $("bminp").addEventListener("input",e=>{const v=parseFloat(e.target.value);BP.minp=isNaN(v)?0:v;renderBest()});

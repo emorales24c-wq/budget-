@@ -196,6 +196,7 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
     <span class="count" id="bcount"></span>
   </div>
   <p class="meta" style="margin:10px 0 0">Los props con más probabilidad de cada jugador de los partidos del día, de mejor a peor. <b>Línea</b>: viene la de referencia (su producción con el rol de hoy —snaps con los OUT y el QB que va a lanzar— pero sin el ajuste por la defensa rival, redondeada al .5 más cercano; así el edge sale sobre todo del matchup); escribe la de tu casa y la cuota para que se recalcule todo. Solo salen jugadores con rol real (QB con 60%+ de los snaps esperados; los demás con 35%+) y los mercados que las casas suelen ofrecer. El error de cada stat se midió con todos los partidos de la temporada. Las probabilidades usan su producción por snap, snaps esperados, la defensa rival contra su posición y los OUT que marques. <b>Edge</b> = probabilidad del modelo − la que paga la cuota (-110 si no escribes una). Los TD por tierra o recepción están en Anotador TD.</p>
+  <section class="daybox" id="bcards" aria-live="polite"></section>
   <div class="tablebox"><table id="besttbl"><thead><tr><th class="l">Jugador</th><th class="l">Mercado</th><th>Línea</th><th>Proyección</th><th>Prom.</th><th>Over</th><th>Under</th><th>Pick</th><th>Cuota</th><th>Edge</th></tr></thead><tbody id="besttb"></tbody></table></div>
 </div>
 
@@ -637,7 +638,7 @@ if(location.hash==="#defensa")showTab("dvp");
 if(location.hash==="#td")showTab("td");
 
 // ================= Mejores props del día (Over y Under, todos los mercados) =================
-const BP={day:DAYS[0]||"",pos:"",mk:"",side:"",minp:55,q:"",view:"tm"};
+const BP={day:DAYS[0]||"",pos:"",mk:"",side:"",minp:55,q:"",view:"tm",game:""};
 const MINAVG={pyd:120,cmp:10,att:15,ptd:0.8,int:0.4,ryd:15,car:6,rec:2,recyd:20,rr:35,tgt:3};
 const BMLAB={pyd:"Yds pase",cmp:"Pases completos",att:"Intentos de pase",ptd:"TD de pase",int:"Intercepciones",ryd:"Yds por tierra",car:"Acarreos",rec:"Recepciones",recyd:"Yds recibidas",rr:"Yds tierra+recep.",tgt:"Targets"};
 const avgOf=(p,k)=>k==="rr"?p.a[IDX.ryd]+p.a[IDX.recyd]:p.a[IDX[k]];
@@ -667,6 +668,18 @@ function bestRows(){
 }
 let BROWS=[];
 // Vista de Mejores props: por equipo (cada jugador con sus props juntos), por mercado (los 10 mejores de cada uno), por jugador (todos sus props juntos) o todos juntos
+const GAMES_OF=d=>NEXT.filter(g=>g[1]===d).map(g=>[g[3],g[4],g[2],scoreFor(g[4],g[3],1)]);
+// tarjetas de los partidos del día: toca una para ver solo los props de ese partido
+function renderBestCards(all){
+  const games=GAMES_OF(BP.day),cnt={};all.forEach(r=>cnt[r.p.tm]=(cnt[r.p.tm]||0)+1);
+  $("bcards").innerHTML=!games.length?"":`<div class="dayhead"><b>${fmtDay(BP.day)}</b> · ${games.length} partido${games.length>1?"s":""}${BP.game?` · <button type="button" class="btn" id="ball">Ver todos los partidos</button>`:" · toca un partido para ver solo sus props"}</div><div class="cards">`+
+    games.map(([away,home,time,sc])=>{const k=away+"-"+home,n=(cnt[away]||0)+(cnt[home]||0);
+      return `<button type="button" class="gcard${BP.game===k?" on":""}" data-g="${k}">
+        <span class="gt">${esc(time)} ET</span>
+        <span class="gr"><span>${away}</span><b>${sc?f1(sc.b):"—"}</b></span>
+        <span class="gr"><span>${home} <small>local</small></span><b>${sc?f1(sc.a):"—"}</b></span>
+        <span class="gt"><b>${n} props</b> · Total ${sc?f1(sc.total):"—"}</span></button>`}).join("")+`</div>`;
+}
 function groupedBest(rows,rowFn,ncol,order,labels){
   rows.forEach((r,i)=>r._i=i);
   const head=(t,s)=>`<tr class="grp"><td colspan="${ncol}" class="l">${t} <span>${s}</span></td></tr>`;
@@ -687,7 +700,7 @@ function groupedBest(rows,rowFn,ncol,order,labels){
     return head(labels[k],`${rs.length} props · ${rs.length>10?"los 10 mejores":"todos"}`)+rs.slice(0,10).map(r=>rowFn(r,r._i)).join("")}).join("");
 }
 function renderBest(){
-  BROWS=bestRows();
+  const ALL=bestRows();renderBestCards(ALL);BROWS=BP.game?ALL.filter(r=>BP.game.split("-").includes(r.p.tm)):ALL;
   const rowFn=(r,i)=>{const L=((S[r.p.name]||{}).l||{})[r.k]||{};
     return `<tr data-bi="${i}"><td class="l name"><span class="pn">${esc(r.p.name)}</span>${injBadge(r.p)}<small>${r.p.tm} · ${r.p.pos} · ${r.home?"vs":"@"} ${r.opp}</small></td>
     <td class="l">${esc(BMLAB[r.k])}</td>
@@ -700,7 +713,11 @@ function renderBest(){
   $("besttb").innerHTML=groupedBest(BROWS,rowFn,10,["pyd","cmp","att","ptd","int","ryd","car","rec","recyd","rr","tgt"],BMLAB)||`<tr><td colspan="10" class="l">Ningún prop pasa los filtros. Baja la probabilidad mínima o cambia el día.</td></tr>`;
   $("bcount").textContent=`${BROWS.length} props`+(BP.view==="all"&&BROWS.length>150?" (mostrando los 150 mejores)":"");
 }
-$("bday").addEventListener("change",e=>{BP.day=e.target.value;renderBest()});
+$("bday").addEventListener("change",e=>{BP.day=e.target.value;BP.game="";renderBest()});
+$("bcards").addEventListener("click",e=>{
+  if(e.target.closest("#ball")){BP.game="";renderBest();return}
+  const c=e.target.closest(".gcard");if(!c)return;BP.game=BP.game===c.dataset.g?"":c.dataset.g;renderBest()});
+
 ["bpos","bmk","bsd","bview"].forEach(id=>$(id).addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;$(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));BP[{bpos:"pos",bmk:"mk",bsd:"side",bview:"view"}[id]]=b.dataset.v;renderBest()}));
 $("bminp").addEventListener("input",e=>{const v=parseFloat(e.target.value);BP.minp=isNaN(v)?0:v;renderBest()});
 $("bq").addEventListener("input",e=>{BP.q=e.target.value;renderBest()});
