@@ -1,0 +1,44 @@
+name: Build Rutina V7 APK
+
+on:
+  push:
+    paths:
+      - "android-rutina/**"
+      - "rutina/**"
+      - ".github/workflows/rutina-android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+
+      - name: Build APK
+        working-directory: android-rutina
+        run: gradle assembleRelease --no-daemon
+
+      - name: Rename APK
+        run: cp android-rutina/app/build/outputs/apk/release/app-release.apk RutinaV7.apk
+
+      # Fixed download link: .../releases/download/rutina-v7/RutinaV7.apk
+      - name: Publish to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: rutina-v7
+          name: Rutina V7 (Android)
+          body: "Descarga RutinaV7.apk desde tu teléfono e instálalo."
+          files: RutinaV7.apk
+          make_latest: false
