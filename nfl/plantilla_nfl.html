@@ -54,6 +54,14 @@ input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid 
 #besttbl td input{width:76px}
 #besttbl input.refl{border-style:dashed;color:var(--muted)}
 #bmk,#bsd,#bpos,#bview{flex-wrap:wrap}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:12px 0}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.tile .k{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.tile .v{font-family:var(--display);font-size:1.6rem;font-weight:700;font-variant-numeric:tabular-nums}
+.tile .s{font-size:.72rem;color:var(--muted)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-top:12px}
+.panel h3{font-family:var(--display);font-size:1.15rem;margin:0 0 8px;letter-spacing:.02em}
+.caltbl{min-width:560px}.caltbl th{cursor:default}.caltbl td,.caltbl th{text-align:right}.caltbl td.l,.caltbl th.l{text-align:left}
 .score{margin-top:14px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:14px 24px;align-items:center}
 .score .hint{grid-column:1/-1;color:var(--muted);margin:0}
 .board{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;text-align:center}
@@ -146,6 +154,7 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
   <button type="button" role="tab" id="tab-proj" aria-selected="true" aria-controls="view-proj"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15l3-4 3 3 5-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Proyecciones</span></button>
   <button type="button" role="tab" id="tab-best" aria-selected="false" aria-controls="view-best"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg><span>Mejores props</span></button>
   <button type="button" role="tab" id="tab-td" aria-selected="false" aria-controls="view-td"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><ellipse cx="12" cy="12" rx="9" ry="5.5" transform="rotate(-35 12 12)" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9.5 14.5l5-5M10.5 11l1 1M12 9.5l1 1M13.5 12.5l-1-1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>Anotador TD</span></button>
+  <button type="button" role="tab" id="tab-rec" aria-selected="false" aria-controls="view-rec"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Récord</span></button>
   <button type="button" role="tab" id="tab-dvp" aria-selected="false" aria-controls="view-dvp"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Defensa</span></button>
 </nav>
 
@@ -198,6 +207,18 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
   <p class="meta" style="margin:10px 0 0">Los props con más probabilidad de cada jugador de los partidos del día, de mejor a peor. <b>Línea</b>: viene la de referencia (su producción con el rol de hoy —snaps con los OUT y el QB que va a lanzar— pero sin el ajuste por la defensa rival, redondeada al .5 más cercano; así el edge sale sobre todo del matchup); escribe la de tu casa y la cuota para que se recalcule todo. Solo salen jugadores con rol real (QB con 60%+ de los snaps esperados; los demás con 35%+) y los mercados que las casas suelen ofrecer. El error de cada stat se midió con todos los partidos de la temporada. Las probabilidades usan su producción por snap, snaps esperados, la defensa rival contra su posición y los OUT que marques. <b>Edge</b> = probabilidad del modelo − la que paga la cuota (-110 si no escribes una). Los TD por tierra o recepción están en Anotador TD.</p>
   <section class="daybox" id="bcards" aria-live="polite"></section>
   <div class="tablebox"><table id="besttbl"><thead><tr><th class="l">Jugador</th><th class="l">Mercado</th><th>Línea</th><th>Proyección</th><th>Prom.</th><th>Over</th><th>Under</th><th>Pick</th><th>Cuota</th><th>Edge</th></tr></thead><tbody id="besttb"></tbody></table></div>
+</div>
+
+<div id="view-rec" role="tabpanel" aria-labelledby="tab-rec" hidden>
+  <p class="meta" style="margin:10px 0 0">Récord real de los Mejores props. Cada vez que se actualizan los datos se guardan los props que recomienda el modelo para los partidos que todavía no empiezan (la última foto antes de cada partido, con la línea de referencia y sin tus cambios), y cuando sale el box score se califican solos. Ganancia en unidades apostando 1 a cada pick a -110 (ganar paga 0.91): para no perder hace falta acertar más de 52.4%. Si el jugador no juega, el pick se anula.</p>
+  <div class="controls">
+    <div class="f"><label>Cuáles</label><div class="seg" id="pktop"><button type="button" data-v="5" aria-pressed="false">Top 5 de la semana</button><button type="button" data-v="10" aria-pressed="false">Top 10</button><button type="button" data-v="25" aria-pressed="false">Top 25</button><button type="button" data-v="0" aria-pressed="true">Todos</button></div></div>
+    <div class="f"><label for="pkmin">Prob. mínima %</label><select id="pkmin"><option value="55">55</option><option value="60">60</option><option value="65">65</option><option value="70">70</option></select></div>
+    <div class="f"><label for="pkmk">Mercado</label><select id="pkmk"></select></div>
+    <div class="f"><label>Posición</label><div class="seg" id="pkpos"><button type="button" data-v="" aria-pressed="true">Todas</button><button type="button" data-v="QB" aria-pressed="false">QB</button><button type="button" data-v="RB" aria-pressed="false">RB</button><button type="button" data-v="WR" aria-pressed="false">WR</button><button type="button" data-v="TE" aria-pressed="false">TE</button></div></div>
+    <div class="f"><label>Lado</label><div class="seg" id="pksd"><button type="button" data-v="" aria-pressed="true">Ambos</button><button type="button" data-v="O" aria-pressed="false">Over</button><button type="button" data-v="U" aria-pressed="false">Under</button></div></div>
+  </div>
+  <div id="pkbox"></div>
 </div>
 
 <div id="view-dvp" role="tabpanel" aria-labelledby="tab-dvp" hidden>
@@ -471,7 +492,10 @@ function rowHTML(p){
 }
 // desviación real medida semana a semana (DATA.sd: c0 + c1 × proyección); TD e INT con Poisson
 const SDN=DATA.sd||{};
-function probOverN(k,m,line){if(POISSON[k])return 1-pcdf(Math.floor(line),m);const s=SDN[k];return 1-ncdf(line,m,Math.max(.5,s?s[0]+s[1]*m:m*CV[k]))}
+function probOverN(k,m,line){if(POISSON[k])return shrinkP(1-pcdf(Math.floor(line),m));const s=SDN[k];return shrinkP(1-ncdf(line,m,Math.max(.5,s?s[0]+s[1]*m:m*CV[k])))}
+// corrección de optimismo medida con el récord real de los Mejores props (pestaña Récord)
+const PKB=(DATA.pkcal&&DATA.pkcal.b)||1;
+function shrinkP(p){if(PKB===1)return p;p=Math.min(.999,Math.max(.001,p));return 1/(1+Math.exp(-PKB*Math.log(p/(1-p))))}
 function propOut(p,pr,k){
   const l=((S[p.name]||{}).l||{})[k]||{};
   if(pr.out) return `<span>Jugador OUT</span>`;
@@ -584,7 +608,7 @@ function renderDvp(){
 }
 seg("dpos",v=>{D.pos=v;D.sort=DCOLS[v][v==="QB"?2:v==="RB"?1:2];renderDvp()}); seg("dmode",v=>{D.mode=v;renderDvp()});
 $("dth").addEventListener("click",e=>{const th=e.target.closest("th[data-k]");if(!th)return;const k=th.dataset.k;if(D.sort===k)D.dir*=-1;else{D.sort=k;D.dir=k==="name"?1:-1}renderDvp()});
-function showTab(w){["proj","best","dvp","td"].forEach(k=>{$("view-"+k).hidden=k!==w;$("tab-"+k).setAttribute("aria-selected",String(k===w))});if(w==="dvp")renderDvp();if(w==="td")renderTd();if(w==="best")renderBest();window.scrollTo(0,0)}
+function showTab(w){["proj","best","dvp","td","rec"].forEach(k=>{$("view-"+k).hidden=k!==w;$("tab-"+k).setAttribute("aria-selected",String(k===w))});if(w==="dvp")renderDvp();if(w==="td")renderTd();if(w==="best")renderBest();if(w==="rec")renderPk();window.scrollTo(0,0)}
 // Anotador de TD: probabilidad de anotar al menos un TD (tierra o recepción) en cada partido
 const TD={day:DAYS[0]||"",pos:"",group:1,min:10,q:""};
 const fairOdds=p=>p<=0||p>=1?"—":p>=.5?String(-Math.round(p/(1-p)*100)):"+"+Math.round((1-p)/p*100);
@@ -632,10 +656,58 @@ $("tdq").addEventListener("input",e=>{TD.q=e.target.value;renderTd()});
 $("tdtb").addEventListener("input",e=>{const el=e.target;if(el.dataset.a!=="tdo")return;const tr=el.closest("tr"),n=tr.dataset.tdn;ov(n).tdo=el.value;save();
   const r=tdRows().find(x=>x.p.name===n);if(!r||r.out)return;const tmp=document.createElement("tbody");tmp.innerHTML=tdRowHTML(r);
   ["edge","pick"].forEach(c=>tr.querySelector(`[data-c="${c}"]`).replaceWith(tmp.querySelector(`[data-c="${c}"]`)))});
-$("tab-td").addEventListener("click",()=>showTab("td"));
+$("tab-td").addEventListener("click",()=>showTab("td"));$("tab-rec").addEventListener("click",()=>showTab("rec"));
 $("tab-proj").addEventListener("click",()=>showTab("proj"));$("tab-dvp").addEventListener("click",()=>showTab("dvp"));
 if(location.hash==="#defensa")showTab("dvp");
 if(location.hash==="#td")showTab("td");
+
+// ================= Récord de los Mejores props guardados =================
+const PK=(DATA.pk||[]).map(r=>({d:r[0],wk:r[1],n:r[2],tm:r[3],pos:r[4],opp:r[5],k:r[6],line:r[7],side:r[8],prob:r[9],edge:r[10],res:r[11],act:r[12]}));
+const PKF={top:0,min:55,mk:"",pos:"",side:""};
+const PKLAB={pyd:"Yds pase",cmp:"Pases completos",att:"Intentos de pase",ptd:"TD de pase",int:"Intercepciones",ryd:"Yds por tierra",car:"Acarreos",rec:"Recepciones",recyd:"Yds recibidas",rr:"Yds tierra+recep.",tgt:"Targets"};
+$("pkmk").innerHTML=`<option value="">Todos</option>`+Object.keys(PKLAB).map(k=>`<option value="${k}">${PKLAB[k]}</option>`).join("");
+function pkRows(){
+  let rs=PK.filter(r=>r.k!=="td"&&r.prob*100>=PKF.min&&(!PKF.mk||r.k===PKF.mk)&&(!PKF.pos||r.pos===PKF.pos)&&(!PKF.side||r.side===PKF.side));
+  if(PKF.top){const by={};rs.forEach(r=>(by[r.wk]=by[r.wk]||[]).push(r));rs=[].concat(...Object.values(by).map(a=>a.sort((x,y)=>y.edge-x.edge).slice(0,PKF.top)))}
+  return rs;
+}
+function pkStats(rs){const w=rs.filter(r=>r.res==="W").length,l=rs.filter(r=>r.res==="L").length,p=rs.length-w-l,u=w*100/110-l;
+  return {n:rs.length,w,l,p,hit:w+l?w/(w+l):0,u,roi:w+l?u/(w+l):0,exp:rs.length?rs.reduce((s,r)=>s+r.prob,0)/rs.length:0}}
+const pct1=x=>(x*100).toFixed(1)+"%",units=u=>(u>=0?"+":"")+u.toFixed(1);
+function pkTable(title,groups,first){
+  const rows=groups.filter(g=>g[1].length).map(([lab,rs])=>{const s=pkStats(rs);
+    return `<tr><td class="l">${lab}</td><td>${s.n}</td><td>${s.w}-${s.l}${s.p?"-"+s.p:""}</td><td class="${s.hit>=.524?"up":"dn"}"><b>${pct1(s.hit)}</b></td><td>${pct1(s.exp)}</td><td class="${s.u>=0?"up":"dn"}">${units(s.u)}</td><td class="${s.roi>=0?"up":"dn"}">${(s.roi*100).toFixed(1)}%</td></tr>`}).join("");
+  return `<section class="panel"><h3>${title}</h3><div style="overflow-x:auto"><table class="caltbl"><thead><tr><th class="l">${first}</th><th>Picks</th><th>G-P</th><th>Acierto</th><th>Esperado</th><th>Unidades</th><th>ROI</th></tr></thead><tbody>${rows||`<tr><td colspan="7" class="l">Sin picks con estos filtros.</td></tr>`}</tbody></table></div></section>`;
+}
+function renderPk(){
+  const box=$("pkbox");
+  if(!PK.length){box.innerHTML=`<p class="meta">Todavía no hay picks calificados. Se llenará solo con cada actualización.</p>`;return}
+  const rs=pkRows(),s=pkStats(rs),wks=[...new Set(rs.map(r=>r.wk))].sort((a,b)=>a-b),lw=wks[wks.length-1];
+  const bucket=[[.55,.6],[.6,.65],[.65,.7],[.7,1.01]].map(([a,b])=>[`${Math.round(a*100)}–${b>1?"100":Math.round(b*100)}%`,rs.filter(r=>r.prob>=a&&r.prob<b)]);
+  const byMk=Object.keys(PKLAB).map(k=>[PKLAB[k],rs.filter(r=>r.k===k)]).sort((x,y)=>pkStats(y[1]).u-pkStats(x[1]).u);
+  const td=PK.filter(r=>r.k==="td"&&(!PKF.pos||r.pos===PKF.pos));
+  const tdRowsB=[[.25,.35],[.35,.45],[.45,1.01]].map(([a,b])=>{const x=td.filter(r=>r.prob>=a&&r.prob<b);if(!x.length)return "";const w=x.filter(r=>r.res==="W").length;
+    return `<tr><td class="l">${Math.round(a*100)}–${b>1?"100":Math.round(b*100)}%</td><td>${x.length}</td><td>${w}</td><td><b>${pct1(w/x.length)}</b></td><td>${pct1(x.reduce((s,r)=>s+r.prob,0)/x.length)}</td></tr>`}).join("");
+  const recent=rs.filter(r=>r.wk===lw).sort((x,y)=>y.edge-x.edge).slice(0,40);
+  box.innerHTML=`<div class="tiles">
+    <div class="tile"><div class="k">Récord</div><div class="v">${s.w}-${s.l}${s.p?"-"+s.p:""}</div><div class="s">${s.n} picks en ${wks.length} semana${wks.length===1?"":"s"}</div></div>
+    <div class="tile"><div class="k">Acierto</div><div class="v ${s.hit>=.524?"up":"dn"}">${pct1(s.hit)}</div><div class="s">el modelo esperaba ${pct1(s.exp)} · hace falta 52.4%</div></div>
+    <div class="tile"><div class="k">Ganancia</div><div class="v ${s.u>=0?"up":"dn"}">${units(s.u)} u</div><div class="s">1 unidad por pick a -110</div></div>
+    <div class="tile"><div class="k">ROI</div><div class="v ${s.roi>=0?"up":"dn"}">${(s.roi*100).toFixed(1)}%</div><div class="s">ganancia ÷ lo apostado</div></div>
+    <div class="tile"><div class="k">Corrección</div><div class="v">${PKB<1?"−"+Math.round((1-PKB)*100)+"%":"ninguna"}</div><div class="s">${PKB<1?`el modelo exageraba: un 70% ahora sale como ${pct1(shrinkP(.7))}`:"todavía no hay suficientes picks para medirla"} · ${(DATA.pkcal||{}).n||0} picks</div></div></div>`+
+    pkTable("Por probabilidad del modelo (¿está bien calibrado?)",bucket,"Probabilidad")+
+    pkTable("Por mercado",byMk,"Mercado")+
+    pkTable("Por posición",["QB","RB","WR","TE"].map(p=>[p,rs.filter(r=>r.pos===p)]),"Posición")+
+    pkTable("Por lado",[["Over",rs.filter(r=>r.side==="O")],["Under",rs.filter(r=>r.side==="U")]],"Lado")+
+    pkTable("Por semana",wks.slice().reverse().map(w=>["Semana "+w,rs.filter(r=>r.wk===w)]),"Semana")+
+    `<section class="panel"><h3>Anotador TD: lo que dijo el modelo vs. lo que pasó</h3><p class="meta" style="margin:0 0 6px">Jugadores con 25% o más de probabilidad de anotar. Si el % real se parece al esperado, las probabilidades de la pestaña Anotador TD son confiables.</p><div style="overflow-x:auto"><table class="caltbl"><thead><tr><th class="l">Probabilidad</th><th>Jugadores</th><th>Anotaron</th><th>Real</th><th>Esperado</th></tr></thead><tbody>${tdRowsB||`<tr><td colspan="5" class="l">Todavía no hay datos.</td></tr>`}</tbody></table></div></section>`+
+    `<section class="panel"><h3>Picks de la semana ${lw??"—"}</h3><div style="overflow-x:auto"><table class="caltbl"><thead><tr><th class="l">Jugador</th><th class="l">Mercado</th><th>Pick</th><th>Prob.</th><th>Real</th><th>Resultado</th></tr></thead><tbody>`+
+    recent.map(r=>`<tr><td class="l">${esc(r.n)} <small>${r.tm} vs ${r.opp}</small></td><td class="l">${PKLAB[r.k]}</td><td>${r.side==="O"?"Over":"Under"} ${r.line}</td><td>${pct1(r.prob)}</td><td>${r.act}</td><td><span class="pill ${r.res==="W"?"OVER":r.res==="L"?"UNDER":"PASS"}">${r.res==="W"?"GANÓ":r.res==="L"?"PERDIÓ":"PUSH"}</span></td></tr>`).join("")+`</tbody></table></div></section>`;
+}
+[["pktop","top"],["pksd","side"],["pkpos","pos"]].forEach(([id,key])=>$(id).addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+  $(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));PKF[key]=key==="top"?+b.dataset.v:b.dataset.v;renderPk()}));
+$("pkmin").addEventListener("change",e=>{PKF.min=+e.target.value;renderPk()});
+$("pkmk").addEventListener("change",e=>{PKF.mk=e.target.value;renderPk()});
 
 // ================= Mejores props del día (Over y Under, todos los mercados) =================
 const BP={day:DAYS[0]||"",pos:"",mk:"",side:"",minp:55,q:"",view:"tm",game:""};

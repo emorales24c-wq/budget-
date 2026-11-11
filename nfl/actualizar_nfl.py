@@ -232,7 +232,11 @@ if os.path.exists(ipath):
                        "tm": tm, "wk": int(wk), "pr": "" if pd.isna(r.practice_status) else str(r.practice_status)}
     print(f"  Lesiones: {sum(1 for v in INJ.values() if v['st']=='out')} OUT, {sum(1 for v in INJ.values() if v['st']!='out')} en duda")
 
-data = {"fecha": FECHA, "sd": SD, "inj": INJ, "season": SEASON, "semanas": int(st.week.max()), "stats": [k for k, _ in STATS],
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import picks_nfl
+PKCAL = picks_nfl.fit_shrink(picks_nfl.load())
+print(f"  Corrección de optimismo (con {PKCAL['n']} picks calificados): b = {PKCAL['b']}")
+data = {"fecha": FECHA, "pkcal": PKCAL, "sd": SD, "inj": INJ, "season": SEASON, "semanas": int(st.week.max()), "stats": [k for k, _ in STATS],
         "t": T, "tr": TR, "p": PL, "teamSnaps": TEAM_SNAPS,
         "posRate": {k: [round(x / v[-1], 5) for x in v[:-1]] for k, v in TOT.items()}, "dvp": DVP, "next": NEXT, "shrink": SHRINK_GAMES}
 with open(JSON_OUT, "w") as f:
@@ -241,5 +245,20 @@ with open(HTML_TPL) as f:
     tpl = f.read()
 with open(HTML_OUT, "w") as f:
     f.write(tpl.replace("__DATA__", json.dumps(data, ensure_ascii=False, separators=(",", ":"))).replace("__FECHA__", FECHA).replace("__SEMANAS__", str(data["semanas"])).replace("__SHRINK__", f"{SHRINK_GAMES} ({SHRINK_RARE} para touchdowns e intercepciones)"))
+# ---- Registro de los Mejores props: guarda los de esta semana y califica los ya jugados
+PDB = picks_nfl.load()
+try:
+    n_new = picks_nfl.merge(PDB, picks_nfl.snapshot(HTML_OUT), datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None))
+except Exception as e:
+    n_new = 0
+    print(f"  aviso: no se pudieron guardar los Mejores props ({e})")
+n_gr = picks_nfl.grade(PDB, os.path.join(RAW, f"stats_player_week_{SEASON}.csv"), os.path.join(RAW, f"snap_counts_{SEASON}.csv"))
+picks_nfl.save(PDB)
+data["pk"] = picks_nfl.compact(PDB)
+with open(JSON_OUT, "w") as f:
+    json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+with open(HTML_OUT, "w") as f:
+    f.write(tpl.replace("__DATA__", json.dumps(data, ensure_ascii=False, separators=(",", ":"))).replace("__FECHA__", FECHA).replace("__SEMANAS__", str(data["semanas"])).replace("__SHRINK__", f"{SHRINK_GAMES} ({SHRINK_RARE} para touchdowns e intercepciones)"))
+print(f"  Mejores props: {n_new} guardados para los próximos partidos, {n_gr} calificados ahora, {len(data['pk'])} con resultado, {picks_nfl.pending(PDB)} pendientes")
 print(f"Listo ({FECHA}): semanas 1-{data['semanas']}, {len(PL)} jugadores, {len(done)} partidos, {len(NEXT)} partidos próximos")
 print(" ", HTML_OUT)
