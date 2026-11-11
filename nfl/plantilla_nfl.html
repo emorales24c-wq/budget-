@@ -739,7 +739,7 @@ const TRIGGER_ID="trig_01VQagaNRTytRAGd6aStL7n9", CCR="Claude Code Remote";
     btn.disabled=true; msg.textContent="Iniciando la actualización…";
     try{
       await mcp.callTool(CCR,"fire_trigger",{trigger_id:TRIGGER_ID},{cache:false});
-      msg.textContent="Actualización en marcha. Tarda unos minutos; la página se recarga sola con los datos nuevos.";
+      msg.textContent="Actualización en marcha. Tarda unos 4–5 minutos; luego cierra y vuelve a abrir la página para ver los datos nuevos.";
     }catch(e){
       btn.disabled=false; const c=e&&e.code;
       msg.textContent=

@@ -283,9 +283,9 @@ tr.grp td span{font-family:var(--body);font-weight:400;text-transform:none;lette
     <div class="f"><label for="bq">Buscar</label><input id="bq" type="text" placeholder="Jugador o equipo" autocomplete="off"></div>
     <span class="count" id="bcount"></span>
   </div>
-  <p class="meta" style="margin:10px 0 0">Los props con más probabilidad de cada jugador del día, de mejor a peor. <b>Línea</b>: viene la de referencia (su promedio de la temporada redondeado al .5 más cercano); escribe la de tu casa y la cuota para que se recalcule todo. Solo salen los mercados que las casas suelen ofrecer para ese jugador (por ejemplo, tapones si promedia 0.8 o más). Las probabilidades usan el modelo calibrado (incluye minutos proyectados, defensa del rival, ritmo, lesiones y back-to-back). <b>Edge</b> = probabilidad del modelo − la que paga la cuota (-110 si no escribes una).</p>
+  <p class="meta" style="margin:10px 0 0">Los props con más probabilidad de cada jugador del día, de mejor a peor. <b>Línea</b>: viene la de referencia (su promedio de la temporada redondeado al .5 más cercano); escribe la de tu casa y la cuota para que se recalcule todo. Solo salen los mercados que las casas suelen ofrecer para ese jugador (por ejemplo, tapones si promedia 0.8 o más). Las probabilidades usan el modelo calibrado (incluye minutos proyectados, defensa del rival, ritmo, lesiones y back-to-back). <b>Últ. 10</b> = en cuántos de sus últimos 10 partidos habría pegado el pick con esa línea (verde 7+ de 10, rojo 4 o menos). <b>Edge</b> = probabilidad del modelo − la que paga la cuota (-110 si no escribes una).</p>
   <section class="daybox" id="bcards" aria-live="polite"></section>
-  <div class="tablebox"><table id="besttbl"><thead><tr><th class="l">Jugador</th><th class="l">Mercado</th><th>Línea</th><th>Proyección</th><th>Prom.</th><th>Over</th><th>Under</th><th>Pick</th><th>Cuota</th><th>Edge</th><th></th></tr></thead><tbody id="besttb"></tbody></table></div>
+  <div class="tablebox"><table id="besttbl"><thead><tr><th class="l">Jugador</th><th class="l">Mercado</th><th>Línea</th><th>Proyección</th><th>Prom.</th><th title="Partidos de sus últimos 10 en los que pegó el pick contra esta línea">Últ. 10</th><th>Over</th><th>Under</th><th>Pick</th><th>Cuota</th><th>Edge</th><th></th></tr></thead><tbody id="besttb"></tbody></table></div>
 </div>
 
 <div id="view-cal" role="tabpanel" aria-labelledby="tab-cal" hidden>
@@ -818,12 +818,18 @@ function bestRows(){
   out.sort((a,b)=>b.edge-a.edge||b.prob-a.prob);
   return out;
 }
+// cuántos de sus últimos 10 partidos pasó (Over) o se quedó debajo (Under) de la línea
+const LOGK={pts:[5],reb:[6],ast:[7],tpm:[8],stl:[9],blk:[10],pra:[5,6,7],pr:[5,6],pa:[5,7],ra:[6,7]};
+function hitRate(name,k,line,side){const rows=(LOGS[name]||[]).filter(g=>g[4]>0).slice(-10);if(!rows.length)return null;
+  const h=rows.filter(g=>{const v=LOGK[k].reduce((s,j)=>s+g[j],0);return side==="O"?v>line:v<line}).length;return [h,rows.length]}
+function hitCell(r){const x=hitRate(r.p.name,r.k,r.line,r.side);if(!x)return `<td>—</td>`;const f=x[0]/x[1];
+  return `<td class="${f>=.7?"up":f<=.4?"dn":""}" title="${r.side==="O"?"Over":"Under"} ${r.line} en ${x[0]} de sus últimos ${x[1]} partidos">${x[0]}/${x[1]}</td>`}
 function bestRowHTML(r,i){
   const ed=r.edge,tag=ed>=.10?"OVER":ed>=MIN_EDGE?"OVER":"PASS";
   return `<tr data-bi="${i}"><td class="l name"><span class="pn">${esc(r.p.name)}</span>${injBadge(r.p)}<small>${r.p.tm} ${r.home?"vs":"@"} ${r.opp}</small></td>
     <td class="l">${esc(MKLAB[r.k])}</td>
     <td><input type="number" step="0.5" value="${r.line}" data-a="bline" class="${r.ref?"refl":""}" title="${r.ref?"Línea de referencia (promedio de temporada). Escribe la de tu casa.":"Tu línea"}" aria-label="Línea de ${esc(r.p.name)} ${esc(MKLAB[r.k])}"></td>
-    <td class="v">${f1(r.proj)}</td><td>${f1(r.avg)}</td>
+    <td class="v">${f1(r.proj)}</td><td>${f1(r.avg)}</td>${hitCell(r)}
     <td class="${r.side==="O"?"v":""}">${(r.po*100).toFixed(1)}%</td><td class="${r.side==="U"?"v":""}">${(r.pu*100).toFixed(1)}%</td>
     <td><span class="pill ${r.side==="O"?"OVER":"UNDER"}">${r.side==="O"?"OVER":"UNDER"} ${(r.prob*100).toFixed(0)}%</span></td>
     <td><input type="number" step="5" placeholder="-110" value="${r.odds===-110&&!((S[r.p.name]||{}).l||{})[r.k]?"":r.odds}" data-a="bodds" aria-label="Cuota"></td>
@@ -865,7 +871,7 @@ function groupedBest(rows,rowFn,ncol,order,labels){
 }
 function renderBest(){
   const ALL=bestRows();renderBestCards(ALL);BROWS=BP.game?ALL.filter(r=>BP.game.split("-").includes(r.p.tm)):ALL;
-  $("besttb").innerHTML=groupedBest(BROWS,bestRowHTML,11,BMK,MKLAB)||`<tr><td colspan="11" class="l">Ningún prop pasa los filtros. Baja la probabilidad mínima o los minutos.</td></tr>`;
+  $("besttb").innerHTML=groupedBest(BROWS,bestRowHTML,12,BMK,MKLAB)||`<tr><td colspan="12" class="l">Ningún prop pasa los filtros. Baja la probabilidad mínima o los minutos.</td></tr>`;
   $("bcount").textContent=`${BROWS.length} props`+(BP.view==="all"&&BROWS.length>150?" (mostrando los 150 mejores)":"");
 }
 $("bday").addEventListener("change",e=>{BP.day=e.target.value;BP.game="";renderBest()});
@@ -932,7 +938,7 @@ const TRIGGER_ID="trig_011R5cg6nKcyhBjfDa2o8H4W", CCR="Claude Code Remote";
     btn.disabled=true; msg.textContent="Iniciando la actualización…";
     try{
       await mcp.callTool(CCR,"fire_trigger",{trigger_id:TRIGGER_ID},{cache:false});
-      msg.textContent="Actualización en marcha. Tarda unos minutos; la página se recarga sola con los datos nuevos.";
+      msg.textContent="Actualización en marcha. Tarda unos 4–5 minutos; luego cierra y vuelve a abrir la página para ver los datos nuevos.";
     }catch(e){
       btn.disabled=false;
       const c=e&&e.code;
