@@ -474,5 +474,17 @@ data={"fecha":FECHA,"p":P_JSON,"t":[list(t) for t in T],"dvp":DVP,"dvpGames":DVP
 with open(JSON_OUT,"w") as f: json.dump(data,f,ensure_ascii=False,separators=(",",":"))
 with open(HTML_TPL) as f: tpl=f.read()
 with open(HTML_OUT,"w") as f: f.write(tpl.replace("__DATA__",json.dumps(data,ensure_ascii=False,separators=(",",":"))).replace("__FECHA__",FECHA).replace("__DVPGAMES__",str(DVP_GAMES)))
+# ---- Registro de los Mejores props: guarda los de hoy y califica los de días pasados
+import picks
+PDB=picks.load()
+try:
+    n_new=picks.merge(PDB,picks.snapshot(HTML_OUT),datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),cal=1 if MODEL else 0)
+except Exception as e:
+    n_new=0; print(f"  aviso: no se pudieron guardar los Mejores props de hoy ({e})")
+n_gr=picks.grade(PDB,BOX_DIR); picks.save(PDB)
+data["pk"]=picks.compact(PDB)
+with open(JSON_OUT,"w") as f: json.dump(data,f,ensure_ascii=False,separators=(",",":"))
+with open(HTML_OUT,"w") as f: f.write(tpl.replace("__DATA__",json.dumps(data,ensure_ascii=False,separators=(",",":"))).replace("__FECHA__",FECHA).replace("__DVPGAMES__",str(DVP_GAMES)))
+print(f"  Mejores props: {n_new} guardados para los próximos partidos, {n_gr} calificados ahora, {len(data['pk'])} con resultado, {picks.pending(PDB)} pendientes")
 print(f"Listo ({FECHA}): {len(PROWS)} jugadores, {len(T)} equipos")
 print(" ", OUT); print(" ", HTML_OUT)

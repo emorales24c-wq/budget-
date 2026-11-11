@@ -118,6 +118,8 @@ table.dtbl{min-width:560px}
 .daybox{margin-top:14px}
 #besttbl td input{width:72px}
 #bmk,#bsd,#bview{flex-wrap:wrap}
+.pkh{font-family:var(--display);font-size:1.5rem;margin:14px 0 0}
+#calbox{margin-top:20px}
 #besttbl input.refl{border-style:dashed;color:var(--muted)}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:12px}
 .tile{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
@@ -289,6 +291,19 @@ tr.grp td span{font-family:var(--body);font-weight:400;text-transform:none;lette
 </div>
 
 <div id="view-cal" role="tabpanel" aria-labelledby="tab-cal" hidden>
+  <section id="pkwrap">
+    <h2 class="pkh">Récord de los Mejores props</h2>
+    <p class="meta" style="margin:4px 0 0">Cada vez que se actualizan los datos se guardan los Mejores props del modelo para los partidos que todavía no empiezan (la última foto antes de cada partido, con la línea de referencia y sin tus cambios). Al día siguiente se califican solos con el box score. Ganancia en unidades apostando 1 a cada pick a -110 (ganar paga 0.91). Para no perder hace falta acertar más de 52.4%. Si el jugador no juega, el pick se anula y no cuenta.</p>
+    <div class="controls">
+      <div class="f"><label>Cuáles</label><div class="seg" id="pktop"><button type="button" data-v="5" aria-pressed="false">Top 5 del día</button><button type="button" data-v="10" aria-pressed="true">Top 10</button><button type="button" data-v="25" aria-pressed="false">Top 25</button><button type="button" data-v="0" aria-pressed="false">Todos</button></div></div>
+      <div class="f"><label for="pkmin">Prob. mínima %</label><select id="pkmin"><option value="55">55</option><option value="60">60</option><option value="65">65</option><option value="70">70</option><option value="75">75</option></select></div>
+      <div class="f"><label for="pkmk">Mercado</label><select id="pkmk"></select></div>
+      <div class="f"><label>Lado</label><div class="seg" id="pksd"><button type="button" data-v="" aria-pressed="true">Ambos</button><button type="button" data-v="O" aria-pressed="false">Over</button><button type="button" data-v="U" aria-pressed="false">Under</button></div></div>
+      <div class="f"><label>Últ. 10</label><div class="seg" id="pkh10"><button type="button" data-v="0" aria-pressed="true">Cualquiera</button><button type="button" data-v="7" aria-pressed="false">7+ de 10</button></div></div>
+      <div class="f"><label>Período</label><div class="seg" id="pkper"><button type="button" data-v="cal" aria-pressed="true">Modelo actual</button><button type="button" data-v="all" aria-pressed="false">Todo</button><button type="button" data-v="7" aria-pressed="false">Últimos 7 días</button></div></div>
+    </div>
+    <div id="pkbox"></div>
+  </section>
   <div id="calbox"></div>
 </div>
 
@@ -895,6 +910,50 @@ $("besttb").addEventListener("click",e=>{const b=e.target.closest("button[data-a
 if(location.hash==="#props")showTab("best");
 
 // ================= Precisión del modelo (backtest) =================
+// ================= Récord de los Mejores props guardados =================
+const PK=(DATA.pk||[]).map(r=>({d:r[0],n:r[1],tm:r[2],opp:r[3],k:r[4],line:r[5],side:r[6],prob:r[7],edge:r[8],res:r[9],act:r[10],hh:r[11],hn:r[12],cal:r[13]}));
+const PKF={top:10,min:55,mk:"",side:"",h10:0,per:"cal"};
+$("pkmk").innerHTML=`<option value="">Todos</option>`+Object.keys(MKLAB).map(k=>`<option value="${k}">${MKLAB[k]}</option>`).join("");
+function pkRows(){
+  const days=[...new Set(PK.map(r=>r.d))].sort(),last7=days.slice(-7);
+  let rs=PK.filter(r=>r.prob*100>=PKF.min&&(!PKF.mk||r.k===PKF.mk)&&(!PKF.side||r.side===PKF.side)&&(!PKF.h10||(r.hn>=5&&r.hh/r.hn>=PKF.h10/10))
+    &&(PKF.per==="all"||(PKF.per==="cal"?r.cal:last7.includes(r.d))));
+  if(PKF.top){const by={};rs.forEach(r=>(by[r.d]=by[r.d]||[]).push(r));rs=[].concat(...Object.values(by).map(a=>a.sort((x,y)=>y.edge-x.edge).slice(0,PKF.top)))}
+  return rs;
+}
+function pkStats(rs){const w=rs.filter(r=>r.res==="W").length,l=rs.filter(r=>r.res==="L").length,p=rs.length-w-l,u=w*100/110-l;
+  return {n:rs.length,w,l,p,hit:w+l?w/(w+l):0,u,roi:w+l?u/(w+l):0,exp:rs.length?rs.reduce((s,r)=>s+r.prob,0)/rs.length:0}}
+const pct1=x=>(x*100).toFixed(1)+"%",units=u=>(u>=0?"+":"")+u.toFixed(1);
+function pkTable(title,groups,first){
+  const rows=groups.filter(g=>g[1].length).map(([lab,rs])=>{const s=pkStats(rs);
+    return `<tr><td class="l">${lab}</td><td>${s.n}</td><td>${s.w}-${s.l}${s.p?"-"+s.p:""}</td><td class="${s.hit>=.524?"up":"dn"}"><b>${pct1(s.hit)}</b></td><td>${pct1(s.exp)}</td><td class="${s.u>=0?"up":"dn"}">${units(s.u)}</td><td class="${s.roi>=0?"up":"dn"}">${(s.roi*100).toFixed(1)}%</td></tr>`}).join("");
+  return `<section class="panel" style="margin-top:12px"><h3>${title}</h3><div style="overflow-x:auto"><table class="caltbl"><thead><tr><th class="l">${first}</th><th>Picks</th><th>G-P</th><th>Acierto</th><th>Esperado</th><th>Unidades</th><th>ROI</th></tr></thead><tbody>${rows||`<tr><td colspan="7" class="l">Sin picks con estos filtros.</td></tr>`}</tbody></table></div></section>`;
+}
+function renderPk(){
+  const box=$("pkbox");
+  if(!PK.length){box.innerHTML=`<p class="meta">Todavía no hay picks calificados. Se llenará solo con cada actualización.</p>`;return}
+  const rs=pkRows(),s=pkStats(rs),days=[...new Set(rs.map(r=>r.d))].sort();
+  const bucket=[[.55,.6],[.6,.65],[.65,.7],[.7,.75],[.75,1.01]].map(([a,b])=>[`${Math.round(a*100)}–${b>1?"100":Math.round(b*100)}%`,rs.filter(r=>r.prob>=a&&r.prob<b)]);
+  const byMk=Object.keys(MKLAB).map(k=>[MKLAB[k],rs.filter(r=>r.k===k)]).sort((x,y)=>pkStats(y[1]).u-pkStats(x[1]).u);
+  const byDay=days.slice().reverse().map(d=>[fmtDay(d),rs.filter(r=>r.d===d)]);
+  const recent=rs.filter(r=>r.d===days[days.length-1]).sort((x,y)=>y.edge-x.edge).slice(0,40);
+  box.innerHTML=`<div class="tiles" style="margin-top:12px">
+    <div class="tile"><div class="k">Récord</div><div class="v">${s.w}-${s.l}${s.p?"-"+s.p:""}</div><div class="s">${s.n} picks en ${days.length} días</div></div>
+    <div class="tile"><div class="k">Acierto</div><div class="v ${s.hit>=.524?"up":"dn"}">${pct1(s.hit)}</div><div class="s">el modelo esperaba ${pct1(s.exp)} · hace falta 52.4%</div></div>
+    <div class="tile"><div class="k">Ganancia</div><div class="v ${s.u>=0?"up":"dn"}">${units(s.u)} u</div><div class="s">1 unidad por pick a -110</div></div>
+    <div class="tile"><div class="k">ROI</div><div class="v ${s.roi>=0?"up":"dn"}">${(s.roi*100).toFixed(1)}%</div><div class="s">ganancia ÷ lo apostado</div></div></div>`+
+    pkTable("Por probabilidad del modelo (¿está bien calibrado?)",bucket,"Probabilidad")+
+    pkTable("Por mercado",byMk,"Mercado")+
+    pkTable("Por lado",[["Over",rs.filter(r=>r.side==="O")],["Under",rs.filter(r=>r.side==="U")]],"Lado")+
+    pkTable("Por día",byDay,"Día")+
+    `<section class="panel" style="margin-top:12px"><h3>Picks del ${days.length?fmtDay(days[days.length-1]):"—"}</h3><div style="overflow-x:auto"><table class="caltbl"><thead><tr><th class="l">Jugador</th><th class="l">Mercado</th><th>Pick</th><th>Prob.</th><th>Últ. 10</th><th>Real</th><th>Resultado</th></tr></thead><tbody>`+
+    recent.map(r=>`<tr><td class="l">${esc(r.n)} <small>${r.tm} vs ${r.opp}</small></td><td class="l">${MKLAB[r.k]}</td><td>${r.side==="O"?"Over":"Under"} ${r.line}</td><td>${pct1(r.prob)}</td><td>${r.hn?r.hh+"/"+r.hn:"—"}</td><td>${r.act}</td><td><span class="pill ${r.res==="W"?"OVER":r.res==="L"?"UNDER":"PASS"}">${r.res==="W"?"GANÓ":r.res==="L"?"PERDIÓ":"PUSH"}</span></td></tr>`).join("")+`</tbody></table></div></section>`;
+}
+[["pktop","top"],["pksd","side"],["pkh10","h10"],["pkper","per"]].forEach(([id,key])=>$(id).addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+  $(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));PKF[key]=key==="side"||key==="per"?b.dataset.v:+b.dataset.v;renderPk()}));
+$("pkmin").addEventListener("change",e=>{PKF.min=+e.target.value;renderPk()});
+$("pkmk").addEventListener("change",e=>{PKF.mk=e.target.value;renderPk()});
+renderPk();
 function renderCal(){
   const box=$("calbox");
   if(!MDL){box.innerHTML=`<p class="meta">Todavía no hay suficientes partidos para el backtest.</p>`;return}
