@@ -22,7 +22,7 @@ const { chromium } = require("playwright");
                  prob: +r.prob.toFixed(4), edge: +r.edge.toFixed(4), proj: +(+r.proj).toFixed(2), h10: h };
       });
     }
-    return { sched: SCH, picks: res };
+    return { sched: SCH, picks: res, b: (DATA.pkcal && DATA.pkcal.b) || 1 };
   });
   await b.close();
   if (errs.length) out.errors = errs;

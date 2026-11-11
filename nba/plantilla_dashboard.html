@@ -425,8 +425,11 @@ function probOver(k,m,line){
   else if(d==="negbin") po=1-nbCdf(Math.floor(line),Math.max(m,.01),MDL.nb[k]||5);
   else po=1-ncdf(line,m,Math.max(.5,MDL.sd[k][0]+MDL.sd[k][1]*m));
   const c=MDL.cal&&MDL.cal[k];
-  return c?Math.min(.99,Math.max(.01,c[0]+c[1]*po)):po;
+  return shrinkP(c?Math.min(.99,Math.max(.01,c[0]+c[1]*po)):po);
 }
+// corrección de optimismo medida con el récord real de los Mejores props (pestaña Precisión)
+const PKB=(DATA.pkcal&&DATA.pkcal.b)||1;
+function shrinkP(p){if(PKB===1)return p;p=Math.min(.999,Math.max(.001,p));return 1/(1+Math.exp(-PKB*Math.log(p/(1-p))))}
 const seasonVal=(p,k)=>({pts:p.pts,reb:p.orb+p.drb,ast:p.ast,tpm:p.p3,pra:p.pts+p.orb+p.drb+p.ast,stl:p.stl,blk:p.blk})[k];
 const f1=x=>(Math.round(x*10)/10).toFixed(1);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -941,7 +944,8 @@ function renderPk(){
     <div class="tile"><div class="k">Récord</div><div class="v">${s.w}-${s.l}${s.p?"-"+s.p:""}</div><div class="s">${s.n} picks en ${days.length} días</div></div>
     <div class="tile"><div class="k">Acierto</div><div class="v ${s.hit>=.524?"up":"dn"}">${pct1(s.hit)}</div><div class="s">el modelo esperaba ${pct1(s.exp)} · hace falta 52.4%</div></div>
     <div class="tile"><div class="k">Ganancia</div><div class="v ${s.u>=0?"up":"dn"}">${units(s.u)} u</div><div class="s">1 unidad por pick a -110</div></div>
-    <div class="tile"><div class="k">ROI</div><div class="v ${s.roi>=0?"up":"dn"}">${(s.roi*100).toFixed(1)}%</div><div class="s">ganancia ÷ lo apostado</div></div></div>`+
+    <div class="tile"><div class="k">ROI</div><div class="v ${s.roi>=0?"up":"dn"}">${(s.roi*100).toFixed(1)}%</div><div class="s">ganancia ÷ lo apostado</div></div>
+    <div class="tile"><div class="k">Corrección</div><div class="v">${PKB<1?"−"+Math.round((1-PKB)*100)+"%":"ninguna"}</div><div class="s">${PKB<1?`el modelo exageraba: ahora un 70% sale como ${pct1(shrinkP(.7))}`:"todavía no hay suficientes picks"} · medida con ${(DATA.pkcal||{}).n||0} picks</div></div></div>`+
     pkTable("Por probabilidad del modelo (¿está bien calibrado?)",bucket,"Probabilidad")+
     pkTable("Por mercado",byMk,"Mercado")+
     pkTable("Por lado",[["Over",rs.filter(r=>r.side==="O")],["Under",rs.filter(r=>r.side==="U")]],"Lado")+

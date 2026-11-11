@@ -469,13 +469,15 @@ P_JSON=[]
 for row in PROWS:
     d=dict(zip(h,row)); g=lambda k: round(float(d[k] or 0),2)
     P_JSON.append([d["Player"],d["Team"],d["Pos"] or "",int(d["G"] or 0),g("MP"),g("2P"),g("2PA"),g("3P"),g("3PA"),g("FT"),g("FTA"),g("ORB"),g("DRB"),g("AST"),g("STL"),g("BLK"),g("PTS"),int(d["GS"] or 0),d["Peso 2026-27"]])
-data={"fecha":FECHA,"p":P_JSON,"t":[list(t) for t in T],"dvp":DVP,"dvpGames":DVP_GAMES,"mezcla":{"activa":MEZCLA,"minPJ":MIN_GP,"corte":CORTE},"shrink":dvp.SHRINK_GAMES,"sched":SCHED,
+import picks
+PKCAL=picks.fit_shrink(picks.load())
+print(f"  Corrección de optimismo (con {PKCAL['n']} picks calificados): b = {PKCAL['b']}")
+data={"fecha":FECHA,"pkcal":PKCAL,"p":P_JSON,"t":[list(t) for t in T],"dvp":DVP,"dvpGames":DVP_GAMES,"mezcla":{"activa":MEZCLA,"minPJ":MIN_GP,"corte":CORTE},"shrink":dvp.SHRINK_GAMES,"sched":SCHED,
       "mdl":MODEL,"pl":CUR,"logs":LOGS_JSON,"inj":INJ}
 with open(JSON_OUT,"w") as f: json.dump(data,f,ensure_ascii=False,separators=(",",":"))
 with open(HTML_TPL) as f: tpl=f.read()
 with open(HTML_OUT,"w") as f: f.write(tpl.replace("__DATA__",json.dumps(data,ensure_ascii=False,separators=(",",":"))).replace("__FECHA__",FECHA).replace("__DVPGAMES__",str(DVP_GAMES)))
 # ---- Registro de los Mejores props: guarda los de hoy y califica los de días pasados
-import picks
 PDB=picks.load()
 try:
     n_new=picks.merge(PDB,picks.snapshot(HTML_OUT),datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),cal=1 if MODEL else 0)
