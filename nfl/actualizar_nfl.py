@@ -234,9 +234,21 @@ if os.path.exists(ipath):
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import picks_nfl
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "nba"))
+import kalshi
+try:
+    KP, KN, KF = kalshi.fetch(kalshi.NFL)
+    _mine = {kalshi.norm(r[0]) for r in PL}
+    KP = {k: v for k, v in KP.items() if k in _mine}
+    _et = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=5)
+    KALSHI = {"t": f"{_et.day}-{['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][_et.month-1]} {_et.strftime('%H:%M')} ET", "p": KP}
+    print(f"  Kalshi: {KN} precios de {len(KP)} jugadores" + (f" (fallaron: {', '.join(KF)})" if KF else ""))
+except Exception as e:
+    KALSHI = None
+    print(f"  aviso: no se pudieron bajar los precios de Kalshi ({e})")
 PKCAL = picks_nfl.fit_shrink(picks_nfl.load())
 print(f"  Corrección de optimismo (con {PKCAL['n']} picks calificados): b = {PKCAL['b']}")
-data = {"fecha": FECHA, "pkcal": PKCAL, "sd": SD, "inj": INJ, "season": SEASON, "semanas": int(st.week.max()), "stats": [k for k, _ in STATS],
+data = {"fecha": FECHA, "pkcal": PKCAL, "kalshi": KALSHI, "sd": SD, "inj": INJ, "season": SEASON, "semanas": int(st.week.max()), "stats": [k for k, _ in STATS],
         "t": T, "tr": TR, "p": PL, "teamSnaps": TEAM_SNAPS,
         "posRate": {k: [round(x / v[-1], 5) for x in v[:-1]] for k, v in TOT.items()}, "dvp": DVP, "next": NEXT, "shrink": SHRINK_GAMES}
 with open(JSON_OUT, "w") as f:

@@ -124,7 +124,8 @@ def compact(db):
         if p.get("res") in ("W", "L", "P"):
             h = p.get("h10") or [0, 0]
             out.append([p["d"], p["n"], p["tm"], p["opp"], p["k"], p["line"], p["side"],
-                        round(p["prob"], 3), round(p["edge"], 3), p["res"], p.get("act"), h[0], h[1], p.get("cal", 1)])
+                        round(p["prob"], 3), round(p["edge"], 3), p["res"], p.get("act"), h[0], h[1], p.get("cal", 1),
+                        p.get("src", "ref"), p.get("odds", -110)])
     return out
 
 
@@ -133,7 +134,7 @@ def fit_shrink(db, prior=300):
     b se ajusta con los picks ya calificados del modelo calibrado (b < 1 = el modelo exagera).
     Con pocos picks b se acerca a 1 (sin corrección)."""
     rows = [(p.get("raw", p["prob"]), p["res"] == "W") for p in db["picks"]
-            if p.get("cal") and p.get("res") in ("W", "L") and 0 < p.get("raw", p["prob"]) < 1]
+            if p.get("cal") and p.get("src", "ref") == "ref" and p.get("res") in ("W", "L") and 0 < p.get("raw", p["prob"]) < 1]
     if len(rows) < 100:
         return {"b": 1.0, "n": len(rows)}
     best = None

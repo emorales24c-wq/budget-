@@ -469,10 +469,20 @@ P_JSON=[]
 for row in PROWS:
     d=dict(zip(h,row)); g=lambda k: round(float(d[k] or 0),2)
     P_JSON.append([d["Player"],d["Team"],d["Pos"] or "",int(d["G"] or 0),g("MP"),g("2P"),g("2PA"),g("3P"),g("3PA"),g("FT"),g("FTA"),g("ORB"),g("DRB"),g("AST"),g("STL"),g("BLK"),g("PTS"),int(d["GS"] or 0),d["Peso 2026-27"]])
+import kalshi
+try:
+    KP,KN,KF=kalshi.fetch(kalshi.NBA)
+    _mine={kalshi.norm(r[0]) for r in P_JSON}
+    KP={k:v for k,v in KP.items() if k in _mine}
+    _et=datetime.datetime.now(datetime.timezone.utc)-datetime.timedelta(hours=5)
+    KALSHI={"t":f"{_et.day}-{['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][_et.month-1]} {_et.strftime('%H:%M')} ET","p":KP}
+    print(f"  Kalshi: {KN} precios de {len(KP)} jugadores"+(f" (fallaron: {', '.join(KF)})" if KF else ""))
+except Exception as e:
+    KALSHI=None; print(f"  aviso: no se pudieron bajar los precios de Kalshi ({e})")
 import picks
 PKCAL=picks.fit_shrink(picks.load())
 print(f"  Corrección de optimismo (con {PKCAL['n']} picks calificados): b = {PKCAL['b']}")
-data={"fecha":FECHA,"pkcal":PKCAL,"p":P_JSON,"t":[list(t) for t in T],"dvp":DVP,"dvpGames":DVP_GAMES,"mezcla":{"activa":MEZCLA,"minPJ":MIN_GP,"corte":CORTE},"shrink":dvp.SHRINK_GAMES,"sched":SCHED,
+data={"fecha":FECHA,"pkcal":PKCAL,"kalshi":KALSHI,"p":P_JSON,"t":[list(t) for t in T],"dvp":DVP,"dvpGames":DVP_GAMES,"mezcla":{"activa":MEZCLA,"minPJ":MIN_GP,"corte":CORTE},"shrink":dvp.SHRINK_GAMES,"sched":SCHED,
       "mdl":MODEL,"pl":CUR,"logs":LOGS_JSON,"inj":INJ}
 with open(JSON_OUT,"w") as f: json.dump(data,f,ensure_ascii=False,separators=(",",":"))
 with open(HTML_TPL) as f: tpl=f.read()

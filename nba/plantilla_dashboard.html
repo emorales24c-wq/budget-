@@ -277,6 +277,7 @@ tr.grp td span{font-family:var(--body);font-weight:400;text-transform:none;lette
 <div id="view-best" role="tabpanel" aria-labelledby="tab-best" hidden>
   <div class="controls">
     <div class="f"><label for="bday">Día</label><select id="bday"></select></div>
+    <div class="f"><label>Línea</label><div class="seg" id="bsrc"><button type="button" data-v="k" aria-pressed="true">Kalshi (precio real)</button><button type="button" data-v="ref" aria-pressed="false">Referencia</button></div></div>
     <div class="f"><label>Mercado</label><div class="seg" id="bmk"><button type="button" data-v="" aria-pressed="true">Todos</button><button type="button" data-v="pts" aria-pressed="false">PTS</button><button type="button" data-v="reb" aria-pressed="false">REB</button><button type="button" data-v="ast" aria-pressed="false">AST</button><button type="button" data-v="tpm" aria-pressed="false">3PM</button><button type="button" data-v="pra" aria-pressed="false">PRA</button><button type="button" data-v="pr" aria-pressed="false">P+R</button><button type="button" data-v="pa" aria-pressed="false">P+A</button><button type="button" data-v="ra" aria-pressed="false">R+A</button><button type="button" data-v="stl" aria-pressed="false">STL</button><button type="button" data-v="blk" aria-pressed="false">BLK</button></div></div>
     <div class="f"><label>Lado</label><div class="seg" id="bsd"><button type="button" data-v="" aria-pressed="true">Over y Under</button><button type="button" data-v="O" aria-pressed="false">Over</button><button type="button" data-v="U" aria-pressed="false">Under</button></div></div>
     <div class="f"><label>Vista</label><div class="seg" id="bview"><button type="button" data-v="tm" aria-pressed="true">Por equipo</button><button type="button" data-v="mk" aria-pressed="false">Por mercado</button><button type="button" data-v="pl" aria-pressed="false">Por jugador</button><button type="button" data-v="all" aria-pressed="false">Todos juntos</button></div></div>
@@ -286,8 +287,9 @@ tr.grp td span{font-family:var(--body);font-weight:400;text-transform:none;lette
     <span class="count" id="bcount"></span>
   </div>
   <p class="meta" style="margin:10px 0 0">Los props con más probabilidad de cada jugador del día, de mejor a peor. <b>Línea</b>: viene la de referencia (su promedio de la temporada redondeado al .5 más cercano); escribe la de tu casa y la cuota para que se recalcule todo. Solo salen los mercados que las casas suelen ofrecer para ese jugador (por ejemplo, tapones si promedia 0.8 o más). Las probabilidades usan el modelo calibrado (incluye minutos proyectados, defensa del rival, ritmo, lesiones y back-to-back). <b>Últ. 10</b> = en cuántos de sus últimos 10 partidos habría pegado el pick con esa línea (verde 7+ de 10, rojo 4 o menos). <b>Edge</b> = probabilidad del modelo − la que paga la cuota (-110 si no escribes una).</p>
+  <p class="meta" id="bsrcmsg" style="margin:8px 0 0"></p>
   <section class="daybox" id="bcards" aria-live="polite"></section>
-  <div class="tablebox"><table id="besttbl"><thead><tr><th class="l">Jugador</th><th class="l">Mercado</th><th>Línea</th><th>Proyección</th><th>Prom.</th><th title="Partidos de sus últimos 10 en los que pegó el pick contra esta línea">Últ. 10</th><th>Over</th><th>Under</th><th>Pick</th><th>Cuota</th><th>Edge</th><th></th></tr></thead><tbody id="besttb"></tbody></table></div>
+  <div class="tablebox"><table id="besttbl"><thead><tr><th class="l">Jugador</th><th class="l">Mercado</th><th>Línea</th><th>Proyección</th><th>Prom.</th><th title="Partidos de sus últimos 10 en los que pegó el pick contra esta línea">Últ. 10</th><th>Over</th><th>Under</th><th>Pick</th><th>Cuota / precio</th><th>Edge</th><th></th></tr></thead><tbody id="besttb"></tbody></table></div>
 </div>
 
 <div id="view-cal" role="tabpanel" aria-labelledby="tab-cal" hidden>
@@ -295,6 +297,7 @@ tr.grp td span{font-family:var(--body);font-weight:400;text-transform:none;lette
     <h2 class="pkh">Récord de los Mejores props</h2>
     <p class="meta" style="margin:4px 0 0">Cada vez que se actualizan los datos se guardan los Mejores props del modelo para los partidos que todavía no empiezan (la última foto antes de cada partido, con la línea de referencia y sin tus cambios). Al día siguiente se califican solos con el box score. Ganancia en unidades apostando 1 a cada pick a -110 (ganar paga 0.91). Para no perder hace falta acertar más de 52.4%. Si el jugador no juega, el pick se anula y no cuenta.</p>
     <div class="controls">
+      <div class="f"><label>Línea</label><div class="seg" id="pksrc"><button type="button" data-v="ref" aria-pressed="true">Referencia (-110)</button><button type="button" data-v="k" aria-pressed="false">Kalshi (precio real)</button></div></div>
       <div class="f"><label>Cuáles</label><div class="seg" id="pktop"><button type="button" data-v="5" aria-pressed="false">Top 5 del día</button><button type="button" data-v="10" aria-pressed="true">Top 10</button><button type="button" data-v="25" aria-pressed="false">Top 25</button><button type="button" data-v="0" aria-pressed="false">Todos</button></div></div>
       <div class="f"><label for="pkmin">Prob. mínima %</label><select id="pkmin"><option value="55">55</option><option value="60">60</option><option value="65">65</option><option value="70">70</option><option value="75">75</option></select></div>
       <div class="f"><label for="pkmk">Mercado</label><select id="pkmk"></select></div>
@@ -813,19 +816,36 @@ $("btb").addEventListener("click",async e=>{const d=e.target.closest("[data-del]
   if(PENDDEL===id){PENDDEL=null;try{await delBet(id)}catch(err){}}else{PENDDEL=id;d.textContent="¿Seguro?";setTimeout(()=>{if(PENDDEL===id){PENDDEL=null;d.textContent="Borrar"}},3000)}});
 
 // ================= Mejores props del día (todos los mercados, Over y Under) =================
-const BP={day:DAYS[0]||"",mk:"",side:"",minp:55,minm:20,q:"",view:"tm",game:""};
+const BP={day:DAYS[0]||"",mk:"",side:"",minp:55,minm:20,q:"",view:"tm",game:"",src:"k"};
 const BMK=["pts","reb","ast","tpm","pra","pr","pa","ra","stl","blk"];
 const MINAVG={pts:8,reb:3,ast:2,tpm:1,stl:0.8,blk:0.8,pra:12,pr:10,pa:10,ra:5};
 const refLine=(p,k)=>{const v=seasonVal2(p,k);if(v==null)return null;let x=Math.round(v*2)/2;if(x%1===0)x-=.5;return Math.max(.5,x)}; // como las casas: el .5 más cercano al promedio, abajo si cae en entero
 function seasonVal2(p,k){const s={pts:p.pts,reb:p.orb+p.drb,ast:p.ast,tpm:p.p3,stl:p.stl,blk:p.blk};s.pra=s.pts+s.reb+s.ast;s.pr=s.pts+s.reb;s.pa=s.pts+s.ast;s.ra=s.reb+s.ast;return s[k]}
 $("bday").innerHTML=DAYS.map(d=>`<option value="${d}">${fmtDay(d)} (${SCH.filter(g=>g[0]===d).length} partidos)</option>`).join("");
 $("bday").value=BP.day;
+// ===== Kalshi: precios reales de los mercados de jugadores (escalones "15+ puntos") =====
+const KAL=(DATA.kalshi&&DATA.kalshi.p)||{},KALT=(DATA.kalshi&&DATA.kalshi.t)||"";
+const knorm=s=>String(s).normalize("NFKD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[.'’\-]/g,"").replace(/\b(jr|sr|ii|iii|iv|v)\b/g,"").replace(/\s+/g," ").trim();
+const kfee=c=>Math.ceil(0.07*c*(1-c)*100-1e-9)/100; // comisión de Kalshi por contrato
+const toAm=c=>c>=.5?-Math.round(c/(1-c)*100):Math.round((1-c)/c*100);
+// mejor escalón de Kalshi para ese jugador y stat: compara la prob. del modelo con el precio (más comisión)
+function kalBest(name,k,day,pOver){
+  let best=null;
+  ((KAL[knorm(name)]||{})[k]||[]).forEach(([d,line,bid,ask])=>{if(d!==day)return;
+    const po=pOver(line),opts=[["O",po,ask]];if(bid>0)opts.push(["U",1-po,+(1-bid).toFixed(2)]);
+    opts.forEach(([side,prob,c])=>{if(BP.side&&side!==BP.side)return;if(prob*100<BP.minp)return;const cost=c+kfee(c);if(cost>=1)return;
+      const edge=prob-cost;if(edge<=0)return;if(!best||edge>best.edge)best={line,side,po,pu:1-po,prob,edge,cost,c}})});
+  return best;
+}
+const KALDAYS=new Set();Object.values(KAL).forEach(v=>Object.values(v).forEach(rs=>rs.forEach(r=>KALDAYS.add(r[0]))));const hasKal=d=>KALDAYS.has(d);
 function bestRows(){
   const day=OPPD[BP.day]||{}, q=BP.q.trim().toLowerCase(), out=[];
   P.forEach(p=>{const s=day[p.tm];if(!s||isOut(p)||baseMin(p)<BP.minm)return;
     if(q&&!p.name.toLowerCase().includes(q)&&!p.tm.toLowerCase().includes(q))return;
     const st=rowState(p);const c=core(p,st.xmp,s.opp,s.home,{b2b:(s.home?s.g[5]:s.g[4])?1:0});if(!c)return;
     const L=(S[p.name]||{}).l||{};
+    if(BP.src==="k"&&hasKal(BP.day)){(BP.mk?[BP.mk]:BMK).forEach(k=>{const kb=kalBest(p.name,k,BP.day,line=>probOver(k,c[k],line));if(!kb)return;
+      out.push({p,k,line:kb.line,ref:false,kal:kb,proj:c[k],avg:seasonVal2(p,k),po:kb.po,pu:kb.pu,side:kb.side,prob:kb.prob,edge:kb.edge,odds:toAm(kb.cost),opp:s.opp,home:s.home})});return}
     (BP.mk?[BP.mk]:BMK).forEach(k=>{const l=L[k]||{},own=l.line!=null&&l.line!=="";
       if(!own&&(seasonVal2(p,k)||0)<MINAVG[k])return; // las casas no ofrecen ese prop a jugadores que casi no lo producen
       const line=own?+l.line:refLine(p,k);if(line==null)return;
@@ -846,11 +866,11 @@ function bestRowHTML(r,i){
   const ed=r.edge,tag=ed>=.10?"OVER":ed>=MIN_EDGE?"OVER":"PASS";
   return `<tr data-bi="${i}"><td class="l name"><span class="pn">${esc(r.p.name)}</span>${injBadge(r.p)}<small>${r.p.tm} ${r.home?"vs":"@"} ${r.opp}</small></td>
     <td class="l">${esc(MKLAB[r.k])}</td>
-    <td><input type="number" step="0.5" value="${r.line}" data-a="bline" class="${r.ref?"refl":""}" title="${r.ref?"Línea de referencia (promedio de temporada). Escribe la de tu casa.":"Tu línea"}" aria-label="Línea de ${esc(r.p.name)} ${esc(MKLAB[r.k])}"></td>
+    ${r.kal?`<td title="Mercado de Kalshi: ${r.side==="O"?"SÍ":"NO"} en ${r.line+.5}+">${r.line}<small>Kalshi</small></td>`:`<td><input type="number" step="0.5" value="${r.line}" data-a="bline" class="${r.ref?"refl":""}" title="${r.ref?"Línea de referencia (promedio de temporada). Escribe la de tu casa.":"Tu línea"}" aria-label="Línea de ${esc(r.p.name)} ${esc(MKLAB[r.k])}"></td>`}
     <td class="v">${f1(r.proj)}</td><td>${f1(r.avg)}</td>${hitCell(r)}
     <td class="${r.side==="O"?"v":""}">${(r.po*100).toFixed(1)}%</td><td class="${r.side==="U"?"v":""}">${(r.pu*100).toFixed(1)}%</td>
     <td><span class="pill ${r.side==="O"?"OVER":"UNDER"}">${r.side==="O"?"OVER":"UNDER"} ${(r.prob*100).toFixed(0)}%</span></td>
-    <td><input type="number" step="5" placeholder="-110" value="${r.odds===-110&&!((S[r.p.name]||{}).l||{})[r.k]?"":r.odds}" data-a="bodds" aria-label="Cuota"></td>
+    ${r.kal?`<td title="Precio ${Math.round(r.kal.c*100)}¢ + comisión ${Math.round(kfee(r.kal.c)*100)}¢ = cuota ${r.odds>0?"+":""}${r.odds}"><b>${Math.round(r.kal.cost*100)}¢</b></td>`:`<td><input type="number" step="5" placeholder="-110" value="${r.odds===-110&&!((S[r.p.name]||{}).l||{})[r.k]?"":r.odds}" data-a="bodds" aria-label="Cuota"></td>`}
     <td class="${ed>0?"up":"dn"}">${ed>0?"+":""}${(ed*100).toFixed(1)}%</td>
     <td><button type="button" class="exp" data-a="bsave">Guardar</button></td></tr>`;
 }
@@ -888,6 +908,7 @@ function groupedBest(rows,rowFn,ncol,order,labels){
     return head(labels[k],`${rs.length} props · ${rs.length>10?"los 10 mejores":"todos"}`)+rs.slice(0,10).map(r=>rowFn(r,r._i)).join("")}).join("");
 }
 function renderBest(){
+  $("bsrcmsg").textContent=BP.src!=="k"?"":hasKal(BP.day)?`Precios de Kalshi de ${KALT}. Precio = lo que cuesta el contrato + la comisión de Kalshi; paga $1 si pega. El precio cambia: revísalo en Kalshi antes de comprar. Si el edge pasa de 20%, casi siempre Kalshi sabe algo que el modelo no (lesión, cambio de rol): investígalo antes.`:"Kalshi todavía no tiene mercados de jugadores para este día; abajo van con la línea de referencia.";
   const ALL=bestRows();renderBestCards(ALL);BROWS=BP.game?ALL.filter(r=>BP.game.split("-").includes(r.p.tm)):ALL;
   $("besttb").innerHTML=groupedBest(BROWS,bestRowHTML,12,BMK,MKLAB)||`<tr><td colspan="12" class="l">Ningún prop pasa los filtros. Baja la probabilidad mínima o los minutos.</td></tr>`;
   $("bcount").textContent=`${BROWS.length} props`+(BP.view==="all"&&BROWS.length>150?" (mostrando los 150 mejores)":"");
@@ -897,7 +918,7 @@ $("bcards").addEventListener("click",e=>{
   if(e.target.closest("#ball")){BP.game="";renderBest();return}
   const c=e.target.closest(".gcard");if(!c)return;BP.game=BP.game===c.dataset.g?"":c.dataset.g;renderBest()});
 
-segPick2("bmk",v=>BP.mk=v);segPick2("bsd",v=>BP.side=v);segPick2("bview",v=>BP.view=v);
+segPick2("bmk",v=>BP.mk=v);segPick2("bsd",v=>BP.side=v);segPick2("bview",v=>BP.view=v);segPick2("bsrc",v=>BP.src=v);
 function segPick2(id,fn){$(id).addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;$(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));fn(b.dataset.v);renderBest()})}
 $("bminp").addEventListener("input",e=>{const v=parseFloat(e.target.value);BP.minp=isNaN(v)?0:v;renderBest()});
 $("bminm").addEventListener("input",e=>{const v=parseFloat(e.target.value);BP.minm=isNaN(v)?0:v;renderBest()});
@@ -914,17 +935,18 @@ if(location.hash==="#props")showTab("best");
 
 // ================= Precisión del modelo (backtest) =================
 // ================= Récord de los Mejores props guardados =================
-const PK=(DATA.pk||[]).map(r=>({d:r[0],n:r[1],tm:r[2],opp:r[3],k:r[4],line:r[5],side:r[6],prob:r[7],edge:r[8],res:r[9],act:r[10],hh:r[11],hn:r[12],cal:r[13]}));
-const PKF={top:10,min:55,mk:"",side:"",h10:0,per:"cal"};
+const PK=(DATA.pk||[]).map(r=>({d:r[0],n:r[1],tm:r[2],opp:r[3],k:r[4],line:r[5],side:r[6],prob:r[7],edge:r[8],res:r[9],act:r[10],hh:r[11],hn:r[12],cal:r[13],src:r[14]||"ref",odds:r[15]||-110}));
+const PKF={top:10,min:55,mk:"",side:"",h10:0,per:"cal",src:"ref"};
 $("pkmk").innerHTML=`<option value="">Todos</option>`+Object.keys(MKLAB).map(k=>`<option value="${k}">${MKLAB[k]}</option>`).join("");
 function pkRows(){
   const days=[...new Set(PK.map(r=>r.d))].sort(),last7=days.slice(-7);
-  let rs=PK.filter(r=>r.prob*100>=PKF.min&&(!PKF.mk||r.k===PKF.mk)&&(!PKF.side||r.side===PKF.side)&&(!PKF.h10||(r.hn>=5&&r.hh/r.hn>=PKF.h10/10))
+  let rs=PK.filter(r=>r.src===PKF.src&&r.prob*100>=PKF.min&&(!PKF.mk||r.k===PKF.mk)&&(!PKF.side||r.side===PKF.side)&&(!PKF.h10||(r.hn>=5&&r.hh/r.hn>=PKF.h10/10))
     &&(PKF.per==="all"||(PKF.per==="cal"?r.cal:last7.includes(r.d))));
   if(PKF.top){const by={};rs.forEach(r=>(by[r.d]=by[r.d]||[]).push(r));rs=[].concat(...Object.values(by).map(a=>a.sort((x,y)=>y.edge-x.edge).slice(0,PKF.top)))}
   return rs;
 }
-function pkStats(rs){const w=rs.filter(r=>r.res==="W").length,l=rs.filter(r=>r.res==="L").length,p=rs.length-w-l,u=w*100/110-l;
+const payOf=o=>o>0?o/100:100/(-o);
+function pkStats(rs){const w=rs.filter(r=>r.res==="W").length,l=rs.filter(r=>r.res==="L").length,p=rs.length-w-l,u=rs.reduce((s,r)=>s+(r.res==="W"?payOf(r.odds):r.res==="L"?-1:0),0);
   return {n:rs.length,w,l,p,hit:w+l?w/(w+l):0,u,roi:w+l?u/(w+l):0,exp:rs.length?rs.reduce((s,r)=>s+r.prob,0)/rs.length:0}}
 const pct1=x=>(x*100).toFixed(1)+"%",units=u=>(u>=0?"+":"")+u.toFixed(1);
 function pkTable(title,groups,first){
@@ -936,6 +958,7 @@ function renderPk(){
   const box=$("pkbox");
   if(!PK.length){box.innerHTML=`<p class="meta">Todavía no hay picks calificados. Se llenará solo con cada actualización.</p>`;return}
   const rs=pkRows(),s=pkStats(rs),days=[...new Set(rs.map(r=>r.d))].sort();
+  if(!rs.length&&PKF.src==="k"){box.innerHTML=`<p class="meta" style="margin-top:12px">Los picks con precios de Kalshi se guardan desde el 11 de noviembre. Los primeros resultados salen cuando terminen esos partidos.</p>`;return}
   const bucket=[[.55,.6],[.6,.65],[.65,.7],[.7,.75],[.75,1.01]].map(([a,b])=>[`${Math.round(a*100)}–${b>1?"100":Math.round(b*100)}%`,rs.filter(r=>r.prob>=a&&r.prob<b)]);
   const byMk=Object.keys(MKLAB).map(k=>[MKLAB[k],rs.filter(r=>r.k===k)]).sort((x,y)=>pkStats(y[1]).u-pkStats(x[1]).u);
   const byDay=days.slice().reverse().map(d=>[fmtDay(d),rs.filter(r=>r.d===d)]);
@@ -953,8 +976,8 @@ function renderPk(){
     `<section class="panel" style="margin-top:12px"><h3>Picks del ${days.length?fmtDay(days[days.length-1]):"—"}</h3><div style="overflow-x:auto"><table class="caltbl"><thead><tr><th class="l">Jugador</th><th class="l">Mercado</th><th>Pick</th><th>Prob.</th><th>Últ. 10</th><th>Real</th><th>Resultado</th></tr></thead><tbody>`+
     recent.map(r=>`<tr><td class="l">${esc(r.n)} <small>${r.tm} vs ${r.opp}</small></td><td class="l">${MKLAB[r.k]}</td><td>${r.side==="O"?"Over":"Under"} ${r.line}</td><td>${pct1(r.prob)}</td><td>${r.hn?r.hh+"/"+r.hn:"—"}</td><td>${r.act}</td><td><span class="pill ${r.res==="W"?"OVER":r.res==="L"?"UNDER":"PASS"}">${r.res==="W"?"GANÓ":r.res==="L"?"PERDIÓ":"PUSH"}</span></td></tr>`).join("")+`</tbody></table></div></section>`;
 }
-[["pktop","top"],["pksd","side"],["pkh10","h10"],["pkper","per"]].forEach(([id,key])=>$(id).addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
-  $(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));PKF[key]=key==="side"||key==="per"?b.dataset.v:+b.dataset.v;renderPk()}));
+[["pktop","top"],["pksd","side"],["pkh10","h10"],["pkper","per"],["pksrc","src"]].forEach(([id,key])=>$(id).addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+  $(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));PKF[key]=key==="side"||key==="per"||key==="src"?b.dataset.v:+b.dataset.v;renderPk()}));
 $("pkmin").addEventListener("change",e=>{PKF.min=+e.target.value;renderPk()});
 $("pkmk").addEventListener("change",e=>{PKF.mk=e.target.value;renderPk()});
 renderPk();

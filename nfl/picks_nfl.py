@@ -109,7 +109,7 @@ def grade(db, stats_csv, snaps_csv=None):
 def fit_shrink(db, prior=300):
     """Igual que en la NBA: probabilidad real = sigmoide(b × logit(prob. del modelo)), con b medido en los picks calificados."""
     rows = [(p.get("raw", p["prob"]), p["res"] == "W") for p in db["picks"]
-            if p["k"] != "td" and p.get("res") in ("W", "L") and 0 < p.get("raw", p["prob"]) < 1]
+            if p["k"] != "td" and p.get("src", "ref") == "ref" and p.get("res") in ("W", "L") and 0 < p.get("raw", p["prob"]) < 1]
     if len(rows) < 100:
         return {"b": 1.0, "n": len(rows)}
     best = None
@@ -127,7 +127,7 @@ def compact(db):
     for p in sorted(db["picks"], key=lambda x: (x["d"], -x["prob"])):
         if p.get("res") in ("W", "L", "P"):
             out.append([p["d"], p["wk"], p["n"], p["tm"], p["pos"], p["opp"], p["k"], p["line"], p["side"],
-                        round(p["prob"], 3), round(p["edge"], 3), p["res"], p.get("act")])
+                        round(p["prob"], 3), round(p["edge"], 3), p["res"], p.get("act"), p.get("src", "ref"), p.get("odds", -110)])
     return out
 
 

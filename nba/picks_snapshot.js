@@ -14,13 +14,17 @@ const { chromium } = require("playwright");
   await pg.waitForTimeout(300);
   const out = await pg.evaluate(() => {
     const res = {};
-    for (const d of DAYS) {
-      Object.assign(BP, { day: d, mk: "", side: "", minp: 55, minm: 20, q: "", game: "" });
-      res[d] = bestRows().map(r => {
+    for (const d of DAYS) res[d] = [];
+    const srcs = typeof hasKal === "function" ? ["ref", "k"] : ["ref"];
+    for (const src of srcs) for (const d of DAYS) {
+      if (src === "k" && !hasKal(d)) continue;
+      Object.assign(BP, { day: d, mk: "", side: "", minp: 55, minm: 20, q: "", game: "", src });
+      res[d].push(...bestRows().map(r => {
         const h = typeof hitRate === "function" ? hitRate(r.p.name, r.k, r.line, r.side) : null;
         return { d, n: r.p.name, tm: r.p.tm, opp: r.opp, h: r.home ? 1 : 0, k: r.k, line: r.line, side: r.side,
-                 prob: +r.prob.toFixed(4), edge: +r.edge.toFixed(4), proj: +(+r.proj).toFixed(2), h10: h };
-      });
+                 prob: +r.prob.toFixed(4), edge: +r.edge.toFixed(4), proj: +(+r.proj).toFixed(2), h10: h,
+                 src, odds: r.odds };
+      }));
     }
     return { sched: SCH, picks: res, b: (DATA.pkcal && DATA.pkcal.b) || 1 };
   });

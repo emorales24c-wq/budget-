@@ -12,9 +12,13 @@ const { chromium } = require("playwright");
   const out = await pg.evaluate(() => {
     const res = {};
     for (const d of DAYS) {
-      Object.assign(BP, { day: d, pos: "", mk: "", side: "", minp: 55, q: "", game: "" });
-      const rows = bestRows().map(r => ({ d, wk: r.g ? r.g[0] : null, n: r.p.name, tm: r.p.tm, pos: r.p.pos, opp: r.opp, h: r.home ? 1 : 0,
-        k: r.k, line: r.line, side: r.side, prob: +r.prob.toFixed(4), edge: +r.edge.toFixed(4), proj: +(+r.proj).toFixed(2) }));
+      const rows = [];
+      for (const src of (typeof hasKal === "function" ? ["ref", "k"] : ["ref"])) {
+        if (src === "k" && !hasKal(d)) continue;
+        Object.assign(BP, { day: d, pos: "", mk: "", side: "", minp: 55, q: "", game: "", src });
+        rows.push(...bestRows().map(r => ({ d, wk: r.g ? r.g[0] : null, n: r.p.name, tm: r.p.tm, pos: r.p.pos, opp: r.opp, h: r.home ? 1 : 0,
+          k: r.k, line: r.line, side: r.side, prob: +r.prob.toFixed(4), edge: +r.edge.toFixed(4), proj: +(+r.proj).toFixed(2), src, odds: r.odds })));
+      }
       if (typeof tdRows === "function") {
         Object.assign(TD, { day: d, pos: "", min: 25, q: "" });
         tdRows().filter(r => !r.out).forEach(r => rows.push({ d, wk: r.g[0], n: r.p.name, tm: r.p.tm, pos: r.p.pos, opp: r.opp, h: r.home ? 1 : 0,
