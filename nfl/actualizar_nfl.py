@@ -265,6 +265,13 @@ except Exception as e:
     n_new = 0
     print(f"  aviso: no se pudieron guardar los Mejores props ({e})")
 n_gr = picks_nfl.grade(PDB, os.path.join(RAW, f"stats_player_week_{SEASON}.csv"), os.path.join(RAW, f"snap_counts_{SEASON}.csv"))
+try:
+    n_clv = kalshi.add_clv(PDB["picks"], picks_nfl.start_of, datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None))
+except Exception as e:
+    n_clv = 0
+    print(f"  aviso: no se pudo medir el CLV ({e})")
+if n_clv:
+    print(f"  CLV: precio de cierre de Kalshi para {n_clv} picks")
 picks_nfl.save(PDB)
 data["pk"] = picks_nfl.compact(PDB)
 with open(JSON_OUT, "w") as f:

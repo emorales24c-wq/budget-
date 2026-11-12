@@ -23,7 +23,7 @@ const { chromium } = require("playwright");
         const h = typeof hitRate === "function" ? hitRate(r.p.name, r.k, r.line, r.side) : null;
         return { d, n: r.p.name, tm: r.p.tm, opp: r.opp, h: r.home ? 1 : 0, k: r.k, line: r.line, side: r.side,
                  prob: +r.prob.toFixed(4), edge: +r.edge.toFixed(4), proj: +(+r.proj).toFixed(2), h10: h,
-                 src, odds: r.odds };
+                 src, odds: r.odds, tk: r.kal ? r.kal.tk : undefined, c: r.kal ? r.kal.c : undefined };
       }));
     }
     return { sched: SCH, picks: res, b: (DATA.pkcal && DATA.pkcal.b) || 1 };

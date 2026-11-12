@@ -17,7 +17,7 @@ const { chromium } = require("playwright");
         if (src === "k" && !hasKal(d)) continue;
         Object.assign(BP, { day: d, pos: "", mk: "", side: "", minp: 55, q: "", game: "", src });
         rows.push(...bestRows().map(r => ({ d, wk: r.g ? r.g[0] : null, n: r.p.name, tm: r.p.tm, pos: r.p.pos, opp: r.opp, h: r.home ? 1 : 0,
-          k: r.k, line: r.line, side: r.side, prob: +r.prob.toFixed(4), edge: +r.edge.toFixed(4), proj: +(+r.proj).toFixed(2), src, odds: r.odds })));
+          k: r.k, line: r.line, side: r.side, prob: +r.prob.toFixed(4), edge: +r.edge.toFixed(4), proj: +(+r.proj).toFixed(2), src, odds: r.odds, tk: r.kal ? r.kal.tk : undefined, c: r.kal ? r.kal.c : undefined })));
       }
       if (typeof tdRows === "function") {
         Object.assign(TD, { day: d, pos: "", min: 25, q: "" });

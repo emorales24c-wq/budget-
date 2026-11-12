@@ -56,11 +56,12 @@ def merge(db, snap, taken_at, cal=1):
     """Guarda los picks de los partidos que empiezan después de taken_at (datetime UTC).
     Por partido manda la foto más reciente antes de que empiece."""
     stamp = taken_at.strftime("%Y-%m-%dT%H:%MZ")
-    games = {}
+    games, starts = {}, {}
     for g in snap["sched"]:
         start = game_start_utc(g[0], g[1])
         if start > taken_at:
             games[(g[0], g[2])] = games[(g[0], g[3])] = (g[0], g[2], g[3])
+            starts[(g[0], g[2])] = starts[(g[0], g[3])] = start.strftime("%Y-%m-%dT%H:%MZ")
     if not games:
         return 0
     covered = set(games.values())
@@ -75,6 +76,7 @@ def merge(db, snap, taken_at, cal=1):
         for p in rows:
             if (d, p["tm"]) in games:
                 p["t"] = stamp
+                p["gs"] = starts.get((d, p["tm"]))
                 b = snap.get("b") or 1.0  # corrección que tenía la página: guarda también la probabilidad sin corregir
                 p["raw"] = round(1 / (1 + math.exp(-math.log(p["prob"] / (1 - p["prob"])) / b)), 4)
                 p["cal"] = cal  # 1 = con el modelo calibrado (desde el 4-nov-2026)
@@ -125,7 +127,7 @@ def compact(db):
             h = p.get("h10") or [0, 0]
             out.append([p["d"], p["n"], p["tm"], p["opp"], p["k"], p["line"], p["side"],
                         round(p["prob"], 3), round(p["edge"], 3), p["res"], p.get("act"), h[0], h[1], p.get("cal", 1),
-                        p.get("src", "ref"), p.get("odds", -110)])
+                        p.get("src", "ref"), p.get("odds", -110), p.get("clv")])
     return out
 
 
@@ -148,6 +150,11 @@ def fit_shrink(db, prior=300):
             best = (b, ll)
     b = (len(rows) * best[0] + prior) / (len(rows) + prior)
     return {"b": round(b, 3), "fit": best[0], "n": len(rows)}
+
+
+def start_of(p):
+    gs = p.get("gs")
+    return datetime.datetime.strptime(gs, "%Y-%m-%dT%H:%MZ") if gs else None
 
 
 def pending(db):

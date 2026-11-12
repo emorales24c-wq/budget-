@@ -854,10 +854,10 @@ function kalMain(name,k,day){let m=null,dm=9;
   return m}
 function kalBest(name,k,day,pOver){
   let best=null;const main=kalMain(name,k,day);
-  (main?[main]:[]).forEach(([d,line,bid,ask])=>{
+  (main?[main]:[]).forEach(([d,line,bid,ask,tk])=>{
     const pm=pOver(line),mkt=bid>0?(bid+ask)/2:ask,po=KW*pm+(1-KW)*mkt,opts=[["O",po,ask]];if(bid>0)opts.push(["U",1-po,+(1-bid).toFixed(2)]);
     opts.forEach(([side,prob,c])=>{if(BP.side&&side!==BP.side)return;if(prob*100<BP.minp)return;const cost=c+kfee(c);if(cost>=1)return;
-      const edge=prob-cost;if(edge<=0)return;if(!best||edge>best.edge)best={line,side,po,pu:1-po,prob,edge,cost,c,yes:ask,no:+(1-bid).toFixed(2),pm}})});
+      const edge=prob-cost;if(edge<=0)return;if(!best||edge>best.edge)best={line,side,po,pu:1-po,prob,edge,cost,c,yes:ask,no:+(1-bid).toFixed(2),pm,tk:tk||""}})});
   return best;
 }
 const KALDAYS=new Set();Object.values(KAL).forEach(v=>Object.values(v).forEach(rs=>rs.forEach(r=>KALDAYS.add(r[0]))));const hasKal=d=>KALDAYS.has(d);
@@ -973,7 +973,7 @@ if(location.hash==="#props")showTab("best");
 
 // ================= Precisión del modelo (backtest) =================
 // ================= Récord de los Mejores props guardados =================
-const PK=(DATA.pk||[]).filter(r=>["pts","reb","ast","pra","tpm"].includes(r[4])).map(r=>({d:r[0],n:r[1],tm:r[2],opp:r[3],k:r[4],line:r[5],side:r[6],prob:r[7],edge:r[8],res:r[9],act:r[10],hh:r[11],hn:r[12],cal:r[13],src:r[14]||"ref",odds:r[15]||-110}));
+const PK=(DATA.pk||[]).filter(r=>["pts","reb","ast","pra","tpm"].includes(r[4])).map(r=>({d:r[0],n:r[1],tm:r[2],opp:r[3],k:r[4],line:r[5],side:r[6],prob:r[7],edge:r[8],res:r[9],act:r[10],hh:r[11],hn:r[12],cal:r[13],src:r[14]||"ref",odds:r[15]||-110,clv:r[16]??null}));
 const PKF={top:10,min:55,mk:"",side:"",h10:0,per:"cal",src:"ref"};
 $("pkmk").innerHTML=`<option value="">Todos</option>`+BMK.map(k=>`<option value="${k}">${MKLAB[k]}</option>`).join("");
 function pkRows(){
@@ -983,6 +983,11 @@ function pkRows(){
   if(PKF.top){const by={};rs.forEach(r=>(by[r.d]=by[r.d]||[]).push(r));rs=[].concat(...Object.values(by).map(a=>a.sort((x,y)=>((x.edge>.12)-(y.edge>.12))||y.edge-x.edge).slice(0,PKF.top)))}
   return rs;
 }
+// CLV: ¿el precio de cierre de Kalshi (justo antes del partido) quedó más caro que lo que pagamos? Esa es la prueba de que el modelo tiene ventaja
+function clvStats(rs){const x=rs.filter(r=>r.clv!=null);if(!x.length)return null;const beat=x.filter(r=>r.clv>0).length,eq=x.filter(r=>r.clv===0).length;
+  return {n:x.length,beat,eq,pct:beat/Math.max(1,x.length-eq),avg:x.reduce((s,r)=>s+r.clv,0)/x.length}}
+function clvTile(rs){const c=clvStats(rs);if(!c)return `<div class="tile"><div class="k">CLV</div><div class="v">—</div><div class="s">se mide con los picks de Kalshi cuando empiezan los partidos</div></div>`;
+  const good=c.pct>=.55;return `<div class="tile"><div class="k">CLV (le ganamos al cierre)</div><div class="v ${good?"up":c.pct<.5?"dn":""}">${Math.round(c.pct*100)}%</div><div class="s">${c.beat} de ${c.n-c.eq} picks · promedio ${c.avg>=0?"+":""}${(c.avg*100).toFixed(1)}¢ · la meta es 55%+</div></div>`}
 const payOf=o=>o>0?o/100:100/(-o);
 function pkStats(rs){const w=rs.filter(r=>r.res==="W").length,l=rs.filter(r=>r.res==="L").length,p=rs.length-w-l,u=rs.reduce((s,r)=>s+(r.res==="W"?payOf(r.odds):r.res==="L"?-1:0),0);
   return {n:rs.length,w,l,p,hit:w+l?w/(w+l):0,u,roi:w+l?u/(w+l):0,exp:rs.length?rs.reduce((s,r)=>s+r.prob,0)/rs.length:0}}
@@ -1005,7 +1010,7 @@ function renderPk(){
     <div class="tile"><div class="k">Récord</div><div class="v">${s.w}-${s.l}${s.p?"-"+s.p:""}</div><div class="s">${s.n} picks en ${days.length} días</div></div>
     <div class="tile"><div class="k">Acierto</div><div class="v ${s.hit>=.524?"up":"dn"}">${pct1(s.hit)}</div><div class="s">el modelo esperaba ${pct1(s.exp)} · hace falta 52.4%</div></div>
     <div class="tile"><div class="k">Ganancia</div><div class="v ${s.u>=0?"up":"dn"}">${units(s.u)} u</div><div class="s">1 unidad por pick a -110</div></div>
-    <div class="tile"><div class="k">ROI</div><div class="v ${s.roi>=0?"up":"dn"}">${(s.roi*100).toFixed(1)}%</div><div class="s">ganancia ÷ lo apostado</div></div>
+    <div class="tile"><div class="k">ROI</div><div class="v ${s.roi>=0?"up":"dn"}">${(s.roi*100).toFixed(1)}%</div><div class="s">ganancia ÷ lo apostado</div></div>${PKF.src==="k"?clvTile(rs):""}
     <div class="tile"><div class="k">Corrección</div><div class="v">${PKB<1?"−"+Math.round((1-PKB)*100)+"%":"ninguna"}</div><div class="s">${PKB<1?`el modelo exageraba: ahora un 70% sale como ${pct1(shrinkP(.7))}`:"todavía no hay suficientes picks"} · medida con ${(DATA.pkcal||{}).n||0} picks</div></div></div>`+
     pkTable("Por probabilidad del modelo (¿está bien calibrado?)",bucket,"Probabilidad")+
     pkTable("Por mercado",byMk,"Mercado")+
@@ -1048,7 +1053,7 @@ function renderTop(){
      <p class="meta" style="margin:4px 0 0">${TP.src==="k"?"Con la línea principal y el precio de Kalshi (se guarda desde el 12 de noviembre).":"Con la línea de referencia a -110"+" desde el 4 de noviembre (modelo actual)"+"."} Mismo orden que arriba: los de "⚠ revisar" (edge de más de 12%) van al final.</p>`+
     (base.length?`<div class="tiles" style="margin-top:12px">
       <div class="tile"><div class="k">Top 5</div><div class="v ${s5.u>=0?"up":"dn"}">${s5.w}-${s5.l}</div><div class="s">${pct1(s5.hit)} de acierto · ${units(s5.u)} u</div></div>
-      <div class="tile"><div class="k">Top 10</div><div class="v ${s10.u>=0?"up":"dn"}">${s10.w}-${s10.l}</div><div class="s">${pct1(s10.hit)} de acierto · ${units(s10.u)} u</div></div></div>
+      <div class="tile"><div class="k">Top 10</div><div class="v ${s10.u>=0?"up":"dn"}">${s10.w}-${s10.l}</div><div class="s">${pct1(s10.hit)} de acierto · ${units(s10.u)} u</div></div>${TP.src==="k"?clvTile(t10):""}</div>
      <section class="panel"><h3>${"Por mercado y lado"}</h3><div style="overflow-x:auto"><table class="caltbl"><thead><tr><th class="l"></th><th>Top 10</th><th>Top 5</th></tr></thead><tbody>${grp}</tbody></table></div></section>
      <section class="panel" style="margin-top:12px"><h3>${"Por día"}</h3><div style="overflow-x:auto"><table class="caltbl"><thead><tr><th class="l"></th><th>Top 10</th><th>Top 5</th></tr></thead><tbody>${per}</tbody></table></div></section>`
      :`<p class="meta" style="margin-top:10px">Todavía no hay picks calificados con esta línea.</p>`);

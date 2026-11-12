@@ -69,7 +69,7 @@ def fetch(series):
                     continue  # sin vendedores: no se puede comprar
                 date = _date(m.get("event_ticker", ""))
                 out.setdefault(norm(title.split(":")[0]), {}).setdefault(k, []).append(
-                    [date, float(m["floor_strike"]), round(bid, 2), round(ask, 2)])
+                    [date, float(m["floor_strike"]), round(bid, 2), round(ask, 2), m.get("ticker", "")])
                 n += 1
             cursor = d.get("cursor") or ""
             if not cursor:
@@ -78,3 +78,55 @@ def fetch(series):
         for rows in v.values():
             rows.sort(key=lambda r: (r[0] or "", r[1]))
     return out, n, failed
+
+
+def closing_mid(ticker, start_utc):
+    """(bid, ask) de SÍ en el último minuto con precio antes de start_utc (datetime UTC sin zona)."""
+    import calendar
+    series = ticker.split("-")[0]
+    end = calendar.timegm(start_utc.timetuple())
+    url = (f"https://api.elections.kalshi.com/trade-api/v2/series/{series}/markets/{ticker}/candlesticks"
+           f"?start_ts={end - 3600}&end_ts={end}&period_interval=1")
+    for intento in range(4):
+        r = subprocess.run(["curl", "-sS", "-m", "30", url], capture_output=True, text=True)
+        try:
+            d = json.loads(r.stdout)
+        except ValueError:
+            d = {}
+        if "candlesticks" in d:
+            for c in reversed(d["candlesticks"]):
+                try:
+                    bid = float(c["yes_bid"]["close_dollars"]); ask = float(c["yes_ask"]["close_dollars"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if 0 < ask < 1 and bid > 0:
+                    return round(bid, 3), round(ask, 3)
+            return None
+        time.sleep(2 * (intento + 1))
+    return None
+
+
+def add_clv(picks, start_of, now_utc, limit=400):
+    """Para los picks de Kalshi cuyo partido ya empezó: precio de cierre y si le ganamos (CLV).
+    start_of(p) -> datetime UTC del inicio del partido o None."""
+    n = 0
+    for p in picks:
+        if n >= limit:
+            break
+        if p.get("src") != "k" or not p.get("tk") or "close" in p or p.get("c") is None:
+            continue
+        st = start_of(p)
+        if not st or st > now_utc:
+            continue
+        mid = closing_mid(p["tk"], st)
+        time.sleep(0.4)
+        n += 1
+        if mid is None:
+            p["close"] = None
+            continue
+        # Over = compramos SÍ a c; Under = compramos NO a c. Lo que costaba ese mismo lado al cierre:
+        bid, ask = mid
+        close_cost = ask if p["side"] == "O" else 1 - bid
+        p["close"] = round(close_cost, 3)
+        p["clv"] = round(close_cost - p["c"], 3)   # + = al cierre costaba más: le ganamos al mercado
+    return n

@@ -493,7 +493,11 @@ try:
     n_new=picks.merge(PDB,picks.snapshot(HTML_OUT),datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),cal=1 if MODEL else 0)
 except Exception as e:
     n_new=0; print(f"  aviso: no se pudieron guardar los Mejores props de hoy ({e})")
-n_gr=picks.grade(PDB,BOX_DIR); picks.save(PDB)
+n_gr=picks.grade(PDB,BOX_DIR)
+try: n_clv=kalshi.add_clv(PDB["picks"],picks.start_of,datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None))
+except Exception as e: n_clv=0; print(f"  aviso: no se pudo medir el CLV ({e})")
+picks.save(PDB)
+if n_clv: print(f"  CLV: precio de cierre de Kalshi para {n_clv} picks")
 data["pk"]=picks.compact(PDB)
 with open(JSON_OUT,"w") as f: json.dump(data,f,ensure_ascii=False,separators=(",",":"))
 with open(HTML_OUT,"w") as f: f.write(tpl.replace("__DATA__",json.dumps(data,ensure_ascii=False,separators=(",",":"))).replace("__FECHA__",FECHA).replace("__DVPGAMES__",str(DVP_GAMES)))

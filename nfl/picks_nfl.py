@@ -51,10 +51,11 @@ def save(db):
 def merge(db, snap, taken_at):
     """Guarda los picks de los partidos que empiezan después de taken_at (UTC). Por partido manda la foto más reciente."""
     stamp = taken_at.strftime("%Y-%m-%dT%H:%MZ")
-    games = {}
+    games, starts = {}, {}
     for d, t, away, home, wk in snap["sched"]:
         if game_start_utc(d, t) > taken_at:
             games[(d, away)] = games[(d, home)] = (d, away, home)
+            starts[(d, away)] = starts[(d, home)] = game_start_utc(d, t).strftime("%Y-%m-%dT%H:%MZ")
     if not games:
         return 0
     covered = set(games.values())
@@ -65,6 +66,7 @@ def merge(db, snap, taken_at):
         for p in rows:
             if (d, p["tm"]) in games:
                 p["t"] = stamp
+                p["gs"] = starts.get((d, p["tm"]))
                 if p["k"] != "td":
                     p["raw"] = round(1 / (1 + math.exp(-math.log(p["prob"] / (1 - p["prob"])) / b)), 4)
                 keep.append(p)
@@ -127,8 +129,13 @@ def compact(db):
     for p in sorted(db["picks"], key=lambda x: (x["d"], -x["prob"])):
         if p.get("res") in ("W", "L", "P"):
             out.append([p["d"], p["wk"], p["n"], p["tm"], p["pos"], p["opp"], p["k"], p["line"], p["side"],
-                        round(p["prob"], 3), round(p["edge"], 3), p["res"], p.get("act"), p.get("src", "ref"), p.get("odds", -110)])
+                        round(p["prob"], 3), round(p["edge"], 3), p["res"], p.get("act"), p.get("src", "ref"), p.get("odds", -110), p.get("clv")])
     return out
+
+
+def start_of(p):
+    gs = p.get("gs")
+    return datetime.datetime.strptime(gs, "%Y-%m-%dT%H:%MZ") if gs else None
 
 
 def pending(db):
