@@ -88,7 +88,10 @@ async function getJSON(url){
 
 async function loadGames(){
   try {
-    const d = await getJSON(API + "/scoreboard");
+    // Fecha de hoy en hora del este (antes de las 6am sigue siendo la noche anterior), para que ESPN no mande los de ayer
+    const et = new Date(Date.now() - 5 * 3600e3 - 6 * 3600e3);
+    const ymd = et.getUTCFullYear() + String(et.getUTCMonth() + 1).padStart(2, "0") + String(et.getUTCDate()).padStart(2, "0");
+    const d = await getJSON(API + "/scoreboard?dates=" + ymd);
     S.games = (d.events||[]).map(e => {
       const c = e.competitions[0];
       const t = c.competitors.map(x => x.team.abbreviation);
