@@ -323,7 +323,7 @@ tr.grp td span{font-family:var(--body);font-weight:400;text-transform:none;lette
 <div class="foot">
   <div><b>Datos:</b> basketball-reference.com (box score de cada partido, stats por jugador y lesiones) y teamrankings.com (pace, eficiencia y lo que permite cada rival). Temporada 2026-27, actualizados el __FECHA__.</div>
   <div><b>Modelo:</b> minutos proyectados = mezcla de los últimos 5 partidos y la temporada; producción por minuto, ajuste por rival y peso de los partidos recientes elegidos con un backtest de todos los partidos jugados (cada partido se proyecta solo con lo que se sabía antes). Se corrige el sesgo de cada stat, se aplica back-to-back y, cuando falta un jugador, el aumento de uso medido. Las probabilidades usan el error real medido y una calibración final; detalles en la pestaña Récord del modelo.</div>
-  <div><b>Lesiones:</b> los jugadores "Out" en el reporte de lesiones salen OUT solos (puedes quitarlo tocando OUT). Si la baja es nueva, sus minutos se reparten; si ya venía faltando, sus compañeros ya traen esos minutos en sus promedios recientes.</div>
+  <div><b>Lesiones:</b> los jugadores "Out" en el reporte de lesiones salen OUT solos (puedes quitarlo tocando OUT). Si la baja es nueva, una parte de sus minutos (la medida en el backtest, hoy ~30%) se reparte entre sus compañeros; si ya venía faltando, sus compañeros ya traen esos minutos en sus promedios recientes.</div>
   <div><b>Defensa por posición:</b> calculada con __DVPGAMES__ box scores de basketball-reference: lo que anotó, rebotó, asistió, etc. cada posición del rival por minuto, separando titulares y suplentes, contra el promedio de liga. A cada jugador se le aplica el factor de su posición y su rol (titular si fue titular en al menos la mitad de sus partidos). La posición es la de basketball-reference (la primera si tiene dos).</div>
   <div><b>OUT:</b> tus cambios a mano (OUT, minutos, rival, líneas) duran solo ese día; al día siguiente la página arranca limpia con las lesiones del reporte. Los minutos del jugador pasan a sus compañeros de rotación (10+ min de promedio) que no tengan minutos puestos a mano, en proporción a los minutos que juega cada uno, con tope de 42. Si le pones minutos a mano a alguien, se respetan tus minutos.</div>
   <div><b>Cálculo:</b> cada stat = producción por minuto × xMP × pace del partido × local (±1%) × ajuste por rival × corrección de sesgo × back-to-back × uso. Ajuste por rival: "Equipo" usa lo que permite el rival (puntos por posesión, % de rebote, asistencias y triples); "Posición" usa lo que permite a la posición y rol del jugador; "Auto" usa el que mejor funcionó en el backtest. Las cifras en pequeño debajo de cada stat son el promedio de la temporada. Marcador: posesiones × eficiencia ofensiva del equipo (pts por posesión, teamrankings) × eficiencia defensiva del rival ÷ promedio de liga × local, más el efecto de los jugadores OUT (lo que dejan de anotar menos lo que anotan sus compañeros con los minutos extra); total y spread con desviación de 12 puntos (supuesto).</div>
@@ -391,7 +391,9 @@ function computeBoost(){
     if(b.outPts>0&&b.totPts>0)USG[tm]=Math.min(1.25,1+(MDL?MDL.usage:0.3)*b.outPts/b.totPts);
     if(!b.out||!b.act.length)return;
     const tot=b.act.reduce((s,p)=>s+baseMin(p),0);
-    b.act.forEach(p=>{const room=Math.max(0,MAX_MIN-Math.round(baseMin(p)));EXTRA[p.name]=Math.min(room,b.out*baseMin(p)/tot)})});
+    // solo una parte de los minutos del que falta se reparte de verdad (medida en el backtest)
+    const red=MDL&&MDL.params.redist!=null?MDL.params.redist:0.4;
+    b.act.forEach(p=>{const room=Math.max(0,MAX_MIN-Math.round(baseMin(p)));EXTRA[p.name]=Math.min(room,red*b.out*baseMin(p)/tot)})});
 }
 const modeNow=()=>G.mode==="auto"?(MDL?MDL.params.mode:"team"):G.mode;
 function b2bOf(tm){const s=G.day&&OPPD[G.day]&&OPPD[G.day][tm];if(!s)return 0;const g=s.g;return (s.home?g[5]:g[4])?1:0}
@@ -1068,7 +1070,8 @@ function renderCal(){
   box.innerHTML=`<div class="tiles" style="margin-top:12px">
     <div class="tile"><div class="k">Casos probados</div><div class="v">${r.n.toLocaleString("es")}</div><div class="s">jugador-partido, de ${r.games} partidos</div></div>
     <div class="tile"><div class="k">Ajuste por rival</div><div class="v">${MODE[pm.mode]}</div><div class="s">el que menos se equivocó</div></div>
-    <div class="tile"><div class="k">Peso de los últimos 5</div><div class="v">${Math.round(pm.a_min*100)}% · ${Math.round(pm.b*100)}%</div><div class="s">en minutos · en producción por minuto</div></div>
+    ${pm.h?`<div class="tile"><div class="k">Minutos recientes</div><div class="v">${pm.h} partidos</div><div class="s">vida media del promedio ponderado de minutos</div></div>`:`<div class="tile"><div class="k">Peso de los últimos 5</div><div class="v">${Math.round(pm.a_min*100)}% · ${Math.round(pm.b*100)}%</div><div class="s">en minutos · en producción por minuto</div></div>`}
+    <div class="tile"><div class="k">Minutos del que falta</div><div class="v">${Math.round((pm.redist!=null?pm.redist:0.4)*100)}%</div><div class="s">se reparten entre los compañeros (medido; el resto se pierde en rotación)</div></div>
     <div class="tile"><div class="k">Back-to-back</div><div class="v">×${MDL.b2b.toFixed(3)}</div><div class="s">${r.b2b_n} casos medidos</div></div>
     <div class="tile"><div class="k">Uso al faltar un titular</div><div class="v">${MDL.usage.toFixed(2)}</div><div class="s">por cada 100% de puntos que faltan · ${r.usage_n} casos</div></div></div>
   <section class="panel"><h3>Error promedio por partido (menos es mejor)</h3>

@@ -48,6 +48,18 @@ def _blend(recent, season, w):
     return w * recent + (1 - w) * season
 
 
+MIN_H = None  # vida media (en partidos) de los minutos ponderados; la elige el backtest
+H_GRID = [2, 3, 5, 8]
+REDIST_GRID = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0]
+
+
+def ewm_minutes(entries, h):
+    """Promedio de minutos que pesa más los partidos recientes (el de hace h partidos pesa la mitad)."""
+    n = len(entries)
+    w = [0.5 ** ((n - 1 - i) / h) for i in range(n)]
+    return sum(wi * e["mp"] for wi, e in zip(w, entries)) / sum(w)
+
+
 def player_state(entries, a_min, b):
     """Minutos proyectados y producción por minuto (mezcla últimos LAST_N y temporada)."""
     last = entries[-LAST_N:]
@@ -60,7 +72,8 @@ def player_state(entries, a_min, b):
         r_all = sum(e["s"][k] for e in entries) / tot_all
         r_last = sum(e["s"][k] for e in last) / tot_last
         rates.append(_blend(r_last, r_all, b))
-    return _blend(mp_last, mp_all, a_min), rates
+    mpx = ewm_minutes(entries, MIN_H) if MIN_H else _blend(mp_last, mp_all, a_min)
+    return mpx, rates
 
 
 class Snapshot:
@@ -198,9 +211,46 @@ def run(games, positions):
         return None, logs, team_games
     mean_act = [sum(c["act"][k] for c in cases) / len(cases) or 1 for k in range(len(STATS))]
 
-    # 1) peso de los minutos recientes
+    # 1) peso de los minutos recientes: mezcla últimos 5 + temporada, o promedio ponderado por recencia
+    global MIN_H
+    MIN_H = None
     mins = {a: _mae([player_state(c["prior"], a, 0)[0] - c["mp"] for c in cases]) for a in GRID}
     a_min = min(mins, key=mins.get)
+    mins_h = {h: _mae([ewm_minutes(c["prior"], h) - c["mp"] for c in cases]) for h in H_GRID}
+    best_h = min(mins_h, key=mins_h.get)
+    if mins_h[best_h] < mins[a_min]:
+        MIN_H = best_h
+    rep["mae_min_h"] = {str(h): round(v, 3) for h, v in mins_h.items()}
+    # 1b) cuánto de los minutos de un compañero que falta (habitual de 20+ min que jugó el partido anterior)
+    #     se reparte de verdad entre los que juegan
+    by_game = defaultdict(list)
+    for c in cases:
+        by_game[(c["d"], c["tm"])].append(c)
+    team_dates = {t: sorted({d for d, _ in v}) for t, v in team_games.items()}
+    for (d, tm), cs in by_game.items():
+        prev = [x for x in team_dates[tm] if x < d]
+        miss = 0.0
+        if prev:
+            present = {c["name"] for c in cs}
+            for nm, ent in logs.items():
+                if nm in present:
+                    continue
+                pe = [e for e in ent if e["d"] < d and e["tm"] == tm]
+                if len(pe) < MIN_PRIOR or not any(e["d"] == prev[-1] and e["mp"] > 0 for e in pe):
+                    continue
+                if any(e["d"] == d and e["mp"] > 0 for e in ent):
+                    continue
+                avg5 = sum(e["mp"] for e in pe[-LAST_N:]) / len(pe[-LAST_N:])
+                if avg5 >= 20:
+                    miss += avg5
+        base = {id(c): player_state(c["prior"], a_min, 0)[0] for c in cs}
+        tot = sum(base.values()) or 1
+        for c in cs:
+            c["gain"] = miss * base[id(c)] / tot
+    red = {k: _mae([player_state(c["prior"], a_min, 0)[0] + k * c["gain"] - c["mp"] for c in cases]) for k in REDIST_GRID}
+    redist = min(red, key=red.get)
+    rep["redist_n"] = sum(1 for c in cases if c["gain"] > 0)
+    rep["mae_redist"] = {str(k): round(v, 3) for k, v in red.items()}
 
     # 2) peso reciente de la producción por minuto y tipo de ajuste por rival
     score, detail = {}, {}
@@ -313,13 +363,15 @@ def run(games, positions):
             buckets[bk][2] += 1
         calib[s] = [[round(v[0] / v[2], 3), round(v[1] / v[2], 3), v[2]] for bk, v in sorted(buckets.items()) if v[2] >= 15]
 
-    params = {"a_min": a_min, "b": b, "mode": mode, "last_n": LAST_N, "opp_k": OPP_K}
+    params = {"a_min": a_min, "h": MIN_H, "redist": redist, "b": b, "mode": mode, "last_n": LAST_N, "opp_k": OPP_K}
     model = {"params": params, "bias": bias, "sd": sd, "dist": dist, "b2b": b2b, "usage": usage, "calib": calib, "nb": nb, "cal": cal, "report": rep}
     return model, logs, team_games
 
 
-def current(logs, a_min, b):
+def current(logs, a_min, b, h=None):
     """Minutos proyectados, producción por minuto y rol actual de cada jugador."""
+    global MIN_H
+    MIN_H = h
     out = {}
     for name, ent in logs.items():
         ent = [e for e in ent if e["mp"] > 0]

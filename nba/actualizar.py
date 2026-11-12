@@ -178,7 +178,7 @@ print(f"  Calendario: {len(SCHED)} partidos en {len(DIAS)} días")
 GAMES=dvp.load_games(BOX_DIR)
 MODEL,LOGS,TEAM_GAMES=modelo.run(GAMES,POSMAP)
 MP=MODEL["params"] if MODEL else {"a_min":0.5,"b":0.0,"mode":"team"}
-CUR=modelo.current(LOGS,MP["a_min"],MP["b"])
+CUR=modelo.current(LOGS,MP["a_min"],MP["b"],MP.get("h"))
 if MODEL: print(f"  Backtest: {MODEL['report']['n']} casos · ajuste por rival elegido: {MP['mode']} · peso reciente minutos {MP['a_min']}, producción {MP['b']}")
 # back-to-back: el equipo jugó el día anterior (según los partidos jugados o el mismo calendario)
 LAST_DATES={t:{d for d,_ in v} for t,v in TEAM_GAMES.items()}
