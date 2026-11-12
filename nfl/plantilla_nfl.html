@@ -678,7 +678,7 @@ const PKLAB={pyd:"Yds pase",cmp:"Pases completos",att:"Intentos de pase",ptd:"TD
 $("pkmk").innerHTML=`<option value="">Todos</option>`+Object.keys(PKLAB).map(k=>`<option value="${k}">${PKLAB[k]}</option>`).join("");
 function pkRows(){
   let rs=PK.filter(r=>r.k!=="td"&&r.src===PKF.src&&r.prob*100>=PKF.min&&(!PKF.mk||r.k===PKF.mk)&&(!PKF.pos||r.pos===PKF.pos)&&(!PKF.side||r.side===PKF.side));
-  if(PKF.top){const by={};rs.forEach(r=>(by[r.wk]=by[r.wk]||[]).push(r));rs=[].concat(...Object.values(by).map(a=>a.sort((x,y)=>y.edge-x.edge).slice(0,PKF.top)))}
+  if(PKF.top){const by={};rs.forEach(r=>(by[r.wk]=by[r.wk]||[]).push(r));rs=[].concat(...Object.values(by).map(a=>a.sort((x,y)=>((x.edge>.12)-(y.edge>.12))||y.edge-x.edge).slice(0,PKF.top)))}
   return rs;
 }
 const payOf=o=>o>0?o/100:100/(-o);
@@ -739,6 +739,8 @@ const KAL=(DATA.kalshi&&DATA.kalshi.p)||{},KALT=(DATA.kalshi&&DATA.kalshi.t)||""
 const knorm=s=>String(s).normalize("NFKD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[.'’\-]/g,"").replace(/\b(jr|sr|ii|iii|iv|v)\b/g,"").replace(/\s+/g," ").trim();
 const kfee=c=>Math.ceil(0.07*c*(1-c)*100-1e-9)/100; // comisión de Kalshi por contrato
 const toAm=c=>c>=.5?-Math.round(c/(1-c)*100):Math.round((1-c)/c*100);
+// la probabilidad final mezcla el modelo (60%) con lo que dice el precio de Kalshi (40%): el mercado sabe cosas que el modelo no
+const KW=0.6;
 // línea principal de Kalshi (el escalón más cerca de 50/50, la que Kalshi muestra primero):
 // compara la prob. del modelo con el precio de SÍ (Over) y de NO (Under), más la comisión
 function kalMain(name,k,day){let m=null,dm=9;
@@ -747,12 +749,13 @@ function kalMain(name,k,day){let m=null,dm=9;
 function kalBest(name,k,day,pOver){
   let best=null;const main=kalMain(name,k,day);
   (main?[main]:[]).forEach(([d,line,bid,ask])=>{
-    const po=pOver(line),opts=[["O",po,ask]];if(bid>0)opts.push(["U",1-po,+(1-bid).toFixed(2)]);
+    const pm=pOver(line),mkt=bid>0?(bid+ask)/2:ask,po=KW*pm+(1-KW)*mkt,opts=[["O",po,ask]];if(bid>0)opts.push(["U",1-po,+(1-bid).toFixed(2)]);
     opts.forEach(([side,prob,c])=>{if(BP.side&&side!==BP.side)return;if(prob*100<BP.minp)return;const cost=c+kfee(c);if(cost>=1)return;
-      const edge=prob-cost;if(edge<=0)return;if(!best||edge>best.edge)best={line,side,po,pu:1-po,prob,edge,cost,c,yes:ask,no:+(1-bid).toFixed(2)}})});
+      const edge=prob-cost;if(edge<=0)return;if(!best||edge>best.edge)best={line,side,po,pu:1-po,prob,edge,cost,c,yes:ask,no:+(1-bid).toFixed(2),pm}})});
   return best;
 }
 const KALDAYS=new Set();Object.values(KAL).forEach(v=>Object.values(v).forEach(rs=>rs.forEach(r=>KALDAYS.add(r[0]))));const hasKal=d=>KALDAYS.has(d);
+const EDGE_CAP=0.12;
 function bestRows(){
   const day=OPPD[BP.day]||{},q=BP.q.trim().toLowerCase(),out=[];
   P.forEach(p=>{const s=day[p.tm];if(!s||(BP.pos&&p.pos!==BP.pos))return;
@@ -769,7 +772,9 @@ function bestRows(){
       let side=eo>=eu?"O":"U";if(BP.side)side=BP.side;
       const prob=side==="O"?po:pu,edge=side==="O"?eo:eu;if(prob*100<BP.minp)return;
       out.push({p,k,line,ref:!own,proj:pr[k],avg,po,pu,side,prob,edge,odds:side==="O"?oo:ou,opp:s.opp,home:s.home,g:s.g})})});
-  out.sort((a,b)=>b.edge-a.edge||b.prob-a.prob);
+  // edge muy grande = casi siempre el mercado sabe algo (minutos, lesión): se marca y va al final
+  out.forEach(r=>r.warn=r.edge>EDGE_CAP);
+  out.sort((a,b)=>(a.warn-b.warn)||b.edge-a.edge||b.prob-a.prob);
   return out;
 }
 let BROWS=[];
@@ -806,7 +811,7 @@ function groupedBest(rows,rowFn,ncol,order,labels){
     return head(labels[k],`${rs.length} props · ${rs.length>10?"los 10 mejores":"todos"}`)+rs.slice(0,10).map(r=>rowFn(r,r._i)).join("")}).join("");
 }
 function renderBest(){
-  $("bsrcmsg").textContent=BP.src!=="k"?"":hasKal(BP.day)?`Precios de Kalshi de ${KALT}. Precio = lo que cuesta el contrato + la comisión de Kalshi; paga $1 si pega. Se usa la línea principal de Kalshi de cada jugador (la más cerca de 50/50) y solo salen los que tienen edge positivo. El precio cambia: revísalo en Kalshi antes de comprar. Si el edge pasa de 20%, casi siempre Kalshi sabe algo que el modelo no (lesión, cambio de rol): investígalo antes.`:"Kalshi todavía no tiene mercados de jugadores para este día; abajo van con la línea de referencia.";
+  $("bsrcmsg").textContent=BP.src!=="k"?"":hasKal(BP.day)?`Precios de Kalshi de ${KALT}. Precio = lo que cuesta el contrato + la comisión de Kalshi; paga $1 si pega. Se usa la línea principal de Kalshi de cada jugador (la más cerca de 50/50) y solo salen los que tienen edge positivo. El precio cambia: revísalo en Kalshi antes de comprar. La probabilidad mezcla el modelo (60%) con el precio de Kalshi (40%). Si el edge pasa de 12% sale "⚠ revisar" y va al final: casi siempre el mercado sabe algo que el modelo no (lesión, minutos, rol).`:"Kalshi todavía no tiene mercados de jugadores para este día; abajo van con la línea de referencia.";
   const ALL=bestRows();renderBestCards(ALL);BROWS=BP.game?ALL.filter(r=>BP.game.split("-").includes(r.p.tm)):ALL;
   const rowFn=(r,i)=>{const L=((S[r.p.name]||{}).l||{})[r.k]||{};
     return `<tr data-bi="${i}"><td class="l name"><span class="pn">${esc(r.p.name)}</span>${injBadge(r.p)}<small>${r.p.tm} · ${r.p.pos} · ${r.home?"vs":"@"} ${r.opp}</small></td>
@@ -816,7 +821,7 @@ function renderBest(){
     <td class="${r.side==="O"?"v":""}">${(r.po*100).toFixed(1)}%</td><td class="${r.side==="U"?"v":""}">${(r.pu*100).toFixed(1)}%</td>
     <td><span class="pill ${r.side==="O"?"OVER":"UNDER"}">${r.side==="O"?"OVER":"UNDER"} ${(r.prob*100).toFixed(0)}%</span></td>
     ${r.kal?`<td title="Precio ${Math.round(r.kal.c*100)}¢ + comisión ${Math.round(kfee(r.kal.c)*100)}¢ = cuota ${r.odds>0?"+":""}${r.odds}"><b>${Math.round(r.kal.cost*100)}¢</b></td>`:`<td><input type="number" step="5" placeholder="-110" value="${(r.side==="O"?L.oo:L.ou)??""}" data-a="bodds" aria-label="Cuota"></td>`}
-    <td class="${r.edge>0?"up":"dn"}">${r.edge>0?"+":""}${(r.edge*100).toFixed(1)}%</td></tr>`};
+    <td class="${r.edge>0?"up":"dn"}">${r.edge>0?"+":""}${(r.edge*100).toFixed(1)}%${r.warn?`<small class="dn" title="Edge de más de 12%: casi siempre el mercado sabe algo que el modelo no. Revisa lesiones y rol antes.">⚠ revisar</small>`:""}</td></tr>`};
   $("besttb").innerHTML=groupedBest(BROWS,rowFn,10,["pyd","cmp","att","ptd","int","ryd","car","rec","recyd","rr","tgt"],BMLAB)||`<tr><td colspan="10" class="l">Ningún prop pasa los filtros. Baja la probabilidad mínima o cambia el día.</td></tr>`;
   $("bcount").textContent=`${BROWS.length} props`+(BP.view==="all"&&BROWS.length>150?" (mostrando los 150 mejores)":"");
 }
