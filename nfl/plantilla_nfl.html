@@ -739,13 +739,17 @@ const KAL=(DATA.kalshi&&DATA.kalshi.p)||{},KALT=(DATA.kalshi&&DATA.kalshi.t)||""
 const knorm=s=>String(s).normalize("NFKD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[.'’\-]/g,"").replace(/\b(jr|sr|ii|iii|iv|v)\b/g,"").replace(/\s+/g," ").trim();
 const kfee=c=>Math.ceil(0.07*c*(1-c)*100-1e-9)/100; // comisión de Kalshi por contrato
 const toAm=c=>c>=.5?-Math.round(c/(1-c)*100):Math.round((1-c)/c*100);
-// mejor escalón de Kalshi para ese jugador y stat: compara la prob. del modelo con el precio (más comisión)
+// línea principal de Kalshi (el escalón más cerca de 50/50, la que Kalshi muestra primero):
+// compara la prob. del modelo con el precio de SÍ (Over) y de NO (Under), más la comisión
+function kalMain(name,k,day){let m=null,dm=9;
+  ((KAL[knorm(name)]||{})[k]||[]).forEach(e=>{if(e[0]!==day)return;const mid=e[2]>0?(e[2]+e[3])/2:e[3]/2,dd=Math.abs(mid-.5);if(dd<dm){dm=dd;m=e}});
+  return m}
 function kalBest(name,k,day,pOver){
-  let best=null;
-  ((KAL[knorm(name)]||{})[k]||[]).forEach(([d,line,bid,ask])=>{if(d!==day)return;
+  let best=null;const main=kalMain(name,k,day);
+  (main?[main]:[]).forEach(([d,line,bid,ask])=>{
     const po=pOver(line),opts=[["O",po,ask]];if(bid>0)opts.push(["U",1-po,+(1-bid).toFixed(2)]);
     opts.forEach(([side,prob,c])=>{if(BP.side&&side!==BP.side)return;if(prob*100<BP.minp)return;const cost=c+kfee(c);if(cost>=1)return;
-      const edge=prob-cost;if(edge<=0)return;if(!best||edge>best.edge)best={line,side,po,pu:1-po,prob,edge,cost,c}})});
+      const edge=prob-cost;if(edge<=0)return;if(!best||edge>best.edge)best={line,side,po,pu:1-po,prob,edge,cost,c,yes:ask,no:+(1-bid).toFixed(2)}})});
   return best;
 }
 const KALDAYS=new Set();Object.values(KAL).forEach(v=>Object.values(v).forEach(rs=>rs.forEach(r=>KALDAYS.add(r[0]))));const hasKal=d=>KALDAYS.has(d);
@@ -802,12 +806,12 @@ function groupedBest(rows,rowFn,ncol,order,labels){
     return head(labels[k],`${rs.length} props · ${rs.length>10?"los 10 mejores":"todos"}`)+rs.slice(0,10).map(r=>rowFn(r,r._i)).join("")}).join("");
 }
 function renderBest(){
-  $("bsrcmsg").textContent=BP.src!=="k"?"":hasKal(BP.day)?`Precios de Kalshi de ${KALT}. Precio = lo que cuesta el contrato + la comisión de Kalshi; paga $1 si pega. Solo salen los que tienen edge positivo. El precio cambia: revísalo en Kalshi antes de comprar. Si el edge pasa de 20%, casi siempre Kalshi sabe algo que el modelo no (lesión, cambio de rol): investígalo antes.`:"Kalshi todavía no tiene mercados de jugadores para este día; abajo van con la línea de referencia.";
+  $("bsrcmsg").textContent=BP.src!=="k"?"":hasKal(BP.day)?`Precios de Kalshi de ${KALT}. Precio = lo que cuesta el contrato + la comisión de Kalshi; paga $1 si pega. Se usa la línea principal de Kalshi de cada jugador (la más cerca de 50/50) y solo salen los que tienen edge positivo. El precio cambia: revísalo en Kalshi antes de comprar. Si el edge pasa de 20%, casi siempre Kalshi sabe algo que el modelo no (lesión, cambio de rol): investígalo antes.`:"Kalshi todavía no tiene mercados de jugadores para este día; abajo van con la línea de referencia.";
   const ALL=bestRows();renderBestCards(ALL);BROWS=BP.game?ALL.filter(r=>BP.game.split("-").includes(r.p.tm)):ALL;
   const rowFn=(r,i)=>{const L=((S[r.p.name]||{}).l||{})[r.k]||{};
     return `<tr data-bi="${i}"><td class="l name"><span class="pn">${esc(r.p.name)}</span>${injBadge(r.p)}<small>${r.p.tm} · ${r.p.pos} · ${r.home?"vs":"@"} ${r.opp}</small></td>
     <td class="l">${esc(BMLAB[r.k])}</td>
-    ${r.kal?`<td title="Mercado de Kalshi: ${r.side==="O"?"SÍ":"NO"} en ${r.line+.5}+">${r.line}<small>Kalshi</small></td>`:`<td><input type="number" step="0.5" value="${r.line}" data-a="bline" class="${r.ref?"refl":""}" title="${r.ref?"Línea de referencia (su promedio). Escribe la de tu casa.":"Tu línea"}" aria-label="Línea"></td>`}
+    ${r.kal?`<td title="En Kalshi: ${r.line+.5}+ · SÍ ${Math.round(r.kal.yes*100)}¢ / NO ${Math.round(r.kal.no*100)}¢">${r.line+.5}+<small>Kalshi · ${r.side==="O"?"SÍ":"NO"}</small></td>`:`<td><input type="number" step="0.5" value="${r.line}" data-a="bline" class="${r.ref?"refl":""}" title="${r.ref?"Línea de referencia (su promedio). Escribe la de tu casa.":"Tu línea"}" aria-label="Línea"></td>`}
     <td class="v">${f1(r.proj)}</td><td>${f1(r.avg)}</td>
     <td class="${r.side==="O"?"v":""}">${(r.po*100).toFixed(1)}%</td><td class="${r.side==="U"?"v":""}">${(r.pu*100).toFixed(1)}%</td>
     <td><span class="pill ${r.side==="O"?"OVER":"UNDER"}">${r.side==="O"?"OVER":"UNDER"} ${(r.prob*100).toFixed(0)}%</span></td>
