@@ -280,6 +280,11 @@ function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 const ov=n=>S[n]||(S[n]={});
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+// hora del partido en la zona del que mira la página (los horarios vienen en hora del este, UTC-5 en invierno)
+function locT(d,t){const m=String(t||"").trim().toLowerCase().match(/^(\d{1,2}):(\d{2})\s*([ap])?/);if(!m||!d)return esc(t)+" ET";
+  let h=+m[1]%12;if(m[3]==="p")h+=12;else if(!m[3])h=+m[1];
+  const x=new Date(Date.UTC(+d.slice(0,4),+d.slice(5,7)-1,+d.slice(8,10),h+5,+m[2]));
+  return x.toLocaleTimeString("es",{hour:"numeric",minute:"2-digit",hour12:true})+" (tu hora)"}
 const f1=x=>(Math.round(x*10)/10).toFixed(1);
 const pct=x=>(x*100).toFixed(0)+"%";
 
@@ -425,7 +430,7 @@ function renderDay(){
       const sp=sc?sc.b-sc.a:0, fav=!sc?"":Math.abs(sp)<.05?"Parejo":(sp<0?g[4]:g[3])+" -"+Math.abs(sp).toFixed(1);
       const lv=g[5]==null?"":` · LV ${g[5]>0?g[4]:g[3]} -${Math.abs(g[5]).toFixed(1)}, ${g[6]}`;
       return `<button type="button" class="gcard${on?" on":""}" data-gi="${NEXT.indexOf(g)}">
-        <span class="gt">${esc(g[2])} ET · semana ${g[0]}</span>
+        <span class="gt">${locT(g[1],g[2])} · semana ${g[0]}</span>
         <span class="gr"><span>${g[3]}</span><b>${sc?f1(sc.b):"—"}</b></span>
         <span class="gr"><span>${g[4]} <small>local</small></span><b>${sc?f1(sc.a):"—"}</b></span>
         <span class="gt">Total ${sc?f1(sc.total):"—"} · ${fav}${lv}</span></button>`}).join("")+`</div>`;
@@ -649,7 +654,7 @@ function renderTd(){
   if(TD.group){
     const games=NEXT.filter(g=>!TD.day||g[1]===TD.day);
     games.forEach(g=>{const rs=rows.filter(r=>r.g===g);if(!rs.length)return;const sc=scoreFor(g[4],g[3],1);
-      html+=`<tr class="grp"><td colspan="9" class="l">${g[3]} @ ${g[4]} <span>${esc(dayName(g[1]))} ${esc(g[2])} ET${sc?` · proyectado ${g[3]} ${f1(sc.b)} – ${g[4]} ${f1(sc.a)}`:""}${g[6]!=null?` · total Las Vegas ${g[6]}`:""}</span></td></tr>`+rs.map(tdRowHTML).join("")});
+      html+=`<tr class="grp"><td colspan="9" class="l">${g[3]} @ ${g[4]} <span>${esc(dayName(g[1]))} ${locT(g[1],g[2])}${sc?` · proyectado ${g[3]} ${f1(sc.b)} – ${g[4]} ${f1(sc.a)}`:""}${g[6]!=null?` · total Las Vegas ${g[6]}`:""}</span></td></tr>`+rs.map(tdRowHTML).join("")});
   }else html=rows.map(tdRowHTML).join("");
   $("tdtb").innerHTML=html||`<tr><td colspan="9" class="l">Ningún jugador pasa la probabilidad mínima. Bájala o cambia los filtros.</td></tr>`;
   $("tdcount").textContent=rows.filter(r=>!r.out).length+" jugadores";
@@ -772,7 +777,7 @@ function renderBestCards(all){
   $("bcards").innerHTML=!games.length?"":`<div class="dayhead"><b>${fmtDay(BP.day)}</b> · ${games.length} partido${games.length>1?"s":""}${BP.game?` · <button type="button" class="btn" id="ball">Ver todos los partidos</button>`:" · toca un partido para ver solo sus props"}</div><div class="cards">`+
     games.map(([away,home,time,sc])=>{const k=away+"-"+home,n=(cnt[away]||0)+(cnt[home]||0);
       return `<button type="button" class="gcard${BP.game===k?" on":""}" data-g="${k}">
-        <span class="gt">${esc(time)} ET</span>
+        <span class="gt">${locT(BP.day,time)}</span>
         <span class="gr"><span>${away}</span><b>${sc?f1(sc.b):"—"}</b></span>
         <span class="gr"><span>${home} <small>local</small></span><b>${sc?f1(sc.a):"—"}</b></span>
         <span class="gt"><b>${n} props</b> · Total ${sc?f1(sc.total):"—"}</span></button>`}).join("")+`</div>`;

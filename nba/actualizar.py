@@ -43,7 +43,7 @@ OUT=os.path.join(HERE,"Modelo_Props_NBA.xlsx")
 HTML_TPL=os.path.join(HERE,"plantilla_dashboard.html")
 HTML_OUT=os.path.join(HERE,"proyecciones-nba.html")
 JSON_OUT=os.path.join(HERE,"data","nba_data.json")
-HOY=datetime.date.today()
+HOY=(datetime.datetime.now(datetime.timezone.utc)-datetime.timedelta(hours=5)).date()  # fecha de Nueva York (el servidor está en UTC)
 FECHA=f"{HOY.day}-{['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][HOY.month-1]}-{HOY.year}"
 
 TR_STATS=[("pace","possessions-per-game"),("orb","offensive-rebounding-pct"),("drb","defensive-rebounding-pct"),

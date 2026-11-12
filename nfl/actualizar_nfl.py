@@ -14,7 +14,7 @@ RAW = os.path.join(HERE, "data", "raw")
 JSON_OUT = os.path.join(HERE, "data", "nfl_data.json")
 HTML_TPL = os.path.join(HERE, "plantilla_nfl.html")
 HTML_OUT = os.path.join(HERE, "proyecciones-nfl.html")
-HOY = datetime.date.today()
+HOY = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=5)).date()  # fecha de Nueva York (el servidor está en UTC)
 FECHA = f"{HOY.day}-{['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][HOY.month-1]}-{HOY.year}"
 
 URL_STATS = f"https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_{SEASON}.csv"
