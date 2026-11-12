@@ -527,6 +527,118 @@ function putBet(bet){
 
 function setTab(t){ S.tab = t; render(); }
 
+
+// ---------- foto de Kalshi: leer la apuesta de un screenshot ----------
+// La app (Android) lee el texto con ML Kit y llama a window.onOcr(texto). Formato de Kalshi:
+//   "Combo" (= parlay) · "No · Rudy Gobert: 15+ points" · "Cost $9.00" · "Max payout $15.61"
+const KSTAT = s => { s = s.toLowerCase();
+  const p = /point/.test(s), r = /rebound/.test(s), a = /assist/.test(s);
+  if (p && r && a) return "PRA"; if (p && r) return "PR"; if (p && a) return "PA"; if (r && a) return "RA";
+  if (/three|3-?p|3pt|triple/.test(s)) return "3PM"; if (/steal/.test(s) && /block/.test(s)) return "STL";
+  if (/steal/.test(s)) return "STL"; if (/block/.test(s)) return "BLK";
+  if (p) return "PTS"; if (r) return "REB"; if (a) return "AST"; return "PTS"; };
+const kMoney = s => { const m = String(s).replace(/,/g, "").match(/\$?\s*(\d+(?:\.\d+)?)/); return m ? +m[1] : null; };
+function parseKalshi(text){
+  const flat = text.replace(/\r/g, "").replace(/[•·]/g, "·");
+  const legs = [];
+  const re = /\b(Yes|No)\b\s*[·.\-–]?\s*([A-Za-zÀ-ÿ'’.\- ]{3,40}?)\s*:\s*(\d+)\s*\+\s*([a-z ,+&3-]{3,60})/gi;
+  let m;
+  while ((m = re.exec(flat))) {
+    const n = +m[3];
+    legs.push({player: m[2].trim(), stat: KSTAT(m[4]), side: /^no$/i.test(m[1]) ? "under" : "over", line: n - 0.5});
+  }
+  const costM = flat.match(/Cost\s*\n?\s*\$?\s*([\d,]+\.\d{2})/i), payM = flat.match(/(?:Max\s*)?payout\s*\n?\s*\$?\s*([\d,]+\.\d{2})/i);
+  let stake = costM ? kMoney(costM[1]) : null, payout = payM ? kMoney(payM[1]) : null;
+  if (stake == null || payout == null) {
+    // si el texto salió desordenado: el primer $ después de "Cost" y el de "payout" pueden venir en otras líneas
+    const amts = [...flat.matchAll(/\$\s*([\d,]+\.\d{2})/g)].map(x => +x[1].replace(/,/g, ""));
+    const i = flat.search(/Cost/i);
+    const after = i >= 0 ? [...flat.slice(i).matchAll(/\$\s*([\d,]+\.\d{2})/g)].map(x => +x[1].replace(/,/g, "")) : amts;
+    if (stake == null && after.length) stake = after[0];
+    if (payout == null && after.length > 1) payout = after[1];
+  }
+  const parlay = /combo|parlay/i.test(flat) || legs.length > 1;
+  let odds = "";
+  if (stake && payout && payout > stake) {
+    const prof = payout - stake;
+    odds = prof >= stake ? "+" + Math.round(prof / stake * 100) : String(-Math.round(stake / prof * 100));
+  }
+  return {legs, stake, payout, odds, parlay};
+}
+function photoKalshi(){
+  if (!NATIVE || !window.Android.pickPhoto) { S.photoMsg = "La foto solo funciona en la app de Android."; return render(); }
+  S.photoMsg = "Leyendo la foto…"; render();
+  Android.pickPhoto();
+}
+window.onOcr = async (text, err) => {
+  if (err === "cancel") { S.photoMsg = ""; return render(); }
+  if (err || !text) { S.photoMsg = "No pude leer la foto (" + (err || "sin texto") + ")."; return render(); }
+  const k = parseKalshi(text);
+  if (!S.games.length) await loadGames();
+  await Promise.all(S.games.map(g => loadRoster(g.id)));
+  const key = s => norm(s).replace(/\b(jr|sr|ii|iii|iv)\b/g, "").replace(/\s+/g, " ").trim();
+  k.legs.forEach(l => {
+    for (const g of S.games) for (const t of S.rosters[g.id] || []) {
+      const hit = t.names.find(x => key(x) === key(l.player)) || t.names.find(x => key(x).split(" ").pop() === key(l.player).split(" ").pop() && key(x)[0] === key(l.player)[0]);
+      if (hit && !l.game) { l.game = g.id; l.player = hit; }
+    }
+  });
+  if (!k.legs.length) k.legs.push({player: "", stat: "PTS", side: "over", line: ""});
+  S.photo = k; S.photoMsg = ""; S.photoRaw = text;
+  render();
+};
+function phSet(i, f, v){ const l = S.photo.legs[i]; l[f] = f === "line" ? v : v;
+  if (f === "player") { l.game = null; const key = s => norm(s).replace(/\s+/g, " ").trim();
+    for (const g of S.games) for (const t of S.rosters[g.id] || []) { const h = t.names.find(x => key(x) === key(v)); if (h) { l.game = g.id; l.player = h; } } }
+  if (f !== "player" && f !== "line") render(); }
+function phDel(i){ S.photo.legs.splice(i, 1); render(); }
+function phAdd(){ S.photo.legs.push({player: "", stat: "PTS", side: "over", line: ""}); render(); }
+function phCancel(){ S.photo = null; render(); }
+function phSave(){
+  const k = S.photo, stake = parseFloat(document.getElementById("phstake")?.value) || 0, odds = (document.getElementById("phodds")?.value || "").trim();
+  for (const l of k.legs) {
+    if (!l.player || l.line === "" || isNaN(+l.line)) { S.photoMsg = "Completa jugador y línea en todos."; return render(); }
+    if (!l.game) { S.photoMsg = `No encontré a ${l.player} en los juegos de hoy. Escribe su nombre completo.`; return render(); }
+  }
+  const legs = k.legs.map(l => ({game: l.game, gameName: S.games.find(g => g.id === l.game)?.name || "", player: l.player, stat: l.stat, side: l.side, line: +l.line, ...playerMeta(l.game, l.player)}));
+  if (k.parlay && legs.length > 1) S.bets.push({id: Date.now(), parlay: true, legs, stake, odds});
+  else legs.forEach((leg, n) => S.bets.push({id: Date.now() + n, ...leg, stake, odds}));
+  S.photo = null; S.photoMsg = `✅ ${k.parlay && legs.length > 1 ? "Parlay agregado" : legs.length + " apuesta" + (legs.length > 1 ? "s agregadas" : " agregada")}.`;
+  save(); poll(); render();
+}
+function photoCard(){
+  const k = S.photo;
+  if (!k) return `<button class="btns" style="width:100%;margin-bottom:12px" onclick="photoKalshi()">📷 Subir foto de Kalshi</button>` +
+    (S.photoMsg ? `<div class="card" style="padding:10px;font-size:13px">${esc(S.photoMsg)}</div>` : "");
+  const sel = (i, f, opts, v) => `<select onchange="phSet(${i},'${f}',this.value)" style="background:#111;color:#e8e0d0;border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:6px">${opts.map(([a, b]) => `<option value="${a}" ${a === v ? "selected" : ""}>${b}</option>`).join("")}</select>`;
+  const inp = "background:#111;color:#e8e0d0;border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:6px";
+  return `<div class="card" style="padding:12px">
+    <div style="font-size:14px;margin-bottom:8px">📷 Revisa lo que leí de la foto y corrige si algo está mal:</div>
+    ${k.legs.map((l, i) => `<div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,.07)">
+      <div style="display:flex;gap:6px"><input value="${esc(l.player)}" placeholder="Jugador" onchange="phSet(${i},'player',this.value)" style="flex:1;${inp}">
+        <button class="btns" onclick="phDel(${i})" style="flex:0 0 auto">✕</button></div>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        ${sel(i, "stat", Object.keys(STATS).map(s => [s, s]), l.stat)}
+        ${sel(i, "side", [["over", "Over"], ["under", "Under"]], l.side)}
+        <input type="number" step="0.5" value="${esc(l.line)}" placeholder="Línea" oninput="S.photo.legs[${i}].line=this.value" style="width:80px;${inp}">
+      </div>
+      ${l.player && !l.game ? `<div style="color:#f87171;font-size:12px;margin-top:4px">No lo encuentro en los juegos de hoy</div>` : ""}
+    </div>`).join("")}
+    <button class="btns" onclick="phAdd()" style="margin-top:8px">+ Agregar pierna</button>
+    <div class="row" style="margin-top:10px">
+      <button class="btns ${k.parlay ? "" : "on"}" onclick="S.photo.parlay=false;render()">Sueltas</button>
+      <button class="btns ${k.parlay ? "on" : ""}" onclick="S.photo.parlay=true;render()">Parlay</button>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">
+      <span class="muted">Apostado $</span><input id="phstake" type="number" inputmode="decimal" value="${k.stake ?? ""}" oninput="S.photo.stake=this.value" style="width:80px;${inp}">
+      <span class="muted">Cuota</span><input id="phodds" value="${esc(k.odds)}" oninput="S.photo.odds=this.value" style="width:80px;${inp}">
+    </div>
+    ${k.payout ? `<div class="muted" style="margin-top:6px">Cobras si pega: $${k.payout.toFixed(2)}</div>` : ""}
+    <div class="row" style="margin-top:10px"><button class="btns" onclick="phCancel()">Cancelar</button><button class="btns on" onclick="phSave()">Confirmar</button></div>
+    ${S.photoMsg ? `<div style="margin-top:8px;font-size:13px">${esc(S.photoMsg)}</div>` : ""}
+  </div>`;
+}
+
 // ---------- importar picks de "Proyecciones NBA" ----------
 // La página de proyecciones copia un código "LB1:..." con los picks; aquí se pega y entran como apuestas
 const BBREF_TO_ESPN = {BRK:"BKN", CHO:"CHA", GSW:"GS", NOP:"NO", NYK:"NY", PHO:"PHX", SAS:"SA", UTA:"UTAH", WAS:"WSH"};
@@ -629,6 +741,7 @@ function render(){
   if (S.tab === "pnl") h += pnlView();
   else {
     for (const b of S.bets) h += b.parlay ? parlayCard(b) : betCard(b);
+    h += photoCard();
     h += `<button class="btns ${S.importOpen ? "on" : ""}" style="width:100%;margin-bottom:12px" onclick="toggleImport()">📥 Importar picks de Proyecciones NBA</button>`;
     if (S.importOpen) {
       const P = S.impPicks || [], sel = P.filter((_, i) => S.impSel[i]), pm = S.impMode === "parlay";

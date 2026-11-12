@@ -16,6 +16,10 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.webkit.WebViewAssetLoader
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import org.json.JSONObject
 
 class MainActivity : Activity() {
 
@@ -65,7 +69,38 @@ class MainActivity : Activity() {
         if (web.canGoBack()) web.goBack() else super.onBackPressed()
     }
 
+    // Foto de Kalshi: el usuario escoge un screenshot, ML Kit lee el texto y se lo pasa a la página
+    private val PICK_PHOTO = 7
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != PICK_PHOTO) return
+        val uri = data?.data
+        if (resultCode != RESULT_OK || uri == null) { sendOcr(null, "cancel"); return }
+        try {
+            val image = InputImage.fromFilePath(this, uri)
+            TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS).process(image)
+                .addOnSuccessListener { sendOcr(it.text, null) }
+                .addOnFailureListener { sendOcr(null, it.message ?: "error") }
+        } catch (e: Exception) { sendOcr(null, e.message ?: "error") }
+    }
+
+    private fun sendOcr(text: String?, err: String?) {
+        val js = "window.onOcr && window.onOcr(" + JSONObject.quote(text ?: "") + "," + JSONObject.quote(err ?: "") + ")"
+        runOnUiThread { web.evaluateJavascript(js, null) }
+    }
+
     inner class Bridge {
+        @JavascriptInterface
+        fun pickPhoto() {
+            runOnUiThread {
+                val i = Intent(Intent.ACTION_GET_CONTENT).apply { type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE) }
+                @Suppress("DEPRECATION")
+                startActivityForResult(Intent.createChooser(i, "Screenshot de Kalshi"), PICK_PHOTO)
+            }
+        }
+
         // Called by the page whenever the bet list changes
         @JavascriptInterface
         fun syncBets(json: String) {
