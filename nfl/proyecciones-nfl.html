@@ -55,6 +55,7 @@ input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid 
 #besttbl input.refl{border-style:dashed;color:var(--muted)}
 #bmk,#bsd,#bpos,#bview{flex-wrap:wrap}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:12px 0}
+.pkh{font-family:var(--display);font-size:1.5rem;margin:18px 0 0}
 .tile{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
 .tile .k{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
 .tile .v{font-family:var(--display);font-size:1.6rem;font-weight:700;font-variant-numeric:tabular-nums}
@@ -152,6 +153,7 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
 
 <nav class="rail" role="tablist" aria-label="Secciones">
   <button type="button" role="tab" id="tab-proj" aria-selected="true" aria-controls="view-proj"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15l3-4 3 3 5-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Proyecciones</span></button>
+  <button type="button" role="tab" id="tab-top" aria-selected="false" aria-controls="view-top"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Top 5 / 10</span></button>
   <button type="button" role="tab" id="tab-best" aria-selected="false" aria-controls="view-best"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg><span>Mejores props</span></button>
   <button type="button" role="tab" id="tab-td" aria-selected="false" aria-controls="view-td"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><ellipse cx="12" cy="12" rx="9" ry="5.5" transform="rotate(-35 12 12)" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9.5 14.5l5-5M10.5 11l1 1M12 9.5l1 1M13.5 12.5l-1-1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>Anotador TD</span></button>
   <button type="button" role="tab" id="tab-rec" aria-selected="false" aria-controls="view-rec"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Récord</span></button>
@@ -209,6 +211,14 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
   <p class="meta" id="bsrcmsg" style="margin:8px 0 0"></p>
   <section class="daybox" id="bcards" aria-live="polite"></section>
   <div class="tablebox"><table id="besttbl"><thead><tr><th class="l">Jugador</th><th class="l">Mercado</th><th>Línea</th><th>Proyección</th><th>Prom.</th><th>Over</th><th>Under</th><th>Pick</th><th>Cuota / precio</th><th>Edge</th></tr></thead><tbody id="besttb"></tbody></table></div>
+</div>
+
+<div id="view-top" role="tabpanel" aria-labelledby="tab-top" hidden>
+  <div class="controls">
+    <div class="f"><label for="tday">Día</label><select id="tday"></select></div>
+    <div class="f"><label>Línea</label><div class="seg" id="tsrc"><button type="button" data-v="k" aria-pressed="true">Kalshi (precio real)</button><button type="button" data-v="ref" aria-pressed="false">Referencia</button></div></div>
+  </div>
+  <div id="topbox"></div>
 </div>
 
 <div id="view-rec" role="tabpanel" aria-labelledby="tab-rec" hidden>
@@ -616,7 +626,7 @@ function renderDvp(){
 }
 seg("dpos",v=>{D.pos=v;D.sort=DCOLS[v][v==="QB"?2:v==="RB"?1:2];renderDvp()}); seg("dmode",v=>{D.mode=v;renderDvp()});
 $("dth").addEventListener("click",e=>{const th=e.target.closest("th[data-k]");if(!th)return;const k=th.dataset.k;if(D.sort===k)D.dir*=-1;else{D.sort=k;D.dir=k==="name"?1:-1}renderDvp()});
-function showTab(w){["proj","best","dvp","td","rec"].forEach(k=>{$("view-"+k).hidden=k!==w;$("tab-"+k).setAttribute("aria-selected",String(k===w))});if(w==="dvp")renderDvp();if(w==="td")renderTd();if(w==="best")renderBest();if(w==="rec")renderPk();window.scrollTo(0,0)}
+function showTab(w){["proj","best","dvp","td","rec","top"].forEach(k=>{$("view-"+k).hidden=k!==w;$("tab-"+k).setAttribute("aria-selected",String(k===w))});if(w==="dvp")renderDvp();if(w==="td")renderTd();if(w==="best")renderBest();if(w==="rec")renderPk();if(w==="top")renderTop();window.scrollTo(0,0)}
 // Anotador de TD: probabilidad de anotar al menos un TD (tierra o recepción) en cada partido
 const TD={day:DAYS[0]||"",pos:"",group:1,min:10,q:""};
 const fairOdds=p=>p<=0||p>=1?"—":p>=.5?String(-Math.round(p/(1-p)*100)):"+"+Math.round((1-p)/p*100);
@@ -666,7 +676,7 @@ $("tdq").addEventListener("input",e=>{TD.q=e.target.value;renderTd()});
 $("tdtb").addEventListener("input",e=>{const el=e.target;if(el.dataset.a!=="tdo")return;const tr=el.closest("tr"),n=tr.dataset.tdn;ov(n).tdo=el.value;save();
   const r=tdRows().find(x=>x.p.name===n);if(!r||r.out)return;const tmp=document.createElement("tbody");tmp.innerHTML=tdRowHTML(r);
   ["edge","pick"].forEach(c=>tr.querySelector(`[data-c="${c}"]`).replaceWith(tmp.querySelector(`[data-c="${c}"]`)))});
-$("tab-td").addEventListener("click",()=>showTab("td"));$("tab-rec").addEventListener("click",()=>showTab("rec"));
+$("tab-td").addEventListener("click",()=>showTab("td"));$("tab-rec").addEventListener("click",()=>showTab("rec"));$("tab-top").addEventListener("click",()=>showTab("top"));
 $("tab-proj").addEventListener("click",()=>showTab("proj"));$("tab-dvp").addEventListener("click",()=>showTab("dvp"));
 if(location.hash==="#defensa")showTab("dvp");
 if(location.hash==="#td")showTab("td");
@@ -864,4 +874,39 @@ const TRIGGER_ID="trig_01VQagaNRTytRAGd6aStL7n9", CCR="Claude Code Remote";
     }
   });
 })();
+// ================= Top 5 y Top 10: los mejores picks del día y su récord =================
+const TP={day:DAYS[0]||"",src:"k"};
+$("tday").innerHTML=$("bday").innerHTML;$("tday").value=TP.day;
+function topToday(){
+  const keep={...BP};Object.assign(BP,{day:TP.day,src:TP.src,mk:"",side:"",minp:55,q:"",game:"",pos:""});
+  const rows=bestRows();Object.keys(BP).forEach(k=>delete BP[k]);Object.assign(BP,keep);return rows.slice(0,10)}
+function topPickRow(r,i){const kal=!!r.kal;
+  return `<tr><td>${i+1}</td><td class="l name"><span class="pn">${esc(r.p.name)}</span>${injBadge(r.p)}<small>${r.p.tm} ${r.home?"vs":"@"} ${r.opp}</small></td><td class="l">${esc(PKLAB[r.k]||r.k)}</td>
+    <td><span class="pill ${r.side==="O"?"OVER":"UNDER"}">${kal?(r.side==="O"?"SÍ ":"NO ")+(r.line+.5)+"+":(r.side==="O"?"OVER ":"UNDER ")+r.line}</span></td>
+    <td class="v">${(r.prob*100).toFixed(0)}%</td><td>${kal?Math.round(r.kal.cost*100)+"¢":(r.odds>0?"+":"")+r.odds}</td>
+    <td class="${r.edge>0?"up":"dn"}">${r.edge>0?"+":""}${(r.edge*100).toFixed(1)}%${r.warn?`<small class="dn">⚠ revisar</small>`:""}</td></tr>`}
+function topOf(rs,n){const by={};rs.forEach(r=>(by[r.wk]=by[r.wk]||[]).push(r));
+  return [].concat(...Object.values(by).map(a=>a.slice().sort((x,y)=>((x.edge>.12)-(y.edge>.12))||y.edge-x.edge).slice(0,n)))}
+function renderTop(){
+  const rows=topToday(),hk=TP.src==="k"&&hasKal(TP.day);
+  const head=`<thead><tr><th>#</th><th class="l">Jugador</th><th class="l">Mercado</th><th>Pick</th><th>Prob.</th><th>${hk?"Precio":"Cuota"}</th><th>Edge</th></tr></thead>`;
+  const tbl=(rs,off)=>rs.length?`<div style="overflow-x:auto"><table class="caltbl">${head}<tbody>${rs.map((r,i)=>topPickRow(r,i+off)).join("")}</tbody></table></div>`:`<p class="meta">No hay picks que pasen los filtros.</p>`;
+  const base=PK.filter(r=>r.src===(TP.src==="k"?"k":"ref")&&(r=>r.k!=="td")(r)),t10=topOf(base,10),t5=topOf(base,5),s10=pkStats(t10),s5=pkStats(t5);
+  const cell=rs=>{if(!rs.length)return `<td>—</td>`;const s=pkStats(rs);return `<td class="${s.u>=0?"up":"dn"}">${s.w}-${s.l} (${Math.round(s.hit*100)}%) ${units(s.u)}</td>`};
+  const grp=[["QB",r=>r.pos==="QB"],["RB",r=>r.pos==="RB"],["WR",r=>r.pos==="WR"],["TE",r=>r.pos==="TE"],["Over",r=>r.side==="O"],["Under",r=>r.side==="U"]].map(([lab,f])=>`<tr><td class="l">${lab}</td>${cell(t10.filter(f))}${cell(t5.filter(f))}</tr>`).join("");
+  const per=[...new Set(base.map(r=>r.wk))].sort().reverse().map(x=>`<tr><td class="l">${(x=>"Semana "+x)(x)}</td>${cell(t10.filter(r=>r.wk===x))}${cell(t5.filter(r=>r.wk===x))}</tr>`).join("");
+  $("topbox").innerHTML=(TP.src==="k"&&!hk?`<p class="meta" style="margin-top:10px">Kalshi todavía no tiene precios para este día: van con la línea de referencia.</p>`:"")+
+    `<section class="panel" style="margin-top:12px"><h3>Top 5 ${"del día"}</h3>${tbl(rows.slice(0,5),0)}</section>
+     <section class="panel" style="margin-top:12px"><h3>Top 6 al 10</h3>${tbl(rows.slice(5,10),5)}</section>
+     <h2 class="pkh">Récord del Top 5 y del Top 10</h2>
+     <p class="meta" style="margin:4px 0 0">${TP.src==="k"?"Con la línea principal y el precio de Kalshi (se guarda desde el 12 de noviembre).":"Con la línea de referencia a -110"+" (Top de cada semana)"+"."} Mismo orden que arriba: los de "⚠ revisar" (edge de más de 12%) van al final.</p>`+
+    (base.length?`<div class="tiles" style="margin-top:12px">
+      <div class="tile"><div class="k">Top 5</div><div class="v ${s5.u>=0?"up":"dn"}">${s5.w}-${s5.l}</div><div class="s">${pct1(s5.hit)} de acierto · ${units(s5.u)} u</div></div>
+      <div class="tile"><div class="k">Top 10</div><div class="v ${s10.u>=0?"up":"dn"}">${s10.w}-${s10.l}</div><div class="s">${pct1(s10.hit)} de acierto · ${units(s10.u)} u</div></div></div>
+     <section class="panel"><h3>${"Por posición y lado"}</h3><div style="overflow-x:auto"><table class="caltbl"><thead><tr><th class="l"></th><th>Top 10</th><th>Top 5</th></tr></thead><tbody>${grp}</tbody></table></div></section>
+     <section class="panel" style="margin-top:12px"><h3>${"Por semana"}</h3><div style="overflow-x:auto"><table class="caltbl"><thead><tr><th class="l"></th><th>Top 10</th><th>Top 5</th></tr></thead><tbody>${per}</tbody></table></div></section>`
+     :`<p class="meta" style="margin-top:10px">Todavía no hay picks calificados con esta línea.</p>`);
+}
+$("tday").addEventListener("change",e=>{TP.day=e.target.value;renderTop()});
+$("tsrc").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;$("tsrc").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));TP.src=b.dataset.v;renderTop()});
 </script>
