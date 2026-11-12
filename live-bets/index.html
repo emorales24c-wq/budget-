@@ -531,34 +531,49 @@ function setTab(t){ S.tab = t; render(); }
 // La página de proyecciones copia un código "LB1:..." con los picks; aquí se pega y entran como apuestas
 const BBREF_TO_ESPN = {BRK:"BKN", CHO:"CHA", GSW:"GS", NOP:"NO", NYK:"NY", PHO:"PHX", SAS:"SA", UTA:"UTAH", WAS:"WSH"};
 const espnAbbr = a => BBREF_TO_ESPN[a] || a;
-// El WebView de Android no muestra prompt()/alert(), así que se pega en un cuadro dentro de la app
+// El WebView de Android no muestra prompt()/alert(), así que se pega en un cuadro dentro de la app.
+// Al pegar el código sale la lista de picks: escoges cuáles y si van sueltas o en parlay.
 function toggleImport(){ S.importOpen = !S.importOpen; S.importMsg = ""; render(); }
+function readCode(v){
+  S.impCode = v; S.impPicks = null; S.importMsg = "";
+  const raw = (v || "").trim().replace(/^LB1:/, "");
+  if (!raw) return;
+  try { S.impPicks = JSON.parse(decodeURIComponent(escape(atob(raw)))); S.impSel = S.impPicks.map(() => true); }
+  catch { S.importMsg = "Ese código no se pudo leer. Cópialo otra vez desde la página."; }
+  document.activeElement?.blur(); render();
+}
+function impToggle(i){ S.impSel[i] = !S.impSel[i]; render(); }
+function impMode(m){ S.impMode = m; render(); }
+const impStatLab = {PTS:"puntos", REB:"rebotes", AST:"asistencias", PRA:"PRA", "3PM":"triples", PR:"Pts+Reb", PA:"Pts+Ast", RA:"Reb+Ast", STL:"robos", BLK:"tapones"};
+// cuota americana de un parlay = producto de las cuotas decimales
+function parlayOdds(list){
+  const dec = list.reduce((d, p) => { const o = +p.odds; return d * (o > 0 ? 1 + o / 100 : o < 0 ? 1 + 100 / -o : 1.91); }, 1);
+  return dec >= 2 ? "+" + Math.round((dec - 1) * 100) : String(-Math.round(100 / (dec - 1)));
+}
 async function importPicks(){
-  const code = (document.getElementById("impcode")?.value || "").trim();
   const stake = parseFloat(document.getElementById("impstake")?.value) || 0;
-  if (!code) { S.importMsg = "Pega primero el código."; return render(); }
-  let picks;
-  try {
-    const raw = code.trim().replace(/^LB1:/, "");
-    picks = JSON.parse(decodeURIComponent(escape(atob(raw))));
-  } catch { S.importMsg = "Ese código no se pudo leer. Cópialo otra vez desde la página."; return render(); }
+  const chosen = (S.impPicks || []).filter((_, i) => S.impSel[i]);
+  if (!chosen.length) { S.importMsg = "Escoge al menos un pick."; return render(); }
+  const parlay = S.impMode === "parlay";
+  if (parlay && chosen.length < 2) { S.importMsg = "Un parlay necesita 2 picks o más."; return render(); }
   S.importMsg = "Importando…"; render();
   if (!S.games.length) await loadGames();
-  let n = 0, miss = [];
-  for (const p of picks) {
+  const key = s => norm(s).replace(/\b(jr|sr|ii|iii|iv)\b/g, "").replace(/\s+/g, " ").trim();
+  const legs = [], miss = [];
+  for (const p of chosen) {
     const a = espnAbbr(p.tm), b = espnAbbr(p.opp);
     const g = S.games.find(x => x.teams.some(t => t.abbr === a) && x.teams.some(t => t.abbr === b));
     if (!g) { miss.push(p.player); continue; }
     await loadRoster(g.id);
     // mismo jugador con el nombre como lo escribe ESPN (sin acentos, sin Jr., etc.)
-    const key = s => norm(s).replace(/\b(jr|sr|ii|iii|iv)\b/g, "").replace(/\s+/g, " ").trim();
     const name = (S.rosters[g.id] || []).flatMap(t => t.names).find(x => key(x) === key(p.player)) || p.player;
-    const leg = {game: g.id, gameName: g.name, player: name, stat: p.stat, side: p.side, line: +p.line, ...playerMeta(g.id, name)};
-    S.bets.push({id: Date.now() + n, ...leg, stake, odds: p.odds || ""});
-    n++;
+    legs.push({leg: {game: g.id, gameName: g.name, player: name, stat: p.stat, side: p.side, line: +p.line, ...playerMeta(g.id, name)}, odds: p.odds || ""});
   }
-  S.importMsg = (n ? `✅ ${n} apuesta${n > 1 ? "s" : ""} agregada${n > 1 ? "s" : ""}. ` : "") + (miss.length ? `No encontré el juego de hoy para: ${miss.join(", ")}` : "");
-  if (n && !miss.length) { S.importOpen = false; S.impCode = ""; }
+  if (miss.length) { S.importMsg = `No encontré el juego de hoy para: ${miss.join(", ")}. No se agregó nada.`; return render(); }
+  if (parlay) S.bets.push({id: Date.now(), parlay: true, legs: legs.map(x => x.leg), stake, odds: parlayOdds(chosen)});
+  else legs.forEach((x, n) => S.bets.push({id: Date.now() + n, ...x.leg, stake, odds: x.odds}));
+  S.importMsg = parlay ? `✅ Parlay de ${legs.length} agregado.` : `✅ ${legs.length} apuesta${legs.length > 1 ? "s" : ""} agregada${legs.length > 1 ? "s" : ""}.`;
+  S.importOpen = false; S.impCode = ""; S.impPicks = null;
   S.tab = "live";
   save(); poll(); render();
 }
@@ -615,16 +630,29 @@ function render(){
   else {
     for (const b of S.bets) h += b.parlay ? parlayCard(b) : betCard(b);
     h += `<button class="btns ${S.importOpen ? "on" : ""}" style="width:100%;margin-bottom:12px" onclick="toggleImport()">📥 Importar picks de Proyecciones NBA</button>`;
-    if (S.importOpen) h += `<div class="card" style="padding:12px">
-      <div class="muted" style="margin-bottom:6px">Pega el código (mantén presionado → Pegar):</div>
-      <textarea id="impcode" oninput="S.impCode=this.value" style="width:100%;height:80px;background:#111;color:#e8e0d0;border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:8px;font-size:12px">${esc(S.impCode || "")}</textarea>
-      <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
-        <span class="muted">$ por apuesta</span>
-        <input id="impstake" type="number" inputmode="decimal" value="5" style="width:80px;background:#111;color:#e8e0d0;border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:6px">
-        <button class="btns on" style="margin-left:auto" onclick="importPicks()">Importar</button>
-      </div>
+    if (S.importOpen) {
+      const P = S.impPicks || [], sel = P.filter((_, i) => S.impSel[i]), pm = S.impMode === "parlay";
+      h += `<div class="card" style="padding:12px">
+      ${P.length ? "" : `<div class="muted" style="margin-bottom:6px">Pega el código (mantén presionado → Pegar):</div>
+      <textarea id="impcode" oninput="readCode(this.value)" style="width:100%;height:80px;background:#111;color:#e8e0d0;border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:8px;font-size:12px">${esc(S.impCode || "")}</textarea>`}
+      ${P.length ? `<div class="muted" style="margin-bottom:8px">Escoge los picks:</div>` + P.map((p, i) => `
+        <label style="display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.07);font-size:14px">
+          <input type="checkbox" ${S.impSel[i] ? "checked" : ""} onchange="impToggle(${i})" style="width:20px;height:20px">
+          <span style="flex:1">${esc(p.player)}<br><span class="muted">${p.side === "over" ? "OVER" : "UNDER"} ${p.line} ${impStatLab[p.stat] || p.stat}</span></span>
+          <span class="muted">${esc(p.odds || "")}</span></label>`).join("") + `
+        <div class="row" style="margin-top:10px">
+          <button class="btns ${pm ? "" : "on"}" onclick="impMode('single')">Sueltas</button>
+          <button class="btns ${pm ? "on" : ""}" onclick="impMode('parlay')">Parlay${pm && sel.length > 1 ? ` (${parlayOdds(sel)})` : ""}</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:10px">
+          <span class="muted">$ ${pm ? "al parlay" : "por apuesta"}</span>
+          <input id="impstake" type="number" inputmode="decimal" value="${esc(S.impStake ?? "5")}" oninput="S.impStake=this.value" style="width:80px;background:#111;color:#e8e0d0;border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:6px">
+          <button class="btns on" style="margin-left:auto" onclick="importPicks()">Agregar ${sel.length}</button>
+        </div>
+        <div style="margin-top:8px"><button class="btns" onclick="readCode('')">Pegar otro código</button></div>` : ""}
       ${S.importMsg ? `<div style="margin-top:8px;font-size:13px">${esc(S.importMsg)}</div>` : ""}
     </div>`;
+    }
     else if (S.importMsg) h += `<div class="card" style="padding:10px;font-size:13px">${esc(S.importMsg)}</div>`;
     h += formCard(f, g, roster, liveNames) + `
   <div class="muted" style="text-align:center;line-height:1.6">Se actualiza cada ${POLL_MS / 1000}s · datos de ESPN (~10-30s de retraso)</div>`;
