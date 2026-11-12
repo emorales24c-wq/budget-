@@ -826,7 +826,7 @@ function renderBest(){
   const rowFn=(r,i)=>{const L=((S[r.p.name]||{}).l||{})[r.k]||{};
     return `<tr data-bi="${i}"><td class="l name"><span class="pn">${esc(r.p.name)}</span>${injBadge(r.p)}<small>${r.p.tm} · ${r.p.pos} · ${r.home?"vs":"@"} ${r.opp}</small></td>
     <td class="l">${esc(BMLAB[r.k])}</td>
-    ${r.kal?`<td title="En Kalshi: ${r.line+.5}+ · SÍ ${Math.round(r.kal.yes*100)}¢ / NO ${Math.round(r.kal.no*100)}¢">${r.line+.5}+<small>Kalshi · ${r.side==="O"?"SÍ":"NO"}</small></td>`:`<td><input type="number" step="0.5" value="${r.line}" data-a="bline" class="${r.ref?"refl":""}" title="${r.ref?"Línea de referencia (su promedio). Escribe la de tu casa.":"Tu línea"}" aria-label="Línea"></td>`}
+    ${r.kal?`<td title="En Kalshi: ${r.line+.5}+ · SÍ ${Math.round(r.kal.yes*100)}¢ / NO ${Math.round(r.kal.no*100)}¢"><b>${r.line}</b><small>Kalshi: ${r.side==="O"?"SÍ":"NO"} ${r.line+.5}+</small></td>`:`<td><input type="number" step="0.5" value="${r.line}" data-a="bline" class="${r.ref?"refl":""}" title="${r.ref?"Línea de referencia (su promedio). Escribe la de tu casa.":"Tu línea"}" aria-label="Línea"></td>`}
     <td class="v">${f1(r.proj)}</td><td>${f1(r.avg)}</td>
     <td class="${r.side==="O"?"v":""}">${(r.po*100).toFixed(1)}%</td><td class="${r.side==="U"?"v":""}">${(r.pu*100).toFixed(1)}%</td>
     <td><span class="pill ${r.side==="O"?"OVER":"UNDER"}">${r.side==="O"?"OVER":"UNDER"} ${(r.prob*100).toFixed(0)}%</span></td>
@@ -882,14 +882,14 @@ function topToday(){
   const rows=bestRows();Object.keys(BP).forEach(k=>delete BP[k]);Object.assign(BP,keep);return rows.slice(0,10)}
 function topPickRow(r,i){const kal=!!r.kal;
   return `<tr><td>${i+1}</td><td class="l name"><span class="pn">${esc(r.p.name)}</span>${injBadge(r.p)}<small>${r.p.tm} ${r.home?"vs":"@"} ${r.opp}</small></td><td class="l">${esc(PKLAB[r.k]||r.k)}</td>
-    <td><span class="pill ${r.side==="O"?"OVER":"UNDER"}">${kal?(r.side==="O"?"SÍ ":"NO ")+(r.line+.5)+"+":(r.side==="O"?"OVER ":"UNDER ")+r.line}</span></td>
+    <td><span class="pill ${r.side==="O"?"OVER":"UNDER"}">${r.side==="O"?"OVER":"UNDER"}</span></td><td class="v">${r.line}${kal?`<small>Kalshi: ${r.side==="O"?"SÍ":"NO"} ${r.line+.5}+</small>`:""}</td>
     <td class="v">${(r.prob*100).toFixed(0)}%</td><td>${kal?Math.round(r.kal.cost*100)+"¢":(r.odds>0?"+":"")+r.odds}</td>
     <td class="${r.edge>0?"up":"dn"}">${r.edge>0?"+":""}${(r.edge*100).toFixed(1)}%${r.warn?`<small class="dn">⚠ revisar</small>`:""}</td></tr>`}
 function topOf(rs,n){const by={};rs.forEach(r=>(by[r.wk]=by[r.wk]||[]).push(r));
   return [].concat(...Object.values(by).map(a=>a.slice().sort((x,y)=>((x.edge>.12)-(y.edge>.12))||y.edge-x.edge).slice(0,n)))}
 function renderTop(){
   const rows=topToday(),hk=TP.src==="k"&&hasKal(TP.day);
-  const head=`<thead><tr><th>#</th><th class="l">Jugador</th><th class="l">Mercado</th><th>Pick</th><th>Prob.</th><th>${hk?"Precio":"Cuota"}</th><th>Edge</th></tr></thead>`;
+  const head=`<thead><tr><th>#</th><th class="l">Jugador</th><th class="l">Mercado</th><th>Pick</th><th>Línea</th><th>Prob.</th><th>${hk?"Precio":"Cuota"}</th><th>Edge</th></tr></thead>`;
   const tbl=(rs,off)=>rs.length?`<div style="overflow-x:auto"><table class="caltbl">${head}<tbody>${rs.map((r,i)=>topPickRow(r,i+off)).join("")}</tbody></table></div>`:`<p class="meta">No hay picks que pasen los filtros.</p>`;
   const base=PK.filter(r=>r.src===(TP.src==="k"?"k":"ref")&&(r=>r.k!=="td")(r)),t10=topOf(base,10),t5=topOf(base,5),s10=pkStats(t10),s5=pkStats(t5);
   const cell=rs=>{if(!rs.length)return `<td>—</td>`;const s=pkStats(rs);return `<td class="${s.u>=0?"up":"dn"}">${s.w}-${s.l} (${Math.round(s.hit*100)}%) ${units(s.u)}</td>`};
