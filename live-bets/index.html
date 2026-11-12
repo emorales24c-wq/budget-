@@ -579,13 +579,17 @@ window.onOcr = async (text, err) => {
   const key = s => norm(s).replace(/\b(jr|sr|ii|iii|iv)\b/g, "").replace(/\s+/g, " ").trim();
   k.legs.forEach(l => {
     for (const g of S.games) for (const t of S.rosters[g.id] || []) {
-      const hit = t.names.find(x => key(x) === key(l.player)) || t.names.find(x => key(x).split(" ").pop() === key(l.player).split(" ").pop() && key(x)[0] === key(l.player)[0]);
+      // exacto, o mismo apellido e inicial, o (si la foto se leyó con un error) mismo nombre y apellido que empieza igual
+      const kp = key(l.player).split(" "), first = kp[0] || "", last = kp[kp.length - 1] || "";
+      const hit = t.names.find(x => key(x) === key(l.player))
+        || t.names.find(x => { const kx = key(x).split(" "); return kx[kx.length - 1] === last && kx[0][0] === first[0]; })
+        || t.names.find(x => { const kx = key(x).split(" "); return kx[0] === first && last.length >= 4 && kx[kx.length - 1].startsWith(last.slice(0, 4)); });
       if (hit && !l.game) { l.game = g.id; l.player = hit; }
     }
   });
   if (!k.legs.length) k.legs.push({player: "", stat: "PTS", side: "over", line: ""});
   S.photo = k; S.photoMsg = ""; S.photoRaw = text;
-  render();
+  render(); photoRosters();
 };
 function phSet(i, f, v){ const l = S.photo.legs[i]; l[f] = f === "line" ? v : v;
   if (f === "player") { l.game = null; const key = s => norm(s).replace(/\s+/g, " ").trim();
@@ -593,6 +597,7 @@ function phSet(i, f, v){ const l = S.photo.legs[i]; l[f] = f === "line" ? v : v;
   if (f !== "player" && f !== "line") render(); }
 function phDel(i){ S.photo.legs.splice(i, 1); render(); }
 function phAdd(){ S.photo.legs.push({player: "", stat: "PTS", side: "over", line: ""}); render(); }
+async function photoRosters(){ if (!S.games.length) await loadGames(); await Promise.all(S.games.map(g => loadRoster(g.id))); render(); }
 function phCancel(){ S.photo = null; render(); }
 function phSave(){
   const k = S.photo, stake = parseFloat(document.getElementById("phstake")?.value) || 0, odds = (document.getElementById("phodds")?.value || "").trim();
@@ -606,6 +611,16 @@ function phSave(){
   S.photo = null; S.photoMsg = `✅ ${k.parlay && legs.length > 1 ? "Parlay agregado" : legs.length + " apuesta" + (legs.length > 1 ? "s agregadas" : " agregada")}.`;
   save(); poll(); render();
 }
+// lista de jugadores de los juegos de hoy (como en el formulario normal), agrupada por partido y equipo
+function playerSelect(i, l, inp){
+  const games = S.games.filter(g => (S.rosters[g.id] || []).length);
+  if (!games.length) return `<input value="${esc(l.player)}" placeholder="Jugador" onchange="phSet(${i},'player',this.value)" style="flex:1;${inp}">`;
+  return `<select onchange="phPick(${i},this.value)" style="flex:1;min-width:0;${inp}"><option value="">— Escoge el jugador —</option>` +
+    games.map(g => (S.rosters[g.id] || []).map(t => `<optgroup label="${esc(g.name)} · ${esc(t.abbr)}">${t.names.map(n =>
+      `<option value="${esc(g.id + "|" + n)}" ${l.game === g.id && l.player === n ? "selected" : ""}>${esc(n)}</option>`).join("")}</optgroup>`).join("")).join("") +
+    `</select>`;
+}
+function phPick(i, v){ const l = S.photo.legs[i]; const k = v.indexOf("|"); if (k < 0) { l.game = null; l.player = ""; } else { l.game = v.slice(0, k); l.player = v.slice(k + 1); } render(); }
 function photoCard(){
   const k = S.photo;
   if (!k) return `<button class="btns" style="width:100%;margin-bottom:12px" onclick="photoKalshi()">📷 Subir foto de Kalshi</button>` +
@@ -615,14 +630,14 @@ function photoCard(){
   return `<div class="card" style="padding:12px">
     <div style="font-size:14px;margin-bottom:8px">📷 Revisa lo que leí de la foto y corrige si algo está mal:</div>
     ${k.legs.map((l, i) => `<div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,.07)">
-      <div style="display:flex;gap:6px"><input value="${esc(l.player)}" placeholder="Jugador" onchange="phSet(${i},'player',this.value)" style="flex:1;${inp}">
+      <div style="display:flex;gap:6px">${playerSelect(i, l, inp)}
         <button class="btns" onclick="phDel(${i})" style="flex:0 0 auto">✕</button></div>
       <div style="display:flex;gap:6px;margin-top:6px">
         ${sel(i, "stat", Object.keys(STATS).map(s => [s, s]), l.stat)}
         ${sel(i, "side", [["over", "Over"], ["under", "Under"]], l.side)}
         <input type="number" step="0.5" value="${esc(l.line)}" placeholder="Línea" oninput="S.photo.legs[${i}].line=this.value" style="width:80px;${inp}">
       </div>
-      ${l.player && !l.game ? `<div style="color:#f87171;font-size:12px;margin-top:4px">No lo encuentro en los juegos de hoy</div>` : ""}
+      ${l.player && !l.game ? `<div style="color:#f87171;font-size:12px;margin-top:4px">Leí "${esc(l.player)}" pero no lo encuentro en los juegos de hoy: escógelo de la lista</div>` : ""}
     </div>`).join("")}
     <button class="btns" onclick="phAdd()" style="margin-top:8px">+ Agregar pierna</button>
     <div class="row" style="margin-top:10px">
