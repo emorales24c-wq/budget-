@@ -523,6 +523,40 @@ function putBet(bet){
 }
 
 function setTab(t){ S.tab = t; render(); }
+
+// ---------- importar picks de "Proyecciones NBA" ----------
+// La página de proyecciones copia un código "LB1:..." con los picks; aquí se pega y entran como apuestas
+const BBREF_TO_ESPN = {BRK:"BKN", CHO:"CHA", GSW:"GS", NOP:"NO", NYK:"NY", PHO:"PHX", SAS:"SA", UTA:"UTAH", WAS:"WSH"};
+const espnAbbr = a => BBREF_TO_ESPN[a] || a;
+async function importPicks(){
+  const code = prompt("Pega el código copiado de Proyecciones NBA (empieza con LB1:)");
+  if (!code) return;
+  let picks;
+  try {
+    const raw = code.trim().replace(/^LB1:/, "");
+    picks = JSON.parse(decodeURIComponent(escape(atob(raw))));
+  } catch { S.err = "Ese código no se pudo leer. Cópialo otra vez desde la página."; return render(); }
+  if (!S.games.length) await loadGames();
+  const stakeTxt = prompt(`${picks.length} pick${picks.length > 1 ? "s" : ""}. ¿Cuánto apuestas en cada uno? ($)`, "5");
+  const stake = parseFloat(stakeTxt) || 0;
+  let n = 0, miss = [];
+  for (const p of picks) {
+    const a = espnAbbr(p.tm), b = espnAbbr(p.opp);
+    const g = S.games.find(x => x.teams.some(t => t.abbr === a) && x.teams.some(t => t.abbr === b));
+    if (!g) { miss.push(p.player); continue; }
+    await loadRoster(g.id);
+    // mismo jugador con el nombre como lo escribe ESPN (sin acentos, sin Jr., etc.)
+    const key = s => norm(s).replace(/\b(jr|sr|ii|iii|iv)\b/g, "").replace(/\s+/g, " ").trim();
+    const name = (S.rosters[g.id] || []).flatMap(t => t.names).find(x => key(x) === key(p.player)) || p.player;
+    const leg = {game: g.id, gameName: g.name, player: name, stat: p.stat, side: p.side, line: +p.line, ...playerMeta(g.id, name)};
+    S.bets.push({id: Date.now() + n, ...leg, stake, odds: p.odds || ""});
+    n++;
+  }
+  S.err = miss.length ? `No encontré el juego de hoy para: ${miss.join(", ")}` : "";
+  S.tab = "live";
+  save(); poll(); render();
+  if (n) alert(`✅ ${n} apuesta${n > 1 ? "s" : ""} agregada${n > 1 ? "s" : ""}`);
+}
 function setResult(id, r){ const h = S.history.find(x => x.id === id); if (h) { h.result = r; save(); render(); } }
 function delHist(id){ if (confirm("¿Borrar esta apuesta del historial?")) { S.history = S.history.filter(h => h.id !== id); save(); render(); } }
 function setMode(m){
@@ -575,6 +609,7 @@ function render(){
   if (S.tab === "pnl") h += pnlView();
   else {
     for (const b of S.bets) h += b.parlay ? parlayCard(b) : betCard(b);
+    h += `<button class="btns" style="width:100%;margin-bottom:12px" onclick="importPicks()">📥 Importar picks de Proyecciones NBA</button>`;
     h += formCard(f, g, roster, liveNames) + `
   <div class="muted" style="text-align:center;line-height:1.6">Se actualiza cada ${POLL_MS / 1000}s · datos de ESPN (~10-30s de retraso)</div>`;
   }

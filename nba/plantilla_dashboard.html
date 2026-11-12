@@ -896,7 +896,7 @@ function bestRowHTML(r,i){
     <td><span class="pill ${r.side==="O"?"OVER":"UNDER"}">${r.side==="O"?"OVER":"UNDER"} ${(r.prob*100).toFixed(0)}%</span></td>
     ${r.kal?`<td title="Precio ${Math.round(r.kal.c*100)}¢ + comisión ${Math.round(kfee(r.kal.c)*100)}¢ = cuota ${r.odds>0?"+":""}${r.odds}"><b>${Math.round(r.kal.cost*100)}¢</b></td>`:`<td><input type="number" step="5" placeholder="-110" value="${r.odds===-110&&!((S[r.p.name]||{}).l||{})[r.k]?"":r.odds}" data-a="bodds" aria-label="Cuota"></td>`}
     <td class="${ed>0?"up":"dn"}">${ed>0?"+":""}${(ed*100).toFixed(1)}%${r.warn?`<small class="dn" title="Edge de más de 12%: casi siempre el mercado sabe algo que el modelo no. Revisa minutos y lesiones antes.">⚠ revisar</small>`:""}</td>
-    <td><button type="button" class="exp" data-a="bsave">Guardar</button></td></tr>`;
+    <td><button type="button" class="exp" data-a="bsave">Guardar</button> <button type="button" class="exp" data-a="blive" title="Copiar para la app Live Bets">📲</button></td></tr>`;
 }
 let BROWS=[];
 // Vista de Mejores props: por equipo (cada jugador con sus props juntos), por mercado (los 10 mejores de cada uno), por jugador (todos sus props juntos) o todos juntos
@@ -951,6 +951,18 @@ $("besttb").addEventListener("change",e=>{const el=e.target,a=el.dataset.a;if(a!
   const o=ov(r.p.name);o.l=o.l||{};const l=o.l[r.k]=o.l[r.k]||{};
   if(a==="bline")l.line=el.value;else{if(r.side==="O")l.oo=el.value;else l.ou=el.value}
   save();renderBest()});
+// ===== Live Bets: copia un código con los picks para pegarlo en la app (📥 Importar) =====
+const LBSTAT={pts:"PTS",reb:"REB",ast:"AST",pra:"PRA",tpm:"3PM",stl:"STL",blk:"BLK",pr:"PR",pa:"PA",ra:"RA"};
+function lbCode(rows){const picks=rows.map(r=>({player:r.p.name,tm:r.p.tm,opp:r.opp,stat:LBSTAT[r.k],side:r.side==="O"?"over":"under",line:r.line,odds:r.odds>0?"+"+r.odds:String(r.odds)}));
+  return "LB1:"+btoa(unescape(encodeURIComponent(JSON.stringify(picks))))}
+async function copyLB(rows,btn){const code=lbCode(rows);let ok=false;
+  try{await navigator.clipboard.writeText(code);ok=true}catch(e){}
+  if(ok){if(btn){const t0=btn.textContent;btn.textContent="Copiado ✓";setTimeout(()=>btn.textContent=t0,2000)}return}
+  // si el navegador no deja copiar solo, se muestra el código para copiarlo a mano
+  let box=$("lbbox");if(!box){box=document.createElement("div");box.id="lbbox";box.style.cssText="position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px";document.body.appendChild(box)}
+  box.innerHTML=`<div class="panel" style="max-width:520px;width:100%"><h3>Código para Live Bets</h3><p class="meta">Mantén presionado el texto → Seleccionar todo → Copiar. Luego en la app toca 📥 Importar.</p><textarea readonly style="width:100%;height:120px;font-size:12px">${code}</textarea><button type="button" class="btn" id="lbclose" style="margin-top:8px">Cerrar</button></div>`;
+  box.hidden=false;const ta=box.querySelector("textarea");ta.focus();ta.select();$("lbclose").onclick=()=>box.hidden=true}
+$("besttb").addEventListener("click",e=>{const l=e.target.closest("button[data-a=blive]");if(l){const r=BROWS[+l.closest("tr").dataset.bi];if(r)copyLB([r],l);return}});
 $("besttb").addEventListener("click",e=>{const b=e.target.closest("button[data-a=bsave]");if(!b)return;const r=BROWS[+b.closest("tr").dataset.bi];if(!r)return;
   addBet({date:BP.day||todayISO(),player:r.p.name,tm:r.p.tm,mk:r.k,line:r.line,side:r.side,odds:r.odds,stake:+(BS.settings.stake||10),prob:r.prob,edge:r.edge,proj:r.proj})
     .then(()=>{b.textContent="Guardada ✓"}).catch(()=>{b.textContent="Error"})});
@@ -1027,6 +1039,7 @@ function renderTop(){
   const grp=[["Puntos",r=>r.k==="pts"],["Rebotes",r=>r.k==="reb"],["Asistencias",r=>r.k==="ast"],["PRA",r=>r.k==="pra"],["Triples",r=>r.k==="tpm"],["Over",r=>r.side==="O"],["Under",r=>r.side==="U"]].map(([lab,f])=>`<tr><td class="l">${lab}</td>${cell(t10.filter(f))}${cell(t5.filter(f))}</tr>`).join("");
   const per=[...new Set(base.map(r=>r.d))].sort().reverse().map(x=>`<tr><td class="l">${(x=>fmtDay(x))(x)}</td>${cell(t10.filter(r=>r.d===x))}${cell(t5.filter(r=>r.d===x))}</tr>`).join("");
   $("topbox").innerHTML=(TP.src==="k"&&!hk?`<p class="meta" style="margin-top:10px">Kalshi todavía no tiene precios para este día: van con la línea de referencia.</p>`:"")+
+    (rows.length?`<div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button type="button" class="btn upd-btn" id="lb5">📲 Copiar Top 5 para Live Bets</button><button type="button" class="btn" id="lb10">📲 Copiar Top 10</button></div>`:"")+
     `<section class="panel" style="margin-top:12px"><h3>Top 5 ${"de hoy"}</h3>${tbl(rows.slice(0,5),0)}</section>
      <section class="panel" style="margin-top:12px"><h3>Top 6 al 10</h3>${tbl(rows.slice(5,10),5)}</section>
      <h2 class="pkh">Récord del Top 5 y del Top 10</h2>
@@ -1039,6 +1052,7 @@ function renderTop(){
      :`<p class="meta" style="margin-top:10px">Todavía no hay picks calificados con esta línea.</p>`);
 }
 $("tday").addEventListener("change",e=>{TP.day=e.target.value;renderTop()});
+$("topbox").addEventListener("click",e=>{const b=e.target.closest("#lb5,#lb10");if(!b)return;const rows=topToday();copyLB(b.id==="lb5"?rows.slice(0,5):rows,b)});
 $("tsrc").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;$("tsrc").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));TP.src=b.dataset.v;renderTop()});
 function renderCal(){
   const box=$("calbox");
