@@ -531,17 +531,19 @@ function setTab(t){ S.tab = t; render(); }
 // La página de proyecciones copia un código "LB1:..." con los picks; aquí se pega y entran como apuestas
 const BBREF_TO_ESPN = {BRK:"BKN", CHO:"CHA", GSW:"GS", NOP:"NO", NYK:"NY", PHO:"PHX", SAS:"SA", UTA:"UTAH", WAS:"WSH"};
 const espnAbbr = a => BBREF_TO_ESPN[a] || a;
+// El WebView de Android no muestra prompt()/alert(), así que se pega en un cuadro dentro de la app
+function toggleImport(){ S.importOpen = !S.importOpen; S.importMsg = ""; render(); }
 async function importPicks(){
-  const code = prompt("Pega el código copiado de Proyecciones NBA (empieza con LB1:)");
-  if (!code) return;
+  const code = (document.getElementById("impcode")?.value || "").trim();
+  const stake = parseFloat(document.getElementById("impstake")?.value) || 0;
+  if (!code) { S.importMsg = "Pega primero el código."; return render(); }
   let picks;
   try {
     const raw = code.trim().replace(/^LB1:/, "");
     picks = JSON.parse(decodeURIComponent(escape(atob(raw))));
-  } catch { S.err = "Ese código no se pudo leer. Cópialo otra vez desde la página."; return render(); }
+  } catch { S.importMsg = "Ese código no se pudo leer. Cópialo otra vez desde la página."; return render(); }
+  S.importMsg = "Importando…"; render();
   if (!S.games.length) await loadGames();
-  const stakeTxt = prompt(`${picks.length} pick${picks.length > 1 ? "s" : ""}. ¿Cuánto apuestas en cada uno? ($)`, "5");
-  const stake = parseFloat(stakeTxt) || 0;
   let n = 0, miss = [];
   for (const p of picks) {
     const a = espnAbbr(p.tm), b = espnAbbr(p.opp);
@@ -555,10 +557,10 @@ async function importPicks(){
     S.bets.push({id: Date.now() + n, ...leg, stake, odds: p.odds || ""});
     n++;
   }
-  S.err = miss.length ? `No encontré el juego de hoy para: ${miss.join(", ")}` : "";
+  S.importMsg = (n ? `✅ ${n} apuesta${n > 1 ? "s" : ""} agregada${n > 1 ? "s" : ""}. ` : "") + (miss.length ? `No encontré el juego de hoy para: ${miss.join(", ")}` : "");
+  if (n && !miss.length) { S.importOpen = false; S.impCode = ""; }
   S.tab = "live";
   save(); poll(); render();
-  if (n) alert(`✅ ${n} apuesta${n > 1 ? "s" : ""} agregada${n > 1 ? "s" : ""}`);
 }
 function setResult(id, r){ const h = S.history.find(x => x.id === id); if (h) { h.result = r; save(); render(); } }
 function delHist(id){ if (confirm("¿Borrar esta apuesta del historial?")) { S.history = S.history.filter(h => h.id !== id); save(); render(); } }
@@ -612,14 +614,25 @@ function render(){
   if (S.tab === "pnl") h += pnlView();
   else {
     for (const b of S.bets) h += b.parlay ? parlayCard(b) : betCard(b);
-    h += `<button class="btns" style="width:100%;margin-bottom:12px" onclick="importPicks()">📥 Importar picks de Proyecciones NBA</button>`;
+    h += `<button class="btns ${S.importOpen ? "on" : ""}" style="width:100%;margin-bottom:12px" onclick="toggleImport()">📥 Importar picks de Proyecciones NBA</button>`;
+    if (S.importOpen) h += `<div class="card" style="padding:12px">
+      <div class="muted" style="margin-bottom:6px">Pega el código (mantén presionado → Pegar):</div>
+      <textarea id="impcode" oninput="S.impCode=this.value" style="width:100%;height:80px;background:#111;color:#e8e0d0;border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:8px;font-size:12px">${esc(S.impCode || "")}</textarea>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+        <span class="muted">$ por apuesta</span>
+        <input id="impstake" type="number" inputmode="decimal" value="5" style="width:80px;background:#111;color:#e8e0d0;border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:6px">
+        <button class="btns on" style="margin-left:auto" onclick="importPicks()">Importar</button>
+      </div>
+      ${S.importMsg ? `<div style="margin-top:8px;font-size:13px">${esc(S.importMsg)}</div>` : ""}
+    </div>`;
+    else if (S.importMsg) h += `<div class="card" style="padding:10px;font-size:13px">${esc(S.importMsg)}</div>`;
     h += formCard(f, g, roster, liveNames) + `
   <div class="muted" style="text-align:center;line-height:1.6">Se actualiza cada ${POLL_MS / 1000}s · datos de ESPN (~10-30s de retraso)</div>`;
   }
 
   // Don't wipe the input the user is typing in
   const a = document.activeElement;
-  if (a && a.tagName === "INPUT" && document.getElementById("app").contains(a)) return;
+  if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA") && document.getElementById("app").contains(a)) return;
   document.getElementById("app").innerHTML = h;
 }
 
