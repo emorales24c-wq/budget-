@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="theme-color" content="#0a0a0f"/>
+<link rel="manifest" href="manifest.json"/>
+<link rel="icon" href="icon.svg"/>
+<title>Live Bets</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#0a0a0f;min-height:100%}
+#app{padding:20px 16px 48px;max-width:480px;margin:0 auto;color:#e8e0d0;font-family:'DM Mono',monospace}
+.card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;margin-bottom:12px}
+.tag{font-size:9px;letter-spacing:.15em;text-transform:uppercase;opacity:.4}
+.btnp{background:#e07b54;border:none;color:white;cursor:pointer;padding:10px 14px;border-radius:8px;font-family:'DM Mono',monospace;font-size:12px}
+.btns{border:1px solid rgba(255,255,255,0.1);background:transparent;color:#a0998a;cursor:pointer;padding:8px 12px;border-radius:8px;font-family:'DM Mono',monospace;font-size:11px}
+.btns.on{background:#3ecf8e;border-color:#3ecf8e;color:#0a0a0f}
+.btnd{border:1px solid rgba(248,113,113,0.25);background:transparent;color:#f87171;cursor:pointer;padding:4px 10px;border-radius:7px;font-family:'DM Mono',monospace;font-size:10px}
+.inp{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#e8e0d0;font-family:'DM Mono',monospace;font-size:14px;padding:9px 11px;outline:none;width:100%;margin-bottom:8px}
+select.inp option{background:#16161d}
+.row{display:flex;gap:8px}.row>*{flex:1;min-width:0}
+.bar{background:rgba(255,255,255,0.06);border-radius:99px;height:12px;overflow:hidden;position:relative;margin:10px 0 6px}
+.bfill{height:100%;border-radius:99px;transition:width .6s ease,background .3s}
+.bline{position:absolute;top:-2px;bottom:-2px;width:2px;background:#e8e0d0;opacity:.6}
+.big{font-family:'Playfair Display',serif;font-size:34px;font-weight:900;line-height:1}
+.muted{color:#7a7060;font-size:11px}
+.err{color:#f87171;font-size:11px;margin-top:6px}
+.pulse{display:inline-block;width:7px;height:7px;border-radius:50%;background:#f87171;margin-right:6px;animation:p 1.2s infinite}
+@keyframes p{50%{opacity:.2}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const API = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba";
+const POLL_MS = 20000;
+
+// Each stat is a sum of base stats read from the ESPN boxscore
+const STATS = {
+  PTS:["PTS"], REB:["REB"], AST:["AST"], "3PM":["3PM"], STL:["STL"], BLK:["BLK"],
+  PRA:["PTS","REB","AST"], PR:["PTS","REB"], PA:["PTS","AST"], RA:["REB","AST"]
+};
+// Boxscore column aliases: older responses use labels, newer ones keys
+const COLS = {
+  PTS:["PTS","points"], REB:["REB","rebounds"], AST:["AST","assists"],
+  STL:["STL","steals"], BLK:["BLK","blocks"],
+  "3PM":["3PT","threePointFieldGoalsMade-threePointFieldGoalsAttempted"]
+};
+
+const S = {
+  bets: load("lb_bets", []),
+  games: [],
+  live: {},          // eventId -> {state, detail, score, players:{normName:{name,stats}}}
+  rosters: {},       // gameId -> [{abbr, names}]
+  form: {game:"", player:"", stat:"REB", side:"over", line:"", stake:"", odds:"", sign:"-"},
+  mode: "single",    // single | parlay
+  draft: [],         // parlay legs being built
+  editing: null,     // id of the bet loaded into the form
+  history: load("lb_hist", []),   // settled bets: {id, at, title, legs, stake, odds, parlay, result}
+  tab: "live",       // live | pnl
+  flash: [],         // bets just moved to Ganancias, shown in a banner for a few seconds
+  lockMode: false,
+  err: ""
+};
+
+function load(k, d){ try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }
+// Inside the Android app, the native side shows the lock screen notifications
+const NATIVE = typeof window.Android !== "undefined";
+function save(){
+  try {
+    localStorage.setItem("lb_bets", JSON.stringify(S.bets));
+    localStorage.setItem("lb_hist", JSON.stringify(S.history));
+  } catch {}
+  if (NATIVE) Android.syncBets(JSON.stringify(S.bets.map(({_lastKey, _lastStatus, ...b}) => b)));
+}
+const norm = s => (s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z ]/g,"").trim();
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+// ---------- ESPN ----------
+async function getJSON(url){
+  const r = await fetch(url, {cache:"no-store"});
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+
+async function loadGames(){
+  try {
+    const d = await getJSON(API + "/scoreboard");
+    S.games = (d.events||[]).map(e => {
+      const c = e.competitions[0];
+      const t = c.competitors.map(x => x.team.abbreviation);
+      return {id:e.id, name:e.shortName || t.join(" vs "), detail:c.status.type.shortDetail, state:c.status.type.state,
+        teams:c.competitors.map(x => ({id:x.team.id, abbr:x.team.abbreviation, logo:x.team.logo || "", color:x.team.color ? "#" + x.team.color : ""}))};
+    });
+    if (!S.form.game && S.games.length) S.form.game = S.games[0].id;
+    loadRoster(S.form.game);
+    for (const id of new Set(S.bets.flatMap(legsOf).map(l => l.game))) loadRoster(id);
+    S.err = "";
+  } catch (e) { S.err = "No pude cargar los juegos (" + e.message + ")"; }
+  render();
+}
+
+// Team rosters so players can be picked before the game starts
+async function loadRoster(gameId){
+  const g = S.games.find(x => x.id === gameId);
+  if (!g || S.rosters[gameId]) return;
+  try {
+    S.rosters[gameId] = await Promise.all(g.teams.map(async t => {
+      const d = await getJSON(`${API}/teams/${t.id}/roster`);
+      const list = d.athletes || [];
+      // Some responses group athletes by position: [{items:[...]}]
+      const flat = list.flatMap(a => a.items || [a]);
+      const players = flat.filter(a => a.displayName || a.fullName)
+        .map(a => ({name: a.displayName || a.fullName, id: String(a.id || ""), photo: a.headshot?.href || headshot(a.id)}))
+        .sort((x, y) => x.name.localeCompare(y.name));
+      return {abbr:t.abbr, logo:t.logo, color:t.color, players, names:players.map(x => x.name)};
+    }));
+  } catch (e) { S.err = "No pude cargar los jugadores (" + e.message + ")"; }
+  backfill();
+  render();
+}
+
+function parseSummary(d){
+  const c = d.header.competitions[0];
+  const st = c.status;
+  const score = c.competitors.map(x => `${x.team.abbreviation} ${x.score ?? 0}`).join(" - ");
+  const teams = c.competitors.map(x => ({abbr: x.team.abbreviation, score: x.score ?? 0,
+    logo: x.team.logo || x.team.logos?.[0]?.href || logoUrl(x.team.abbreviation)}));
+  const players = {};
+  for (const team of (d.boxscore?.players || [])) {
+    const abbr = team.team?.abbreviation || "";
+    for (const grp of (team.statistics || [])) {
+      const cols = grp.labels || grp.names || grp.keys || [];
+      const keys = grp.keys || [];
+      const idx = name => {
+        for (const alias of COLS[name]) {
+          let i = cols.indexOf(alias); if (i < 0) i = keys.indexOf(alias);
+          if (i >= 0) return i;
+        }
+        return -1;
+      };
+      for (const a of (grp.athletes || [])) {
+        if (!a.stats || !a.stats.length) continue;  // DNP
+        const stats = {};
+        for (const k in COLS) {
+          const i = idx(k);
+          stats[k] = i < 0 ? 0 : parseInt(String(a.stats[i]).split("-")[0], 10) || 0;
+        }
+        players[norm(a.athlete.displayName)] = {name:a.athlete.displayName, id:String(a.athlete.id || ""),
+          photo:a.athlete.headshot?.href || headshot(a.athlete.id), team:abbr, stats};
+      }
+    }
+  }
+  return {state:st.type.state, detail:st.type.shortDetail, score, teams, players};
+}
+
+function findPlayer(live, q){
+  const n = norm(q);
+  if (live.players[n]) return live.players[n];
+  const hits = Object.keys(live.players).filter(k => k.includes(n) || k.split(" ").pop() === n.split(" ").pop());
+  return hits.length ? live.players[hits[0]] : null;
+}
+
+// ---------- bets ----------
+// A whole-number over line is a sportsbook milestone: "2" means 2 or more (no push)
+const atLeast = l => l.side === "over" && l.line % 1 === 0;
+const needOf = l => atLeast(l) ? l.line : Math.floor(l.line) + 1;
+const sideLabel = l => atLeast(l) ? `${l.line}+` : `${l.side === "over" ? "O" : "U"}${l.line}`;
+
+function evalBet(b){
+  const live = S.live[b.game];
+  if (!live) return {cur:0, status:"pending", live:null, p:null};
+  const p = findPlayer(live, b.player);
+  const cur = p ? STATS[b.stat].reduce((s,k) => s + p.stats[k], 0) : 0;
+  const final = live.state === "post";
+  let status = live.state === "pre" ? "pending" : "live";
+  if (b.side === "over") {
+    if (cur >= needOf(b)) status = "won";
+    else if (final) status = "lost";
+  } else {
+    if (cur > b.line) status = "lost";
+    else if (final) status = cur === b.line ? "push" : "won";
+  }
+  if (final && !p) status = "void";
+  return {cur, status, live, p};
+}
+
+// ---------- player photos / team logos ----------
+const headshot = id => id ? `https://a.espncdn.com/i/headshots/nba/players/full/${id}.png` : "";
+const logoUrl = abbr => abbr ? `https://a.espncdn.com/i/teamlogos/nba/500/${abbr.toLowerCase()}.png` : "";
+
+// Photo id, team and team color for a player, from the roster or the live boxscore
+function playerMeta(gameId, name){
+  for (const t of S.rosters[gameId] || []) {
+    const p = t.players.find(x => x.name === name);
+    if (p) return {playerId: p.id, photo: p.photo, team: t.abbr, logo: t.logo || logoUrl(t.abbr), color: t.color};
+  }
+  const live = S.live[gameId], p = live && findPlayer(live, name);
+  if (!p) return {};
+  const t = S.games.find(g => g.id === gameId)?.teams?.find(x => x.abbr === p.team);
+  return {playerId: p.id, photo: p.photo, team: p.team, logo: t?.logo || logoUrl(p.team), color: t?.color || ""};
+}
+
+const legPhoto = (l, r) => l.photo || r.p?.photo || headshot(l.playerId || r.p?.id);
+
+// Bets saved before photos existed: fill in id/photo/team once their game's roster is loaded
+function backfill(){
+  let changed = false;
+  for (const l of S.bets.flatMap(legsOf)) {
+    if (l.photo || !S.rosters[l.game]) continue;
+    const m = playerMeta(l.game, l.player);
+    if (m.playerId) { Object.assign(l, m); changed = true; }
+  }
+  if (changed) save();
+}
+
+function avatar(l, r, size){
+  const src = legPhoto(l, r);
+  const initials = (r.p?.name || l.player).split(/\s+/).map(w => w[0]).slice(0, 2).join("");
+  return `<div style="position:absolute;inset:${size * 0.11}px;border-radius:50%;overflow:hidden;background:#1c1c24;display:flex;align-items:center;justify-content:center;font-size:${size * 0.24}px;color:#7a7060">
+    <span>${esc(initials)}</span>
+    ${src ? `<img src="${src}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top" onerror="this.remove()">` : ""}</div>`;
+}
+
+// Progress ring around the player's photo; full ring = line hit
+function ring(l, r, size, color){
+  const target = needOf(l);
+  const pct = Math.min(1, r.cur / target);
+  const sw = Math.max(4, size * 0.07), rad = (size - sw) / 2, C = 2 * Math.PI * rad;
+  return `<div style="position:relative;width:${size}px;height:${size}px;flex:0 0 ${size}px">
+    <svg width="${size}" height="${size}" style="position:absolute;inset:0;transform:rotate(-90deg)">
+      <circle cx="${size / 2}" cy="${size / 2}" r="${rad}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="${sw}"/>
+      <circle cx="${size / 2}" cy="${size / 2}" r="${rad}" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round"
+        stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - pct)}" style="transition:stroke-dashoffset .6s ease"/>
+    </svg>${avatar(l, r, size)}</div>`;
+}
+
+// "[logo] MIL 50 - 48 CHI [logo] · Q2 4:10"
+function scoreLine(live, fallback){
+  if (!live?.teams) return `<span class="muted">${esc(fallback || "")}</span>`;
+  const [a, b] = live.teams;
+  const logo = t => `<img src="${t.logo}" alt="" style="width:18px;height:18px;object-fit:contain" onerror="this.remove()">`;
+  const pre = live.state === "pre";
+  return `<span style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#a0998a">
+    ${logo(a)}${a.abbr}${pre ? "" : ` <b style="color:#e8e0d0">${a.score}</b>`}<span>${pre ? "@" : "-"}</span>${pre ? "" : `<b style="color:#e8e0d0">${b.score}</b> `}${b.abbr}${logo(b)}</span>`;
+}
+
+// Color only ever means bet state: red is reserved for a lost bet, so team colors aren't used
+const liveColor = (l, r) => ({won:"#3ecf8e", lost:"#f87171", push:"#a0998a", void:"#a0998a"}[r.status] || "#e07b54");
+
+// A parlay is {id, parlay:true, legs:[...], stake, odds}; a single bet is its own only leg
+const legsOf = b => b.parlay ? b.legs : [b];
+
+function evalParlay(b){
+  const rs = b.legs.map(evalBet);
+  const hits = rs.filter(r => r.status === "won").length;
+  const counted = rs.filter(r => r.status !== "push" && r.status !== "void").length;
+  let status;
+  if (rs.some(r => r.status === "lost")) status = "lost";
+  else if (rs.every(r => ["won","push","void"].includes(r.status))) status = hits ? "won" : "push";
+  else if (rs.some(r => r.status === "live" || r.status === "won")) status = "live";
+  else status = "pending";
+  return {rs, hits, counted, status};
+}
+
+const statusOf = b => (b.parlay ? evalParlay(b) : evalBet(b)).status;
+
+const FINAL = ["won", "lost", "push", "void"];
+const legTxt = l => `${l.player} ${sideLabel(l)} ${l.stat}`;
+
+// Move bets to the P&L history as soon as they're decided: a won over or a lost
+// under/parlay leg can't change, so it counts right away. A push or a player who
+// didn't play is only known once the game is over.
+function archiveSettled(){
+  const done = S.bets.filter(b => {
+    const st = statusOf(b);
+    if (st === "won" || st === "lost") return true;
+    return FINAL.includes(st) && legsOf(b).every(l => S.live[l.game]?.state === "post");
+  });
+  if (!done.length) return;
+  for (const b of done) {
+    const legs = legsOf(b).map(l => {
+      const r = evalBet(l);
+      return `${{won:"✅", lost:"❌", push:"➖", void:"⚪"}[r.status] || ""} ${legTxt(l)} · ${r.cur}`;
+    });
+    const st = statusOf(b);
+    const rec = {id: b.id, at: Date.now(), parlay: !!b.parlay,
+      title: b.parlay ? `Parlay · ${b.legs.length} piernas` : legTxt(b),
+      legs, stake: b.stake, odds: b.odds, result: st === "void" ? "push" : st};
+    if (!S.history.some(h => h.id === rec.id)) S.history.unshift(rec);
+    S.flash.push(rec);
+  }
+  S.bets = S.bets.filter(b => !done.includes(b));
+  save();
+  clearTimeout(S._flashTimer);
+  S._flashTimer = setTimeout(() => { S.flash = []; render(); }, 10000);
+}
+
+const profitOf = h => h.result === "won" ? payout(h) : h.result === "lost" ? -h.stake : 0;
+const money = v => `${v >= 0 ? "+" : "-"}$${Math.abs(v).toFixed(2)}`;
+
+function payout(b){
+  if (!b.stake) return 0;
+  const o = parseFloat(b.odds) || (b.parlay ? 0 : -110);
+  if (!o) return 0;
+  return o > 0 ? b.stake * o / 100 : b.stake * 100 / -o;
+}
+
+function barText(cur, line){
+  const n = 10, f = Math.max(0, Math.min(n, Math.round(cur / line * n)));
+  return "▰".repeat(f) + "▱".repeat(n - f);
+}
+
+async function poll(){
+  const ids = [...new Set([...S.bets.flatMap(legsOf), ...S.draft].map(l => l.game).concat(S.form.game).filter(Boolean))];
+  await Promise.all(ids.map(async id => {
+    if (S.live[id]?.state === "post") return;
+    try { S.live[id] = parseSummary(await getJSON(API + "/summary?event=" + id)); S.err = ""; }
+    catch (e) { S.err = "Error actualizando (" + e.message + ")"; }
+  }));
+  for (const b of S.bets) notifyBet(b);
+  archiveSettled();
+  updateMediaSession();
+  render();
+}
+
+// ---------- lock screen: notifications ----------
+async function notifyBet(b){
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  if (b.parlay) return notifyParlay(b);
+  const r = evalBet(b);
+  if (!r.live || r.live.state === "pre") return;
+  const key = r.cur + "|" + r.status + "|" + r.live.detail;
+  if (b._lastKey === key) return;
+  const changed = b._lastStatus && b._lastStatus !== r.status;
+  b._lastKey = key; b._lastStatus = r.status;
+  const icon = {won:"✅", lost:"❌", push:"➖", void:"⚪"}[r.status] || "🔴";
+  const reg = await navigator.serviceWorker?.ready;
+  if (!reg) return;
+  reg.showNotification(`${icon} ${b.player} ${b.side === "over" ? "O" : "U"}${b.line} ${b.stat}: ${r.cur}`, {
+    body: `${barText(r.cur, b.line)}  ${r.cur}/${b.line}\n${r.live.detail} · ${r.live.score}`,
+    tag: "bet-" + b.id,
+    renotify: !!changed,
+    silent: !changed,
+    requireInteraction: true,
+    icon: "icon.svg",
+    vibrate: changed ? [200, 100, 200] : undefined
+  });
+}
+
+async function notifyParlay(b){
+  const pr = evalParlay(b);
+  const key = pr.rs.map(r => r.cur + r.status).join("|") + pr.status;
+  if (b._lastKey === key) return;
+  const changed = b._lastStatus && b._lastStatus !== pr.status;
+  b._lastKey = key; b._lastStatus = pr.status;
+  const icon = {won:"✅", lost:"❌", push:"➖"}[pr.status] || "🔴";
+  const reg = await navigator.serviceWorker?.ready;
+  if (!reg) return;
+  reg.showNotification(`${icon} Parlay ${pr.hits}/${b.legs.length} piernas`, {
+    body: b.legs.map((l, i) => `${{won:"✅", lost:"❌"}[pr.rs[i].status] || "•"} ${lastName(l.player)} ${pr.rs[i].cur}/${l.line} ${l.stat}`).join("\n"),
+    tag: "bet-" + b.id, renotify: !!changed, silent: !changed, requireInteraction: true, icon: "icon.svg"
+  });
+}
+
+async function askNotif(){
+  if (!("Notification" in window)) return alert("Este navegador no soporta notificaciones");
+  await Notification.requestPermission();
+  S.bets.forEach(b => { b._lastKey = null; });
+  poll();
+}
+
+// ---------- lock screen: keep-alive + media card ----------
+// Android Chrome freezes hidden pages after a few minutes; a playing (near-silent)
+// audio track keeps it running and puts a media card on the lock screen.
+let audio = null;
+function quietWav(){
+  const rate = 8000, secs = 10, n = rate * secs, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+  const w = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  w(0,"RIFF"); v.setUint32(4, 36 + n*2, true); w(8,"WAVE"); w(12,"fmt ");
+  v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+  v.setUint32(24,rate,true); v.setUint32(28,rate*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true);
+  w(36,"data"); v.setUint32(40, n*2, true);
+  for (let i = 0; i < n; i++) v.setInt16(44 + i*2, (Math.random()*4 - 2) | 0, true);
+  return URL.createObjectURL(new Blob([buf], {type:"audio/wav"}));
+}
+
+async function toggleLock(){
+  if (S.lockMode) {
+    audio?.pause(); S.lockMode = false;
+  } else {
+    if (!audio) { audio = new Audio(quietWav()); audio.loop = true; }
+    try { await audio.play(); S.lockMode = true; } catch (e) { alert("No pude activar: " + e.message); }
+    if ("mediaSession" in navigator) {
+      navigator.mediaSession.setActionHandler("pause", () => { audio.pause(); S.lockMode = false; render(); });
+      navigator.mediaSession.setActionHandler("play", () => { audio.play(); S.lockMode = true; render(); });
+    }
+    if (Notification.permission === "default") await askNotif();
+    updateMediaSession();
+  }
+  render();
+}
+
+const COLORS = {won:"#3ecf8e", lost:"#f87171", push:"#a0998a", void:"#a0998a", live:"#e07b54", pending:"#7a7060"};
+// "Jaren Jackson Jr." -> "Jackson"
+const lastName = n => n.trim().split(/\s+/).filter((w, i, a) => i === 0 || !/^(jr|sr|ii|iii|iv)\.?$/i.test(w)).slice(-1)[0];
+
+// Lock screen card image: one row per bet with a big number and a progress bar
+function drawArt(items){
+  const W = 512, c = document.createElement("canvas"); c.width = c.height = W;
+  const x = c.getContext("2d");
+  x.fillStyle = "#0a0a0f"; x.fillRect(0, 0, W, W);
+  const shown = items.slice(0, 4), rowH = W / Math.max(shown.length, 2), pad = 28;
+  shown.forEach(({b, r}, i) => {
+    const y = i * rowH, col = COLORS[r.status] || "#e07b54";
+    const big = Math.min(rowH * 0.42, 110);
+    x.fillStyle = col; x.font = `900 ${big}px sans-serif`; x.textBaseline = "alphabetic";
+    x.fillText(String(r.cur), pad, y + rowH * 0.55);
+    const w = x.measureText(String(r.cur)).width;
+    x.fillStyle = "#a0998a"; x.font = `500 ${big * 0.4}px sans-serif`;
+    x.fillText(`/ ${b.line} ${b.stat}`, pad + w + 10, y + rowH * 0.55);
+    x.fillStyle = "#e8e0d0"; x.font = `600 ${Math.min(rowH * 0.13, 30)}px sans-serif`;
+    const tag = {won:"✅", lost:"❌", push:"➖", void:"⚪"}[r.status] || (b.side === "over" ? "O" : "U");
+    x.fillText(`${lastName(r.p?.name || b.player)}  ${tag}`, pad, y + rowH * 0.2 + 6);
+    // bar with line marker
+    const bx = pad, by = y + rowH * 0.68, bw = W - pad * 2, bh = Math.min(rowH * 0.1, 22);
+    const max = Math.max(b.line, r.cur) * 1.25 || 1;
+    x.fillStyle = "#26262e"; x.beginPath(); x.roundRect(bx, by, bw, bh, bh / 2); x.fill();
+    x.fillStyle = col; x.beginPath(); x.roundRect(bx, by, Math.max(bh, bw * r.cur / max), bh, bh / 2); x.fill();
+    x.fillStyle = "#e8e0d0"; x.fillRect(bx + bw * b.line / max - 2, by - 6, 4, bh + 12);
+    if (i < shown.length - 1) { x.fillStyle = "#1c1c24"; x.fillRect(pad, y + rowH - 1, W - pad * 2, 2); }
+  });
+  return c.toDataURL("image/png");
+}
+
+function updateMediaSession(){
+  if (!S.lockMode || !("mediaSession" in navigator)) return;
+  const items = S.bets.flatMap(legsOf).map(b => ({b, r: evalBet(b)}));
+  const first = items.find(x => x.r.status === "live") || items[0];
+  if (!first) {
+    navigator.mediaSession.metadata = new MediaMetadata({title:"Sin apuestas", artist:"Agrega una en Live Bets"});
+    return;
+  }
+  const {b, r} = first;
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: `${lastName(r.p?.name || b.player)} ${r.cur}/${b.line} ${b.stat}`,
+    artist: r.live ? `${r.live.state === "pre" ? r.live.detail : r.live.detail + " · " + r.live.score}` : "Esperando juego",
+    album: items.length > 1 ? `+${items.length - 1} más` : "Live Bets",
+    artwork: [{src: drawArt(items), sizes:"512x512", type:"image/png"}]
+  });
+}
+
+// ---------- UI ----------
+function formLeg(){
+  const f = S.form;
+  const line = parseFloat(f.line);
+  if (!f.game || !f.player.trim() || isNaN(line)) { S.err = "Llena juego, jugador y línea"; render(); return null; }
+  return {game: f.game, gameName: S.games.find(g => g.id === f.game)?.name || "",
+    player: f.player.trim(), stat: f.stat, side: f.side, line, ...playerMeta(f.game, f.player.trim())};
+}
+
+function addBet(){
+  const leg = formLeg(), f = S.form;
+  if (!leg) return;
+  putBet({id: Date.now(), ...leg, stake: parseFloat(f.stake) || 0, odds: fullOdds()});
+  f.player = ""; f.line = ""; f.stake = ""; f.odds = ""; S.err = "";
+  save(); poll();
+}
+
+function addLeg(){
+  const leg = formLeg();
+  if (!leg) return;
+  S.draft.push(leg);
+  S.form.player = ""; S.form.line = ""; S.err = "";
+  render();
+}
+
+function saveParlay(){
+  const f = S.form;
+  if (S.draft.length < 2) { S.err = "Un parlay necesita 2 piernas o más"; return render(); }
+  putBet({id: Date.now(), parlay: true, legs: S.draft, stake: parseFloat(f.stake) || 0, odds: fullOdds()});
+  S.draft = []; f.stake = ""; f.odds = ""; S.err = "";
+  save(); poll();
+}
+
+function delLeg(i){ S.draft.splice(i, 1); render(); }
+
+// Put a saved leg back into the form fields
+function fillForm(l){
+  Object.assign(S.form, {game: l.game, player: l.player, stat: l.stat, side: l.side, line: String(l.line)});
+  if (!S.games.some(g => g.id === l.game)) S.games.push({id: l.game, name: l.gameName, detail: "", teams: []});
+  loadRoster(l.game);
+}
+
+function editBet(id){
+  const b = S.bets.find(x => x.id === id);
+  if (!b) return;
+  S.editing = id; S.err = "";
+  S.form.stake = b.stake ? String(b.stake) : ""; setOdds(b.odds || "");
+  if (b.parlay) { S.mode = "parlay"; S.draft = b.legs.map(l => ({...l})); S.form.player = ""; S.form.line = ""; }
+  else { S.mode = "single"; S.draft = []; fillForm(b); }
+  render();
+  document.getElementById("form")?.scrollIntoView({behavior: "smooth"});
+}
+
+function editLeg(i){ fillForm(S.draft[i]); S.draft.splice(i, 1); render(); }
+
+function cancelEdit(){
+  S.editing = null; S.draft = []; S.err = "";
+  Object.assign(S.form, {player: "", line: "", stake: "", odds: ""});
+  render();
+}
+
+// New bets are appended; an edited bet takes the old one's place (with a new id so
+// its notification starts fresh)
+function putBet(bet){
+  const i = S.bets.findIndex(b => b.id === S.editing);
+  if (i >= 0) S.bets[i] = bet; else S.bets.push(bet);
+  S.editing = null;
+}
+
+function setTab(t){ S.tab = t; render(); }
+function setResult(id, r){ const h = S.history.find(x => x.id === id); if (h) { h.result = r; save(); render(); } }
+function delHist(id){ if (confirm("¿Borrar esta apuesta del historial?")) { S.history = S.history.filter(h => h.id !== id); save(); render(); } }
+function setMode(m){
+  if (S.editing) return;
+  S.mode = m; S.err = "";
+  if (!S.form.odds) S.form.sign = m === "parlay" ? "+" : "-";
+  render();
+}
+
+// Phone number pads have no "+" key, so the sign is a separate toggle button
+const fullOdds = () => { const d = S.form.odds.replace(/\D/g, ""); return d ? S.form.sign + d : ""; };
+function setOdds(o){ S.form.sign = o.startsWith("+") ? "+" : "-"; S.form.odds = o.replace(/\D/g, ""); }
+function flipSign(){ S.form.sign = S.form.sign === "+" ? "-" : "+"; render(); }
+function delBet(id){ S.bets = S.bets.filter(b => b.id !== id); save(); render(); }
+function setF(k, v){ S.form[k] = v; if (k === "game") S.form.player = "";
+  if (k !== "line" && k !== "stake" && k !== "odds") render(); }
+
+function render(){
+  const f = S.form;
+  const g = S.live[f.game];
+  const roster = S.rosters[f.game] || [];
+  const liveNames = g ? Object.values(g.players).map(p => p.name) : [];
+  const pnl = S.history.reduce((s, x) => s + profitOf(x), 0);
+
+  let h = `
+  <div style="text-align:center;margin-bottom:18px;padding-top:8px">
+    <div class="tag" style="margin-bottom:6px">nba · player props en vivo</div>
+    <h1 style="font-family:'Playfair Display',serif;font-size:34px;font-weight:900;background:linear-gradient(135deg,#e8e0d0,#e07b54);-webkit-background-clip:text;-webkit-text-fill-color:transparent">Live Bets</h1>
+    ${S.history.length ? `<div class="muted" style="margin-top:6px">P&L total: <span style="color:${pnl >= 0 ? "#3ecf8e" : "#f87171"}">${money(pnl)}</span></div>` : ""}
+  </div>
+  <div class="row" style="margin-bottom:12px">
+    <button class="btns ${S.tab === "live" ? "on" : ""}" onclick="setTab('live')">🎯 En vivo${S.bets.length ? ` (${S.bets.length})` : ""}</button>
+    <button class="btns ${S.tab === "pnl" ? "on" : ""}" onclick="setTab('pnl')">📊 Ganancias</button>
+  </div>
+  ${S.flash.map(x => {
+    const v = profitOf(x), won = x.result === "won";
+    return `<div class="card" style="padding:12px;border-color:${won ? "rgba(62,207,142,.4)" : x.result === "lost" ? "rgba(248,113,113,.35)" : "rgba(255,255,255,.1)"}">
+      <div style="display:flex;align-items:center;gap:8px;font-size:13px">
+        <span>${{won: "✅ Ganada", lost: "❌ Perdida", push: "➖ Push"}[x.result]} · ${esc(x.title)}</span>
+        <span style="margin-left:auto;color:${v > 0 ? "#3ecf8e" : v < 0 ? "#f87171" : "#a0998a"}">${x.stake ? money(v) : ""}</span>
+      </div>
+      <div class="muted" style="margin-top:4px">Movida a 📊 Ganancias</div>
+    </div>`;
+  }).join("")}
+  ${NATIVE || S.tab !== "live" ? "" : `<div class="row" style="margin-bottom:12px">
+    <button class="btns ${S.lockMode ? "on" : ""}" onclick="toggleLock()">${S.lockMode ? "🔒 Lock screen ON" : "🔒 Activar lock screen"}</button>
+    <button class="btns ${typeof Notification !== "undefined" && Notification.permission === "granted" ? "on" : ""}" onclick="askNotif()">🔔 Notificaciones</button>
+  </div>`}`;
+
+  if (S.tab === "pnl") h += pnlView();
+  else {
+    for (const b of S.bets) h += b.parlay ? parlayCard(b) : betCard(b);
+    h += formCard(f, g, roster, liveNames) + `
+  <div class="muted" style="text-align:center;line-height:1.6">Se actualiza cada ${POLL_MS / 1000}s · datos de ESPN (~10-30s de retraso)</div>`;
+  }
+
+  // Don't wipe the input the user is typing in
+  const a = document.activeElement;
+  if (a && a.tagName === "INPUT" && document.getElementById("app").contains(a)) return;
+  document.getElementById("app").innerHTML = h;
+}
+
+function betCard(b){
+  const r = evalBet(b);
+  const color = liveColor(b, r);
+  const label = {won:"✅ GANADA", lost:"❌ PERDIDA", push:"➖ PUSH", void:"⚪ NO JUGÓ", pending:"⏳ " + (r.live?.detail || ""), live:""}[r.status];
+  return `<div class="card" style="border-color:${r.status === "won" ? "rgba(62,207,142,.35)" : r.status === "lost" ? "rgba(248,113,113,.3)" : "rgba(255,255,255,.07)"}">
+    <div style="display:flex;gap:14px;align-items:center">
+      ${ring(b, r, 84, color)}
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:flex-start;gap:6px">
+          <div style="min-width:0">
+            <div style="font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.p?.name || b.player)}</div>
+            <div class="muted">${atLeast(b) ? `${b.line}+` : `${b.side === "over" ? "Over" : "Under"} ${b.line}`} ${b.stat}</div>
+          </div>
+          <div style="display:flex;gap:6px;margin-left:auto"><button class="btns" style="padding:4px 8px" onclick="editBet(${b.id})">✏️</button><button class="btnd" onclick="delBet(${b.id})">✕</button></div>
+        </div>
+        <div style="display:flex;align-items:baseline;gap:6px;margin-top:6px">
+          <span class="big" style="color:${color}">${r.cur}</span><span class="muted">/ ${b.line}</span>
+          <span style="margin-left:auto;font-size:11px">${r.status === "live" ? `<span class="pulse"></span>${esc(r.live.detail)}` : label}</span>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.05)">
+      ${scoreLine(r.live, b.gameName)}
+      <span class="muted" style="margin-left:auto">${b.stake ? `$${b.stake} → $${payout(b).toFixed(2)}` : ""}${b.odds ? ` (${esc(b.odds)})` : ""}</span>
+    </div>
+    ${r.live && r.live.state !== "pre" && !r.p ? `<div class="muted" style="margin-top:6px">jugador aún sin stats</div>` : ""}
+  </div>`;
+}
+function parlayCard(b){
+  const pr = evalParlay(b);
+  const label = {won:"✅ GANADO", lost:"❌ PERDIDO", push:"➖ PUSH", pending:"⏳ Pendiente", live:'<span class="pulse"></span>En vivo'}[pr.status];
+  return `<div class="card" style="border-color:${pr.status === "won" ? "rgba(62,207,142,.35)" : pr.status === "lost" ? "rgba(248,113,113,.3)" : "rgba(224,123,84,.25)"}">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <div style="font-size:14px">Parlay · ${b.legs.length} piernas</div>
+        <div class="muted">${b.stake ? `$${b.stake} → $${payout(b).toFixed(2)}${b.odds ? ` (${esc(b.odds)})` : ""}` : esc(b.odds || "")}</div>
+      </div>
+      <div style="display:flex;gap:6px"><button class="btns" style="padding:4px 10px" onclick="editBet(${b.id})">✏️</button><button class="btnd" onclick="delBet(${b.id})">✕</button></div>
+    </div>
+    <div style="display:flex;align-items:baseline;gap:8px;margin:10px 0 4px">
+      <span class="big" style="color:${COLORS[pr.status]}">${pr.hits}</span><span class="muted">/ ${b.legs.length} piernas</span>
+      <span style="margin-left:auto;font-size:11px">${label}</span>
+    </div>
+    ${b.legs.map((l, i) => {
+      const r = pr.rs[i], col = liveColor(l, r);
+      const ic = {won:"✅", lost:"❌", push:"➖", void:"⚪"}[r.status] || "";
+      return `<div style="display:flex;align-items:center;gap:12px;margin-top:12px">
+        ${ring(l, r, 50, col)}
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;font-size:12px;gap:6px"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.p?.name || l.player)}</span>
+            <span style="margin-left:auto;white-space:nowrap"><b style="color:${col};font-size:15px">${r.cur}</b> <span class="muted">/ ${sideLabel(l)} ${l.stat}</span> ${ic}</span></div>
+          <div class="muted" style="font-size:10px;margin-top:3px">${r.live ? esc(r.live.state === "pre" ? r.live.detail : r.live.detail + " · " + r.live.score) : esc(l.gameName)}</div>
+        </div>
+      </div>`;
+    }).join("")}
+  </div>`;
+}
+
+function pnlView(){
+  const H = S.history, day = 864e5, now = Date.now();
+  const sum = list => list.reduce((s, x) => s + profitOf(x), 0);
+  const startToday = new Date(); startToday.setHours(0, 0, 0, 0);
+  const today = sum(H.filter(x => x.at >= startToday.getTime()));
+  const week = sum(H.filter(x => now - x.at < 7 * day)), month = sum(H.filter(x => now - x.at < 30 * day));
+  const total = sum(H);
+  const w = H.filter(x => x.result === "won").length, l = H.filter(x => x.result === "lost").length;
+  const p = H.length - w - l;
+  const staked = H.reduce((s, x) => s + (x.stake || 0), 0);
+  const open = S.bets.reduce((s, b) => s + (b.stake || 0), 0);
+  const toWin = S.bets.reduce((s, b) => s + payout(b), 0);
+  const col = v => v >= 0 ? "#3ecf8e" : "#f87171";
+  const tile = (label, val, c) => `<div style="flex:1;min-width:0;background:rgba(255,255,255,.03);border-radius:10px;padding:10px">
+    <div class="tag">${label}</div><div style="font-size:15px;margin-top:4px;color:${c || "#e8e0d0"}">${val}</div></div>`;
+
+  let h = `<div class="card" style="text-align:center">
+    <div class="tag">ganancia / pérdida total</div>
+    <div class="big" style="font-size:44px;margin-top:8px;color:${col(total)}">${money(total)}</div>
+    <div class="muted" style="margin-top:6px">${w}-${l}${p ? `-${p}` : ""} · ${w + l ? Math.round(w / (w + l) * 100) : 0}% acierto · ROI ${staked ? (total / staked * 100).toFixed(1) : "0.0"}%</div>
+  </div>
+  <div class="row" style="margin-bottom:8px">${tile("hoy", money(today), col(today))}${tile("7 días", money(week), col(week))}${tile("30 días", money(month), col(month))}</div>
+  <div class="row" style="margin-bottom:12px">${tile("apostado", "$" + staked.toFixed(2))}${tile("en juego", "$" + open.toFixed(2))}${tile("por cobrar", "+$" + toWin.toFixed(2))}</div>`;
+
+  if (!H.length) return h + `<div class="muted" style="text-align:center;padding:20px">Cuando tus apuestas terminen aparecen aquí con lo que ganaste o perdiste.</div>`;
+
+  h += pnlChart(H) + pnlCalendar(H);
+
+  h += `<div class="tag" style="margin:6px 0 10px">historial</div>`;
+  for (const x of H) {
+    const v = profitOf(x);
+    const btn = (r, t) => `<button class="btns ${x.result === r ? "on" : ""}" style="padding:3px 8px;font-size:10px" onclick="setResult(${x.id},'${r}')">${t}</button>`;
+    h += `<div class="card" style="padding:12px">
+      <div style="display:flex;align-items:flex-start;gap:8px">
+        <div style="min-width:0">
+          <div style="font-size:13px">${esc(x.title)}</div>
+          <div class="muted">${new Date(x.at).toLocaleDateString("es", {day: "numeric", month: "short"})}${x.stake ? ` · $${x.stake}` : ""}${x.odds ? ` · ${esc(x.odds)}` : ""}</div>
+        </div>
+        <div style="margin-left:auto;font-size:15px;color:${v > 0 ? "#3ecf8e" : v < 0 ? "#f87171" : "#a0998a"}">${x.stake ? money(v) : {won: "✅", lost: "❌", push: "➖"}[x.result]}</div>
+      </div>
+      <div class="muted" style="margin-top:6px;line-height:1.6">${x.legs.map(esc).join("<br>")}</div>
+      <div style="display:flex;gap:6px;margin-top:8px;align-items:center">
+        ${btn("won", "✅ Ganada")}${btn("lost", "❌ Perdida")}${btn("push", "➖ Push")}
+        <button class="btnd" style="margin-left:auto" onclick="delHist(${x.id})">✕</button>
+      </div>
+    </div>`;
+  }
+  return h;
+}
+
+// Gain / loss colors for charts (teal/coral stay apart for red-green colorblindness)
+const UP = "#22b8a0", DOWN = "#ff6b5e";
+const fmtDay = t => new Date(t).toLocaleDateString("es", {day: "numeric", month: "short"});
+
+// Running P&L, one point per settled bet, oldest first
+function pnlChart(H){
+  const pts = [...H].sort((a, b) => a.at - b.at);
+  let run = 0;
+  const data = [{at: pts[0].at, v: 0, label: "Inicio"}].concat(pts.map(x => ({at: x.at, v: run += profitOf(x), label: x.title})));
+  const W = 340, Hh = 150, padL = 8, padR = 8, padT = 24, padB = 18;
+  const lo = Math.min(0, ...data.map(d => d.v)), hi = Math.max(0, ...data.map(d => d.v));
+  const span = hi - lo || 1;
+  const X = i => padL + (W - padL - padR) * (data.length === 1 ? 0.5 : i / (data.length - 1));
+  const Y = v => padT + (Hh - padT - padB) * (1 - (v - lo) / span);
+  const path = data.map((d, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(d.v).toFixed(1)}`).join("");
+  const end = data[data.length - 1].v, col = end >= 0 ? UP : DOWN;
+  S._chart = data;
+  return `<div class="card">
+    <div style="display:flex;align-items:baseline"><div class="tag">tu dinero en el tiempo</div>
+      <div id="ctip" class="muted" style="margin-left:auto;font-size:11px;min-height:14px"></div></div>
+    <svg viewBox="0 0 ${W} ${Hh}" style="width:100%;height:auto;margin-top:8px;touch-action:pan-y" onpointermove="chartHover(event,this)" onpointerdown="chartHover(event,this)" onpointerleave="chartHover(null,this)">
+      <line x1="${padL}" x2="${W - padR}" y1="${Y(0)}" y2="${Y(0)}" stroke="rgba(255,255,255,.15)" stroke-dasharray="3 4"/>
+      <text x="${W - padR}" y="${Y(0) - 4}" text-anchor="end" font-size="9" fill="#7a7060">$0</text>
+      <path d="${path} L${X(data.length - 1)},${Y(0)} L${X(0)},${Y(0)} Z" fill="${col}" opacity=".08"/>
+      <path d="${path}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${X(data.length - 1)}" cy="${Y(end)}" r="4" fill="${col}" stroke="#0a0a0f" stroke-width="2"/>
+      <text x="${X(data.length - 1) - 8}" y="${Y(end) + (end >= 0 ? -8 : 16)}" text-anchor="end" font-size="11" fill="#e8e0d0">${money(end)}</text>
+      <g id="cx" style="display:none"><line y1="${padT}" y2="${Hh - padB}" stroke="rgba(255,255,255,.3)"/><circle r="5" fill="${col}" stroke="#0a0a0f" stroke-width="2"/></g>
+      <text x="${padL}" y="${Hh - 4}" font-size="9" fill="#7a7060">${fmtDay(data[0].at)}</text>
+      <text x="${W - padR}" y="${Hh - 4}" text-anchor="end" font-size="9" fill="#7a7060">${fmtDay(data[data.length - 1].at)}</text>
+    </svg>
+  </div>`;
+}
+
+function chartHover(e, svg){
+  const g = svg.querySelector("#cx"), tip = document.getElementById("ctip"), data = S._chart;
+  if (!e || !data) { g.style.display = "none"; tip.textContent = ""; return; }
+  const box = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal;
+  const x = (e.clientX - box.left) / box.width * vb.width;
+  const i = Math.max(0, Math.min(data.length - 1, Math.round((x - 8) / (vb.width - 16) * (data.length - 1))));
+  const cx = 8 + (vb.width - 16) * (data.length === 1 ? 0.5 : i / (data.length - 1));
+  const line = g.querySelector("line"), dot = g.querySelector("circle");
+  const ys = [...svg.querySelectorAll("path")][1].getAttribute("d").split(/[ML]/).filter(Boolean)[i].split(",")[1];
+  line.setAttribute("x1", cx); line.setAttribute("x2", cx);
+  dot.setAttribute("cx", cx); dot.setAttribute("cy", ys);
+  g.style.display = "";
+  tip.textContent = `${fmtDay(data[i].at)} · ${money(data[i].v)} · ${data[i].label}`;
+}
+
+// Last 5 weeks, one square per day: teal = won money, coral = lost, gray = even
+function pnlCalendar(H){
+  const byDay = {};
+  for (const x of H) {
+    const k = new Date(x.at).toDateString();
+    byDay[k] = byDay[k] || {v: 0, n: 0};
+    byDay[k].v += profitOf(x); byDay[k].n++;
+  }
+  const maxAbs = Math.max(1, ...Object.values(byDay).map(d => Math.abs(d.v)));
+  const start = new Date(); start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - start.getDay() - 28);   // Sunday, 4 weeks back
+  let cells = "";
+  for (let i = 0; i < 35; i++) {
+    const d = new Date(start); d.setDate(start.getDate() + i);
+    const rec = byDay[d.toDateString()], future = d > new Date();
+    let bg = "rgba(255,255,255,.04)";
+    if (rec) bg = rec.v === 0 ? "#383835" : `color-mix(in srgb, ${rec.v > 0 ? UP : DOWN} ${Math.round(35 + 65 * Math.abs(rec.v) / maxAbs)}%, #16161d)`;
+    const tip = rec ? `${fmtDay(d)}: ${money(rec.v)} (${rec.n} apuesta${rec.n > 1 ? "s" : ""})` : `${fmtDay(d)}: sin apuestas`;
+    cells += `<div title="${tip}" onclick="document.getElementById('caltip').textContent=this.title"
+      style="aspect-ratio:1;border-radius:4px;background:${future ? "transparent" : bg};font-size:9px;color:rgba(232,224,208,.55);display:flex;align-items:center;justify-content:center;cursor:pointer">
+      ${future ? "" : d.getDate()}</div>`;
+  }
+  return `<div class="card">
+    <div style="display:flex;align-items:baseline"><div class="tag">calendario</div>
+      <div id="caltip" class="muted" style="margin-left:auto;font-size:11px">toca un día</div></div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:10px">
+      ${["D","L","M","M","J","V","S"].map(x => `<div class="muted" style="text-align:center;font-size:9px">${x}</div>`).join("")}
+      ${cells}
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;justify-content:center;margin-top:10px;font-size:10px;color:#7a7060">
+      <span>− pérdida</span>
+      <span style="width:12px;height:12px;border-radius:3px;background:${DOWN}"></span>
+      <span style="width:12px;height:12px;border-radius:3px;background:#383835"></span>
+      <span style="width:12px;height:12px;border-radius:3px;background:${UP}"></span>
+      <span>ganancia +</span>
+    </div>
+  </div>`;
+}
+
+function formCard(f, g, roster, liveNames){
+  const parlay = S.mode === "parlay";
+  return `<div class="card" id="form" style="${S.editing ? "border-color:rgba(250,204,21,.4)" : ""}">
+    ${S.editing ? `<div style="display:flex;align-items:center;margin-bottom:12px">
+      <span style="font-size:12px;color:#facc15">✏️ Editando ${parlay ? "parlay" : "apuesta"}</span>
+      <button class="btns" style="margin-left:auto;padding:4px 10px" onclick="cancelEdit()">Cancelar</button>
+    </div>` : `<div class="row" style="margin-bottom:12px">
+      <button class="btns ${parlay ? "" : "on"}" onclick="setMode('single')">Sencilla</button>
+      <button class="btns ${parlay ? "on" : ""}" onclick="setMode('parlay')">Parlay</button>
+    </div>`}
+    ${parlay && S.draft.length ? `<div style="margin-bottom:12px">${S.draft.map((l, i) => `
+      <div style="display:flex;align-items:center;font-size:12px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+        <span>${i + 1}. ${esc(l.player)} ${sideLabel(l)} ${l.stat}</span>
+        <button class="btns" style="margin-left:auto;padding:3px 8px" onclick="editLeg(${i})">✏️</button>
+        <button class="btnd" style="margin-left:6px" onclick="delLeg(${i})">✕</button>
+      </div>`).join("")}</div>` : ""}
+    <select class="inp" onchange="setF('game',this.value);loadRoster(this.value);poll()">
+      ${S.games.length ? S.games.map(x => `<option value="${x.id}" ${x.id === f.game ? "selected" : ""}>${esc(x.name)} · ${esc(x.detail)}</option>`).join("") : `<option>Cargando juegos…</option>`}
+    </select>
+    ${roster.length || liveNames.length ? `<select class="inp" onchange="setF('player',this.value)">
+      <option value="">— Escoge jugador —</option>
+      ${roster.length ? roster.map(t => `<optgroup label="${esc(t.abbr)}">${t.names.map(n => `<option ${n === f.player ? "selected" : ""}>${esc(n)}</option>`).join("")}</optgroup>`).join("")
+        : liveNames.map(n => `<option ${n === f.player ? "selected" : ""}>${esc(n)}</option>`).join("")}
+    </select>` : `<input class="inp" placeholder="Jugador (ej. Paolo Banchero)" value="${esc(f.player)}" oninput="setF('player',this.value)"/>`}
+    <div class="row">
+      <select class="inp" onchange="setF('stat',this.value)">${Object.keys(STATS).map(k => `<option ${k === f.stat ? "selected" : ""}>${k}</option>`).join("")}</select>
+      <select class="inp" onchange="setF('side',this.value)">
+        <option value="over" ${f.side === "over" ? "selected" : ""}>Over</option>
+        <option value="under" ${f.side === "under" ? "selected" : ""}>Under</option>
+      </select>
+      <input class="inp" type="number" step="0.5" inputmode="decimal" placeholder="Línea" value="${esc(f.line)}" oninput="setF('line',this.value)"/>
+    </div>
+    ${parlay ? `<button class="btns" style="width:100%;margin-bottom:12px" onclick="addLeg()">+ Agregar pierna al parlay</button>` : ""}
+    <div class="row">
+      <input class="inp" type="number" inputmode="decimal" placeholder="Apuesta $" value="${esc(f.stake)}" oninput="setF('stake',this.value)"/>
+      <div style="display:flex;gap:6px">
+        <button class="btns" style="flex:0 0 44px;height:39px;padding:0;font-size:18px;color:#e8e0d0" onclick="flipSign()">${f.sign === "+" ? "+" : "−"}</button>
+        <input class="inp" style="flex:1;min-width:0" inputmode="numeric" placeholder="${parlay ? "600" : "110"}" value="${esc(f.odds)}" oninput="setF('odds',this.value)"/>
+      </div>
+    </div>
+    ${parlay
+      ? `<button class="btnp" style="width:100%" onclick="saveParlay()">${S.editing ? "Guardar cambios" : "Guardar parlay"} (${S.draft.length} piernas)</button>`
+      : `<button class="btnp" style="width:100%" onclick="addBet()">${S.editing ? "Guardar cambios" : "+ Agregar apuesta"}</button>`}
+    ${S.err ? `<div class="err">${esc(S.err)}</div>` : ""}
+  </div>`;
+}
+
+if (!NATIVE && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+if (NATIVE) save();
+render();
+loadGames().then(poll);
+setInterval(poll, POLL_MS);
+setInterval(loadGames, 5 * 60000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
+</script>
+</body>
+</html>
