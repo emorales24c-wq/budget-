@@ -120,6 +120,7 @@ table.dtbl{min-width:560px}
 #bmk,#bsd,#bview{flex-wrap:wrap}
 .pkh{font-family:var(--display);font-size:1.5rem;margin:14px 0 0}
 #calbox{margin-top:20px}
+#calbox::before{content:"Precisión del modelo";display:block;font-family:var(--display);font-size:1.5rem;font-weight:700;margin:24px 0 4px}
 #besttbl input.refl{border-style:dashed;color:var(--muted)}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:12px}
 .tile{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
@@ -189,7 +190,7 @@ tr.grp td span{font-family:var(--body);font-weight:400;text-transform:none;lette
   <button type="button" role="tab" id="tab-best" aria-selected="false" aria-controls="view-best"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg><span>Mejores props</span></button>
   <button type="button" role="tab" id="tab-dvp" aria-selected="false" aria-controls="view-dvp"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Defensa</span></button>
   <button type="button" role="tab" id="tab-bets" aria-selected="false" aria-controls="view-bets"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 4h14v16l-3-2-2 2-2-2-2 2-2-2-3 2V4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 9h6M9 13h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Apuestas</span></button>
-  <button type="button" role="tab" id="tab-cal" aria-selected="false" aria-controls="view-cal"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 15a8 8 0 1116 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12 15l4-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="15" r="1.4" fill="currentColor"/></svg><span>Precisión</span></button>
+  <button type="button" role="tab" id="tab-cal" aria-selected="false" aria-controls="view-cal"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Récord</span></button>
 </nav>
 
 <div id="view-proj" role="tabpanel" aria-labelledby="tab-proj">
@@ -321,7 +322,7 @@ tr.grp td span{font-family:var(--body);font-weight:400;text-transform:none;lette
 
 <div class="foot">
   <div><b>Datos:</b> basketball-reference.com (box score de cada partido, stats por jugador y lesiones) y teamrankings.com (pace, eficiencia y lo que permite cada rival). Temporada 2026-27, actualizados el __FECHA__.</div>
-  <div><b>Modelo:</b> minutos proyectados = mezcla de los últimos 5 partidos y la temporada; producción por minuto, ajuste por rival y peso de los partidos recientes elegidos con un backtest de todos los partidos jugados (cada partido se proyecta solo con lo que se sabía antes). Se corrige el sesgo de cada stat, se aplica back-to-back y, cuando falta un jugador, el aumento de uso medido. Las probabilidades usan el error real medido y una calibración final; detalles en la pestaña Precisión del modelo.</div>
+  <div><b>Modelo:</b> minutos proyectados = mezcla de los últimos 5 partidos y la temporada; producción por minuto, ajuste por rival y peso de los partidos recientes elegidos con un backtest de todos los partidos jugados (cada partido se proyecta solo con lo que se sabía antes). Se corrige el sesgo de cada stat, se aplica back-to-back y, cuando falta un jugador, el aumento de uso medido. Las probabilidades usan el error real medido y una calibración final; detalles en la pestaña Récord del modelo.</div>
   <div><b>Lesiones:</b> los jugadores "Out" en el reporte de lesiones salen OUT solos (puedes quitarlo tocando OUT). Si la baja es nueva, sus minutos se reparten; si ya venía faltando, sus compañeros ya traen esos minutos en sus promedios recientes.</div>
   <div><b>Defensa por posición:</b> calculada con __DVPGAMES__ box scores de basketball-reference: lo que anotó, rebotó, asistió, etc. cada posición del rival por minuto, separando titulares y suplentes, contra el promedio de liga. A cada jugador se le aplica el factor de su posición y su rol (titular si fue titular en al menos la mitad de sus partidos). La posición es la de basketball-reference (la primera si tiene dos).</div>
   <div><b>OUT:</b> tus cambios a mano (OUT, minutos, rival, líneas) duran solo ese día; al día siguiente la página arranca limpia con las lesiones del reporte. Los minutos del jugador pasan a sus compañeros de rotación (10+ min de promedio) que no tengan minutos puestos a mano, en proporción a los minutos que juega cada uno, con tope de 42. Si le pones minutos a mano a alguien, se respetan tus minutos.</div>
@@ -439,7 +440,7 @@ function probOver(k,m,line){
   const c=MDL.cal&&MDL.cal[k];
   return shrinkP(c?Math.min(.99,Math.max(.01,c[0]+c[1]*po)):po);
 }
-// corrección de optimismo medida con el récord real de los Mejores props (pestaña Precisión)
+// corrección de optimismo medida con el récord real de los Mejores props (pestaña Récord)
 const PKB=(DATA.pkcal&&DATA.pkcal.b)||1;
 function shrinkP(p){if(PKB===1)return p;p=Math.min(.999,Math.max(.001,p));return 1/(1+Math.exp(-PKB*Math.log(p/(1-p))))}
 const seasonVal=(p,k)=>({pts:p.pts,reb:p.orb+p.drb,ast:p.ast,tpm:p.p3,pra:p.pts+p.orb+p.drb+p.ast,stl:p.stl,blk:p.blk})[k];
