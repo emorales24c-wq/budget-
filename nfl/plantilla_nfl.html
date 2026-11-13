@@ -154,6 +154,7 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
 <nav class="rail" role="tablist" aria-label="Secciones">
   <button type="button" role="tab" id="tab-proj" aria-selected="true" aria-controls="view-proj"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15l3-4 3 3 5-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Proyecciones</span></button>
   <button type="button" role="tab" id="tab-top" aria-selected="false" aria-controls="view-top"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Top 5 / 10</span></button>
+  <button type="button" role="tab" id="tab-calc" aria-selected="false" aria-controls="view-calc"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 7h8M8 11h2M12 11h2M16 11h0M8 15h2M12 15h2M8 18h2M12 18h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Calcular</span></button>
   <button type="button" role="tab" id="tab-par" aria-selected="false" aria-controls="view-par"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="19" cy="18" r="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><span>Parlay</span></button>
   <button type="button" role="tab" id="tab-best" aria-selected="false" aria-controls="view-best"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg><span>Mejores props</span></button>
   <button type="button" role="tab" id="tab-td" aria-selected="false" aria-controls="view-td"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><ellipse cx="12" cy="12" rx="9" ry="5.5" transform="rotate(-35 12 12)" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9.5 14.5l5-5M10.5 11l1 1M12 9.5l1 1M13.5 12.5l-1-1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>Anotador TD</span></button>
@@ -213,6 +214,17 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
   <div id="barb"></div>
   <section class="daybox" id="bcards" aria-live="polite"></section>
   <div class="tablebox"><table id="besttbl"><thead><tr><th class="l">Jugador</th><th class="l">Mercado</th><th>Línea</th><th>Proyección</th><th>Prom.</th><th>Over</th><th>Under</th><th>Pick</th><th>Cuota / precio</th><th>Edge</th></tr></thead><tbody id="besttb"></tbody></table></div>
+</div>
+
+<div id="view-calc" role="tabpanel" aria-labelledby="tab-calc" hidden>
+  <div class="controls">
+    <div class="f" style="flex:1;min-width:200px"><label for="cplayer">Jugador</label><input id="cplayer" list="cplist" type="text" placeholder="Escribe el nombre" autocomplete="off"><datalist id="cplist"></datalist></div>
+    <div class="f"><label for="cmk">Prop</label><select id="cmk"></select></div>
+    <div class="f"><label for="cline">Línea</label><input id="cline" type="number" step="0.5" inputmode="decimal" placeholder="Ej. 1.5" style="width:90px"></div>
+    <div class="f"><label for="cprice">Tu precio (opcional)</label><input id="cprice" type="text" inputmode="decimal" placeholder="¢ o cuota (-110)" style="width:120px"></div>
+  </div>
+  <p class="meta" style="margin:6px 0 0">La línea va como Over/Under: 1.5 = "2+" en Kalshi. Usa el partido de hoy o el próximo del jugador, con los OUT y los minutos de la página.</p>
+  <div id="cbox"></div>
 </div>
 
 <div id="view-par" role="tabpanel" aria-labelledby="tab-par" hidden>
@@ -638,7 +650,7 @@ function renderDvp(){
 }
 seg("dpos",v=>{D.pos=v;D.sort=DCOLS[v][v==="QB"?2:v==="RB"?1:2];renderDvp()}); seg("dmode",v=>{D.mode=v;renderDvp()});
 $("dth").addEventListener("click",e=>{const th=e.target.closest("th[data-k]");if(!th)return;const k=th.dataset.k;if(D.sort===k)D.dir*=-1;else{D.sort=k;D.dir=k==="name"?1:-1}renderDvp()});
-function showTab(w){["proj","best","dvp","td","rec","top","par"].forEach(k=>{$("view-"+k).hidden=k!==w;$("tab-"+k).setAttribute("aria-selected",String(k===w))});if(w==="dvp")renderDvp();if(w==="td")renderTd();if(w==="best")renderBest();if(w==="rec")renderPk();if(w==="top")renderTop();if(w==="par")renderPz();window.scrollTo(0,0)}
+function showTab(w){["proj","best","dvp","td","rec","top","par","calc"].forEach(k=>{$("view-"+k).hidden=k!==w;$("tab-"+k).setAttribute("aria-selected",String(k===w))});if(w==="dvp")renderDvp();if(w==="td")renderTd();if(w==="best")renderBest();if(w==="rec")renderPk();if(w==="top")renderTop();if(w==="par")renderPz();if(w==="calc")renderCalc();window.scrollTo(0,0)}
 // Anotador de TD: probabilidad de anotar al menos un TD (tierra o recepción) en cada partido
 const TD={day:DAYS[0]||"",pos:"",group:1,min:10,q:""};
 const fairOdds=p=>p<=0||p>=1?"—":p>=.5?String(-Math.round(p/(1-p)*100)):"+"+Math.round((1-p)/p*100);
@@ -688,7 +700,7 @@ $("tdq").addEventListener("input",e=>{TD.q=e.target.value;renderTd()});
 $("tdtb").addEventListener("input",e=>{const el=e.target;if(el.dataset.a!=="tdo")return;const tr=el.closest("tr"),n=tr.dataset.tdn;ov(n).tdo=el.value;save();
   const r=tdRows().find(x=>x.p.name===n);if(!r||r.out)return;const tmp=document.createElement("tbody");tmp.innerHTML=tdRowHTML(r);
   ["edge","pick"].forEach(c=>tr.querySelector(`[data-c="${c}"]`).replaceWith(tmp.querySelector(`[data-c="${c}"]`)))});
-$("tab-td").addEventListener("click",()=>showTab("td"));$("tab-rec").addEventListener("click",()=>showTab("rec"));$("tab-top").addEventListener("click",()=>showTab("top"));$("tab-par").addEventListener("click",()=>showTab("par"));
+$("tab-td").addEventListener("click",()=>showTab("td"));$("tab-rec").addEventListener("click",()=>showTab("rec"));$("tab-top").addEventListener("click",()=>showTab("top"));$("tab-par").addEventListener("click",()=>showTab("par"));$("tab-calc").addEventListener("click",()=>showTab("calc"));
 $("tab-proj").addEventListener("click",()=>showTab("proj"));$("tab-dvp").addEventListener("click",()=>showTab("dvp"));
 if(location.hash==="#defensa")showTab("dvp");
 if(location.hash==="#td")showTab("td");
@@ -1035,4 +1047,44 @@ $("pzbox").addEventListener("click",e=>{if(!e.target.closest("#pzcopy"))return;c
 $("pzday").addEventListener("change",e=>{PZ.day=e.target.value;PZ.sel=null;renderPz()});
 [["pzside","side"],["pzmode","mode"],["pzn","n"]].forEach(([id,key])=>$(id).addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
   $(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));PZ[key]=key==="n"?+b.dataset.v:b.dataset.v;PZ.sel=null;renderPz()}));
+// ================= Calculadora: un jugador, un prop y una línea → probabilidad =================
+const CL={day:null};
+$("cplist").innerHTML=P.filter(p=>(p.g>=1)).map(p=>`<option value="${esc(p.name)}">${esc(p.tm)}</option>`).join("");
+function calcMarkets(p){return [...(PROPS[p.pos]||[]),"td"]}
+function fillCalcMk(){const p=P.find(x=>x.name===$("cplayer").value.trim());const ks=p?calcMarkets(p):["pyd","cmp","att","ptd","int","ryd","car","rec","recyd","rr","tgt","td"];const cur=$("cmk").value;
+  $("cmk").innerHTML=ks.map(k=>`<option value="${k}">${{...BMLAB,td:"TD (tierra o recepción)"}[k]||k}</option>`).join("");if(ks.includes(cur))$("cmk").value=cur}
+function parsePrice(s){s=String(s||"").trim().replace("¢","");if(!s)return null;const v=parseFloat(s);if(isNaN(v))return null;
+  if(/^[+-]/.test(s)||Math.abs(v)>=100)return impl(v);if(v>1)return v/100;return v}
+function renderCalc(){
+  const box=$("cbox"),name=$("cplayer").value.trim(),k=$("cmk").value,line=parseFloat($("cline").value);
+  const p=P.find(x=>x.name===name)||P.find(x=>x.name.toLowerCase()===name.toLowerCase());
+  if(!p){box.innerHTML=name?`<p class="meta" style="margin-top:12px">No encuentro a "${esc(name)}". Escoge de la lista.</p>`:"";return}
+  const day=DAYS.find(d=>OPPD[d]&&OPPD[d][p.tm]);const s=day?OPPD[day][p.tm]:null;
+  if(!s){box.innerHTML=`<p class="meta" style="margin-top:12px">${esc(p.name)} (${p.tm}) no tiene partido en los próximos días.</p>`;return}
+  if(isOut(p)){box.innerHTML=`<p class="meta" style="margin-top:12px">⚠ ${esc(p.name)} está OUT.</p>`;return}
+  const res=(()=>{const pr=project(p,{rival:s.opp,home:s.home});if(!pr.ok)return null;if(k==="td"){const lam=pr.rtd+pr.rectd;return {proj:lam,pOver:l=>{let c=0,t=Math.exp(-lam);for(let i=0;i<=Math.floor(l);i++){c+=t;t*=lam/(i+1)}return shrinkP(1-c)},note:"TD esperados"}}if(pr[k]==null)return null;return {proj:pr[k],pOver:l=>probOverN(k,pr[k],l),note:pr.pct!=null?`${Math.round(pr.pct*100)}% de los snaps`:""}})();if(!res){box.innerHTML=`<p class="meta" style="margin-top:12px">No hay datos suficientes de ${esc(p.name)}.</p>`;return}
+  const proj=res.proj;
+  if(isNaN(line)){box.innerHTML=`<section class="panel" style="margin-top:12px"><h3>${esc(p.name)} · ${esc({...BMLAB,td:"TD (tierra o recepción)"}[k]||k)}</h3><p>Proyección: <b>${proj.toFixed(1)}</b> ${day?`· ${p.tm} ${s.home?"vs":"@"} ${s.opp} · ${fmtDay(day)}`:""}</p><p class="meta">Escribe una línea para ver el porcentaje.</p></section>`;return}
+  let po=res.pOver(line);
+  // si Kalshi tiene esa misma línea, mezcla con su precio (60% modelo / 40% mercado), igual que en Mejores props
+  const rung=((KAL[knorm(p.name)]||{})[k]||[]).find(e=>e[0]===day&&e[1]===line);
+  let kal=null;if(rung){const mkt=rung[2]>0?(rung[2]+rung[3])/2:rung[3];const pm=po;po=KW*pm+(1-KW)*mkt;
+    const yes=rung[3]+kfee(rung[3]),no=rung[2]>0?+(1-rung[2]).toFixed(2)+kfee(+(1-rung[2]).toFixed(2)):null;kal={yes,no,pm}}
+  const pu=1-po,h=typeof hitRate==="function"&&false?[hitRate(p.name,k,line,"O"),hitRate(p.name,k,line,"U")]:[null,null];
+  const my=parsePrice($("cprice").value);
+  const side=po>=pu?"O":"U",best=Math.max(po,pu);
+  const card=(lab,pr,hr,price,cls)=>`<div class="tile"><div class="k">${lab} ${line}</div><div class="v ${cls}">${Math.round(pr*100)}%</div><div class="s">${hr?`pegó ${hr[0]} de sus últimos ${hr[1]}`:""}${price!=null?`${hr?" · ":""}Kalshi ${Math.round(price*100)}¢ → <b class="${pr-price>0?"up":"dn"}">${pr-price>0?"+":""}${((pr-price)*100).toFixed(1)}%</b>`:""}</div></div>`;
+  box.innerHTML=`<section class="panel" style="margin-top:12px">
+    <h3>${esc(p.name)} ${injBadge(p)} · ${esc({...BMLAB,td:"TD (tierra o recepción)"}[k]||k)} ${line}</h3>
+    <p class="meta" style="margin:0 0 8px">${p.tm} ${s.home?"vs":"@"} ${s.opp} · ${fmtDay(day)} · proyección <b>${proj.toFixed(1)}</b>${res.note?` · ${res.note}`:""}${kal?" · mezclado con el precio de Kalshi":""}</p>
+    <div class="tiles">${card("OVER",po,h[0],kal?kal.yes:null,side==="O"?"up":"")}${card("UNDER",pu,h[1],kal&&kal.no!=null?kal.no:null,side==="U"?"up":"")}</div>
+    <p style="margin:6px 0 0">El modelo prefiere <b>${side==="O"?"OVER":"UNDER"} ${line}</b> (${Math.round(best*100)}%) · cuota justa ${amOf(best)>0?"+":""}${amOf(best)}${kal?` · en Kalshi: ${side==="O"?"SÍ":"NO"} ${line+.5}+`:""}</p>
+    ${my!=null?`<p style="margin:6px 0 0">Con tu precio (${Math.round(my*100)}%): Over <b class="${po-my>0?"up":"dn"}">${po-my>0?"+":""}${((po-my)*100).toFixed(1)}%</b> · Under <b class="${pu-my>0?"up":"dn"}">${pu-my>0?"+":""}${((pu-my)*100).toFixed(1)}%</b> · ${Math.max(po,pu)-my>0?"✅ tiene valor del lado "+(po>pu?"OVER":"UNDER"):"❌ sin valor"}</p>`:""}
+    ${!rung&&hasKal(day)?`<p class="meta" style="margin:6px 0 0">Kalshi no tiene esa línea exacta para este jugador hoy.</p>`:""}
+  </section>`;
+}
+$("cplayer").addEventListener("change",()=>{fillCalcMk();renderCalc()});
+$("cplayer").addEventListener("input",()=>{if(P.some(x=>x.name===$("cplayer").value.trim())){fillCalcMk();renderCalc()}});
+["cmk","cline","cprice"].forEach(id=>$(id).addEventListener("input",renderCalc));
+fillCalcMk();
 </script>
