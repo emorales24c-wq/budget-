@@ -738,6 +738,10 @@ function render(){
     <button class="btns ${S.tab === "live" ? "on" : ""}" onclick="setTab('live')">🎯 En vivo${S.bets.length ? ` (${S.bets.length})` : ""}</button>
     <button class="btns ${S.tab === "pnl" ? "on" : ""}" onclick="setTab('pnl')">📊 Ganancias</button>
   </div>
+  <div class="row" style="margin-bottom:12px">
+    <button class="btns" onclick="location.href='nba.html'">🏀 Proyecciones NBA</button>
+    <button class="btns" onclick="location.href='nfl.html'">🏈 Proyecciones NFL</button>
+  </div>
   ${S.flash.map(x => {
     const v = profitOf(x), won = x.result === "won";
     return `<div class="card" style="padding:12px;border-color:${won ? "rgba(62,207,142,.4)" : x.result === "lost" ? "rgba(248,113,113,.35)" : "rgba(255,255,255,.1)"}">
@@ -1039,6 +1043,9 @@ if (!NATIVE && "serviceWorker" in navigator) navigator.serviceWorker.register("s
 if (NATIVE) save();
 render();
 loadGames().then(poll);
+// picks mandados desde Proyecciones NBA dentro de la app: se abre el cuadro de importar ya lleno
+(() => { let c = null; try { c = localStorage.getItem("lb_import"); localStorage.removeItem("lb_import"); } catch (e) {}
+  if (c) { S.tab = "live"; S.importOpen = true; readCode(c); } })();
 setInterval(poll, POLL_MS);
 setInterval(loadGames, 5 * 60000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
