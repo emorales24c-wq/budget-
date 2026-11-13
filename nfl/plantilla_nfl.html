@@ -209,6 +209,7 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
   </div>
   <p class="meta" style="margin:10px 0 0">Los props con más probabilidad de cada jugador de los partidos del día, de mejor a peor. <b>Línea</b>: viene la de referencia (su producción con el rol de hoy —snaps con los OUT y el QB que va a lanzar— pero sin el ajuste por la defensa rival, redondeada al .5 más cercano; así el edge sale sobre todo del matchup); escribe la de tu casa y la cuota para que se recalcule todo. Solo salen jugadores con rol real (QB con 60%+ de los snaps esperados; los demás con 35%+) y los mercados que las casas suelen ofrecer. El error de cada stat se midió con todos los partidos de la temporada. Las probabilidades usan su producción por snap, snaps esperados, la defensa rival contra su posición y los OUT que marques. <b>Edge</b> = probabilidad del modelo − la que paga la cuota (-110 si no escribes una). Los TD por tierra o recepción están en Anotador TD.</p>
   <p class="meta" id="bsrcmsg" style="margin:8px 0 0"></p>
+  <div id="barb"></div>
   <section class="daybox" id="bcards" aria-live="polite"></section>
   <div class="tablebox"><table id="besttbl"><thead><tr><th class="l">Jugador</th><th class="l">Mercado</th><th>Línea</th><th>Proyección</th><th>Prom.</th><th>Over</th><th>Under</th><th>Pick</th><th>Cuota / precio</th><th>Edge</th></tr></thead><tbody id="besttb"></tbody></table></div>
 </div>
@@ -770,6 +771,20 @@ function kalBest(name,k,day,pOver){
   return best;
 }
 const KALDAYS=new Set();Object.values(KAL).forEach(v=>Object.values(v).forEach(rs=>rs.forEach(r=>KALDAYS.add(r[0]))));const hasKal=d=>KALDAYS.has(d);
+// ===== Arbitraje dentro de Kalshi: en la escalera de un jugador, "15+" nunca debería costar menos que "20+".
+// Si SÍ en el escalón bajo + NO en el alto (más comisiones) cuesta menos de $1, se gana pase lo que pase.
+function findArbs(day){const out=[],nm={};P.forEach(p=>nm[knorm(p.name)]=p.name);
+  Object.entries(KAL).forEach(([n,mk])=>Object.entries(mk).forEach(([k,rows])=>{
+    const rs=rows.filter(r=>r[0]===day).sort((a,b)=>a[1]-b[1]);
+    for(let i=0;i<rs.length;i++)for(let j=i+1;j<rs.length;j++){const lo=rs[i],hi=rs[j];if(!(hi[2]>0))continue;
+      const no=+(1-hi[2]).toFixed(2),cost=lo[3]+kfee(lo[3])+no+kfee(no);
+      if(cost<1)out.push({name:nm[n]||n,k,lo:lo[1]+.5,hi:hi[1]+.5,yes:lo[3],no,cost,profit:1-cost})}
+    rs.forEach(r=>{if(r[2]>0){const no=+(1-r[2]).toFixed(2),cost=r[3]+kfee(r[3])+no+kfee(no);if(cost<1)out.push({name:nm[n]||n,k,lo:r[1]+.5,hi:r[1]+.5,yes:r[3],no,cost,profit:1-cost})}})}));
+  return out.sort((a,b)=>b.profit-a.profit)}
+function arbHTML(day,lab){if(!hasKal(day))return "";const a=findArbs(day);
+  if(!a.length)return `<p class="meta" style="margin:8px 0 0">💰 Arbitraje: ninguno en los precios de Kalshi de ${KALT} (es normal: son raros y duran poco).</p>`;
+  return `<section class="panel" style="margin-top:10px;border-color:var(--accent)"><h3>💰 Arbitraje en Kalshi (${a.length})</h3><p class="meta" style="margin:0 0 6px">Compra los dos lados: ganas pase lo que pase. Precios de ${KALT}: revísalos en Kalshi, estas oportunidades duran poco y puede que no haya volumen suficiente.</p>`+
+    a.slice(0,10).map(x=>`<div style="padding:6px 0;border-top:1px solid var(--line)"><b>${esc(x.name)}</b> · ${esc(lab[x.k]||x.k)}: compra <b>SÍ ${x.lo}+</b> a ${Math.round(x.yes*100)}¢ y <b>NO ${x.hi}+</b> a ${Math.round(x.no*100)}¢ → costo $${x.cost.toFixed(2)} (con comisión), cobras mínimo $1.00 · <span class="up">ganancia segura ${Math.round(x.profit*100)}¢ por par</span></div>`).join("")+`</section>`}
 const EDGE_CAP=0.12;
 function bestRows(){
   const day=OPPD[BP.day]||{},q=BP.q.trim().toLowerCase(),out=[];
@@ -827,6 +842,7 @@ function groupedBest(rows,rowFn,ncol,order,labels){
 }
 function renderBest(){
   $("bsrcmsg").textContent=BP.src!=="k"?"":hasKal(BP.day)?`Precios de Kalshi de ${KALT}. Precio = lo que cuesta el contrato + la comisión de Kalshi; paga $1 si pega. Se usa la línea principal de Kalshi de cada jugador (la más cerca de 50/50) y solo salen los que tienen edge positivo. El precio cambia: revísalo en Kalshi antes de comprar. La probabilidad mezcla el modelo (60%) con el precio de Kalshi (40%). Si el edge pasa de 12% sale "⚠ revisar" y va al final: casi siempre el mercado sabe algo que el modelo no (lesión, minutos, rol).`:"Kalshi todavía no tiene mercados de jugadores para este día; abajo van con la línea de referencia.";
+  $("barb").innerHTML=arbHTML(BP.day,BMLAB);
   const ALL=bestRows();renderBestCards(ALL);BROWS=BP.game?ALL.filter(r=>BP.game.split("-").includes(r.p.tm)):ALL;
   const rowFn=(r,i)=>{const L=((S[r.p.name]||{}).l||{})[r.k]||{};
     return `<tr data-bi="${i}"><td class="l name"><span class="pn">${esc(r.p.name)}</span>${injBadge(r.p)}<small>${r.p.tm} · ${r.p.pos} · ${r.home?"vs":"@"} ${r.opp}</small></td>
@@ -900,7 +916,7 @@ function renderTop(){
   const cell=rs=>{if(!rs.length)return `<td>—</td>`;const s=pkStats(rs);return `<td class="${s.u>=0?"up":"dn"}">${s.w}-${s.l} (${Math.round(s.hit*100)}%) ${units(s.u)}</td>`};
   const grp=[["QB",r=>r.pos==="QB"],["RB",r=>r.pos==="RB"],["WR",r=>r.pos==="WR"],["TE",r=>r.pos==="TE"],["Over",r=>r.side==="O"],["Under",r=>r.side==="U"]].map(([lab,f])=>`<tr><td class="l">${lab}</td>${cell(t10.filter(f))}${cell(t5.filter(f))}</tr>`).join("");
   const per=[...new Set(base.map(r=>r.wk))].sort().reverse().map(x=>`<tr><td class="l">${(x=>"Semana "+x)(x)}</td>${cell(t10.filter(r=>r.wk===x))}${cell(t5.filter(r=>r.wk===x))}</tr>`).join("");
-  $("topbox").innerHTML=(TP.src==="k"&&!hk?`<p class="meta" style="margin-top:10px">Kalshi todavía no tiene precios para este día: van con la línea de referencia.</p>`:"")+
+  $("topbox").innerHTML=arbHTML(TP.day,BMLAB)+(TP.src==="k"&&!hk?`<p class="meta" style="margin-top:10px">Kalshi todavía no tiene precios para este día: van con la línea de referencia.</p>`:"")+
     `<section class="panel" style="margin-top:12px"><h3>Top 5 ${"del día"}</h3>${tbl(rows.slice(0,5),0)}</section>
      <section class="panel" style="margin-top:12px"><h3>Top 6 al 10</h3>${tbl(rows.slice(5,10),5)}</section>
      <h2 class="pkh">Récord del Top 5 y del Top 10</h2>
