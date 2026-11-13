@@ -187,6 +187,7 @@ tr.grp td span{font-family:var(--body);font-weight:400;text-transform:none;lette
 <nav class="rail" role="tablist" aria-label="Secciones">
   <button type="button" role="tab" id="tab-proj" aria-selected="true" aria-controls="view-proj"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15l3-4 3 3 5-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Proyecciones</span></button>
   <button type="button" role="tab" id="tab-top" aria-selected="false" aria-controls="view-top"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Top 5 / 10</span></button>
+  <button type="button" role="tab" id="tab-par" aria-selected="false" aria-controls="view-par"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="19" cy="18" r="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><span>Parlay</span></button>
   <button type="button" role="tab" id="tab-best" aria-selected="false" aria-controls="view-best"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg><span>Mejores props</span></button>
   <button type="button" role="tab" id="tab-dvp" aria-selected="false" aria-controls="view-dvp"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Defensa</span></button>
   <button type="button" role="tab" id="tab-bets" aria-selected="false" aria-controls="view-bets"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 4h14v16l-3-2-2 2-2-2-2 2-2-2-3 2V4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 9h6M9 13h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Apuestas</span></button>
@@ -293,6 +294,16 @@ tr.grp td span{font-family:var(--body);font-weight:400;text-transform:none;lette
   <div id="barb"></div>
   <section class="daybox" id="bcards" aria-live="polite"></section>
   <div class="tablebox"><table id="besttbl"><thead><tr><th class="l">Jugador</th><th class="l">Mercado</th><th>Línea</th><th>Proyección</th><th>Prom.</th><th title="Partidos de sus últimos 10 en los que pegó el pick contra esta línea">Últ. 10</th><th>Over</th><th>Under</th><th>Pick</th><th>Cuota / precio</th><th>Edge</th><th></th></tr></thead><tbody id="besttb"></tbody></table></div>
+</div>
+
+<div id="view-par" role="tabpanel" aria-labelledby="tab-par" hidden>
+  <div class="controls">
+    <div class="f"><label for="pzday">Día</label><select id="pzday"></select></div>
+    <div class="f"><label>Lado</label><div class="seg" id="pzside"><button type="button" data-v="U" aria-pressed="true">Todo Under</button><button type="button" data-v="O" aria-pressed="false">Todo Over</button></div></div>
+    <div class="f"><label>Línea</label><div class="seg" id="pzmode"><button type="button" data-v="safe" aria-pressed="true">Más segura</button><button type="button" data-v="main" aria-pressed="false">Principal</button></div></div>
+    <div class="f"><label>Patas</label><div class="seg" id="pzn"><button type="button" data-v="2" aria-pressed="false">2</button><button type="button" data-v="3" aria-pressed="true">3</button><button type="button" data-v="4" aria-pressed="false">4</button><button type="button" data-v="5" aria-pressed="false">5</button></div></div>
+  </div>
+  <div id="pzbox"></div>
 </div>
 
 <div id="view-top" role="tabpanel" aria-labelledby="tab-top" hidden>
@@ -740,9 +751,9 @@ function segPick(id,fn){$(id).addEventListener("click",e=>{const b=e.target.clos
 segPick("dstat",v=>D.stat=+v); segPick("dmode",v=>D.mode=v); segPick("drole",v=>D.role=v);
 $("dtbl").querySelector("thead").addEventListener("click",e=>{const th=e.target.closest("th[data-k]");if(!th)return;const k=th.dataset.k;
   if(D.sort===k)D.dir*=-1;else{D.sort=k;D.dir=k==="name"?1:-1}renderDvp()});
-function showTab(which){["proj","best","dvp","bets","cal","top"].forEach(k=>{$("view-"+k).hidden=k!==which;$("tab-"+k).setAttribute("aria-selected",String(k===which))});
-  if(which==="dvp")renderDvp();if(which==="bets")renderBets();if(which==="cal")renderCal();if(which==="best")renderBest();if(which==="top")renderTop();window.scrollTo(0,0)}
-$("tab-best").addEventListener("click",()=>showTab("best"));$("tab-top").addEventListener("click",()=>showTab("top"));
+function showTab(which){["proj","best","dvp","bets","cal","top","par"].forEach(k=>{$("view-"+k).hidden=k!==which;$("tab-"+k).setAttribute("aria-selected",String(k===which))});
+  if(which==="dvp")renderDvp();if(which==="bets")renderBets();if(which==="cal")renderCal();if(which==="best")renderBest();if(which==="top")renderTop();if(which==="par")renderPz();window.scrollTo(0,0)}
+$("tab-best").addEventListener("click",()=>showTab("best"));$("tab-top").addEventListener("click",()=>showTab("top"));$("tab-par").addEventListener("click",()=>showTab("par"));
 $("tab-proj").addEventListener("click",()=>showTab("proj"));$("tab-dvp").addEventListener("click",()=>showTab("dvp"));
 $("tab-bets").addEventListener("click",()=>showTab("bets"));$("tab-cal").addEventListener("click",()=>showTab("cal"));
 if(location.hash==="#apuestas")showTab("bets");if(location.hash==="#precision")showTab("cal");
@@ -861,6 +872,16 @@ function kalBest(name,k,day,pOver){
       const edge=prob-cost;if(edge<=0)return;if(!best||edge>best.edge)best={line,side,po,pu:1-po,prob,edge,cost,c,yes:ask,no:+(1-bid).toFixed(2),pm,tk:tk||""}})});
   return best;
 }
+// línea alterna MÁS SEGURA: el mismo lado del pick con más colchón (UNDER más alto u OVER más bajo),
+// que todavía tenga valor (edge de 1%+) y cueste hasta 85¢. Se queda con la de más probabilidad.
+function kalAlt(name,k,day,pOver,main){if(!main)return null;let best=null;
+  ((KAL[knorm(name)]||{})[k]||[]).forEach(([d,line,bid,ask])=>{if(d!==day||line===main.line)return;
+    if(main.side==="U"?line<=main.line:line>=main.line)return;
+    const pm=pOver(line),mkt=bid>0?(bid+ask)/2:ask,po=KW*pm+(1-KW)*mkt;
+    const side=main.side,prob=side==="O"?po:1-po,c=side==="O"?ask:+(1-bid).toFixed(2);if(side==="U"&&!(bid>0))return;
+    const cost=c+kfee(c);if(cost>.85)return;const edge=prob-cost;if(edge<.01||prob<=main.prob)return;
+    if(!best||prob>best.prob)best={line,side,prob,edge,cost,c}});
+  return best}
 const KALDAYS=new Set();Object.values(KAL).forEach(v=>Object.values(v).forEach(rs=>rs.forEach(r=>KALDAYS.add(r[0]))));const hasKal=d=>KALDAYS.has(d);
 // ===== Arbitraje dentro de Kalshi: en la escalera de un jugador, "15+" nunca debería costar menos que "20+".
 // Si SÍ en el escalón bajo + NO en el alto (más comisiones) cuesta menos de $1, se gana pase lo que pase.
@@ -876,6 +897,26 @@ function arbHTML(day,lab){if(!hasKal(day))return "";const a=findArbs(day);
   if(!a.length)return `<p class="meta" style="margin:8px 0 0">💰 Arbitraje: ninguno en los precios de Kalshi de ${KALT} (es normal: son raros y duran poco).</p>`;
   return `<section class="panel" style="margin-top:10px;border-color:var(--accent)"><h3>💰 Arbitraje en Kalshi (${a.length})</h3><p class="meta" style="margin:0 0 6px">Compra los dos lados: ganas pase lo que pase. Precios de ${KALT}: revísalos en Kalshi, estas oportunidades duran poco y puede que no haya volumen suficiente.</p>`+
     a.slice(0,10).map(x=>`<div style="padding:6px 0;border-top:1px solid var(--line)"><b>${esc(x.name)}</b> · ${esc(lab[x.k]||x.k)}: compra <b>SÍ ${x.lo}+</b> a ${Math.round(x.yes*100)}¢ y <b>NO ${x.hi}+</b> a ${Math.round(x.no*100)}¢ → costo $${x.cost.toFixed(2)} (con comisión), cobras mínimo $1.00 · <span class="up">ganancia segura ${Math.round(x.profit*100)}¢ por par</span></div>`).join("")+`</section>`}
+// ===== Armador de parlay: de cada pick toma la opción más segura con valor (la principal o la alterna)
+// y junta las más probables. Probabilidad del parlay = producto (se asume que los juegos son independientes).
+function parlayLegs(rows){const legs=[],seen=new Set(),perGame={};
+  rows.forEach(r=>{if(r.warn||!r.kal||seen.has(r.p.name))return;
+    const opts=[{side:r.side,line:r.line,prob:r.prob,cost:r.kal.cost,edge:r.edge}];if(r.alt)opts.push(r.alt);
+    const o=opts.filter(x=>x.edge>.01&&x.cost<=.85).sort((a,b)=>b.prob-a.prob)[0];if(!o)return;
+    const gk=[r.p.tm,r.opp].sort().join("-");if((perGame[gk]||0)>=2)return;
+    seen.add(r.p.name);perGame[gk]=(perGame[gk]||0)+1;legs.push({r,...o})});
+  return legs.sort((a,b)=>b.prob-a.prob||b.edge-a.edge)}
+const amOf=c=>c>=.5?-Math.round(c/(1-c)*100):Math.round((1-c)/c*100);
+let PARLAYS=[];
+function parlayHTML(rows,canCopy){const legs=parlayLegs(rows);PARLAYS=[];
+  if(legs.length<2)return `<section class="panel" style="margin-top:12px"><h3>🎯 Parlay sugerido</h3><p class="meta">Hoy no hay suficientes patas seguras con valor en Kalshi.</p></section>`;
+  const sizes=[2,3,4].filter(n=>legs.length>=n);
+  return `<section class="panel" style="margin-top:12px"><h3>🎯 Parlays sugeridos (patas más seguras con valor)</h3>
+    <p class="meta" style="margin:0 0 6px">Cada pata usa la línea principal o la alterna, la que tenga más probabilidad sin perder el valor. Máximo 2 patas por juego. La probabilidad asume que las patas no dependen una de otra; el precio real del Combo en Kalshi puede ser distinto: compáralo con este.</p>`+
+    sizes.map(n=>{const L=legs.slice(0,n),prob=L.reduce((s,x)=>s*x.prob,1),price=L.reduce((s,x)=>s*x.cost,1),ev=prob/price-1;PARLAYS.push(L);
+      return `<div style="padding:8px 0;border-top:1px solid var(--line)"><b>Parlay de ${n}</b> · gana ${Math.round(prob*100)}% de las veces · precio justo ~${Math.round(price*100)}¢ (paga ${(1/price).toFixed(2)}x) · <span class="${ev>0?"up":"dn"}">valor ${ev>0?"+":""}${Math.round(ev*100)}%</span>
+        ${canCopy?` <button type="button" class="btn" data-pl="${n-2}" style="margin-left:6px">📲 Copiar a Live Bets</button>`:""}
+        <div class="meta" style="margin-top:4px">${L.map(x=>`${esc(x.r.p.name)} <b>${x.side==="O"?"OVER":"UNDER"} ${x.line}</b> ${esc((typeof MKLAB!=="undefined"?MKLAB:BMLAB)[x.r.k]||x.r.k)} (${Math.round(x.prob*100)}%, ${Math.round(x.cost*100)}¢)`).join(" · ")}</div></div>`}).join("")+`</section>`}
 const EDGE_CAP=0.12;
 function bestRows(){
   const day=OPPD[BP.day]||{}, q=BP.q.trim().toLowerCase(), out=[];
@@ -883,8 +924,8 @@ function bestRows(){
     if(q&&!p.name.toLowerCase().includes(q)&&!p.tm.toLowerCase().includes(q))return;
     const st=rowState(p);const c=core(p,st.xmp,s.opp,s.home,{b2b:(s.home?s.g[5]:s.g[4])?1:0});if(!c)return;
     const L=(S[p.name]||{}).l||{};
-    if(BP.src==="k"&&hasKal(BP.day)){(BP.mk?[BP.mk]:BMK).forEach(k=>{const kb=kalBest(p.name,k,BP.day,line=>probOver(k,c[k],line));if(!kb)return;
-      out.push({p,k,line:kb.line,ref:false,kal:kb,proj:c[k],avg:seasonVal2(p,k),po:kb.po,pu:kb.pu,side:kb.side,prob:kb.prob,edge:kb.edge,odds:toAm(kb.cost),opp:s.opp,home:s.home})});return}
+    if(BP.src==="k"&&hasKal(BP.day)){(BP.mk?[BP.mk]:BMK).forEach(k=>{const kb=kalBest(p.name,k,BP.day,line=>probOver(k,c[k],line));if(!kb)return;const alt=kalAlt(p.name,k,BP.day,line=>probOver(k,c[k],line),kb);
+      out.push({p,k,line:kb.line,ref:false,kal:kb,alt,proj:c[k],avg:seasonVal2(p,k),po:kb.po,pu:kb.pu,side:kb.side,prob:kb.prob,edge:kb.edge,odds:toAm(kb.cost),opp:s.opp,home:s.home})});return}
     (BP.mk?[BP.mk]:BMK).forEach(k=>{const l=L[k]||{},own=l.line!=null&&l.line!=="";
       if(!own&&(seasonVal2(p,k)||0)<MINAVG[k])return; // las casas no ofrecen ese prop a jugadores que casi no lo producen
       const line=own?+l.line:refLine(p,k);if(line==null)return;
@@ -907,7 +948,7 @@ function bestRowHTML(r,i){
   const ed=r.edge,tag=ed>=.10?"OVER":ed>=MIN_EDGE?"OVER":"PASS";
   return `<tr data-bi="${i}"><td class="l name"><span class="pn">${esc(r.p.name)}</span>${injBadge(r.p)}<small>${r.p.tm} ${r.home?"vs":"@"} ${r.opp}</small></td>
     <td class="l">${esc(MKLAB[r.k])}</td>
-    ${r.kal?`<td title="En Kalshi: ${r.line+.5}+ · SÍ ${Math.round(r.kal.yes*100)}¢ / NO ${Math.round(r.kal.no*100)}¢"><b>${r.line}</b><small>Kalshi: ${r.side==="O"?"SÍ":"NO"} ${r.line+.5}+</small></td>`:`<td><input type="number" step="0.5" value="${r.line}" data-a="bline" class="${r.ref?"refl":""}" title="${r.ref?"Línea de referencia (promedio de temporada). Escribe la de tu casa.":"Tu línea"}" aria-label="Línea de ${esc(r.p.name)} ${esc(MKLAB[r.k])}"></td>`}
+    ${r.kal?`<td title="En Kalshi: ${r.line+.5}+ · SÍ ${Math.round(r.kal.yes*100)}¢ / NO ${Math.round(r.kal.no*100)}¢"><b>${r.line}</b><small>Kalshi: ${r.side==="O"?"SÍ":"NO"} ${r.line+.5}+</small>${r.alt?`<small class="up">Alterna: ${r.alt.side==="O"?"OVER":"UNDER"} ${r.alt.line} a ${Math.round(r.alt.cost*100)}¢ (${Math.round(r.alt.prob*100)}%, +${(r.alt.edge*100).toFixed(1)}%)</small>`:""}</td>`:`<td><input type="number" step="0.5" value="${r.line}" data-a="bline" class="${r.ref?"refl":""}" title="${r.ref?"Línea de referencia (promedio de temporada). Escribe la de tu casa.":"Tu línea"}" aria-label="Línea de ${esc(r.p.name)} ${esc(MKLAB[r.k])}"></td>`}
     <td class="v">${f1(r.proj)}</td><td>${f1(r.avg)}</td>${hitCell(r)}
     <td class="${r.side==="O"?"v":""}">${(r.po*100).toFixed(1)}%</td><td class="${r.side==="U"?"v":""}">${(r.pu*100).toFixed(1)}%</td>
     <td><span class="pill ${r.side==="O"?"OVER":"UNDER"}">${r.side==="O"?"OVER":"UNDER"} ${(r.prob*100).toFixed(0)}%</span></td>
@@ -1045,10 +1086,11 @@ const TP={day:DAYS[0]||"",src:"k"};
 $("tday").innerHTML=$("bday").innerHTML;$("tday").value=TP.day;
 function topToday(){
   const keep={...BP};Object.assign(BP,{day:TP.day,src:TP.src,mk:"",side:"",minp:55,q:"",game:"",pos:""});
-  const rows=bestRows();Object.keys(BP).forEach(k=>delete BP[k]);Object.assign(BP,keep);return rows.slice(0,10)}
+  const rows=bestRows();Object.keys(BP).forEach(k=>delete BP[k]);Object.assign(BP,keep);TOPALL=rows;return rows.slice(0,10)}
+let TOPALL=[];
 function topPickRow(r,i){const kal=!!r.kal;
   return `<tr><td>${i+1}</td><td class="l name"><span class="pn">${esc(r.p.name)}</span>${injBadge(r.p)}<small>${r.p.tm} ${r.home?"vs":"@"} ${r.opp}</small></td><td class="l">${esc(MKLAB[r.k]||r.k)}</td>
-    <td><span class="pill ${r.side==="O"?"OVER":"UNDER"}">${r.side==="O"?"OVER":"UNDER"}</span></td><td class="v">${r.line}${kal?`<small>Kalshi: ${r.side==="O"?"SÍ":"NO"} ${r.line+.5}+</small>`:""}</td>
+    <td><span class="pill ${r.side==="O"?"OVER":"UNDER"}">${r.side==="O"?"OVER":"UNDER"}</span></td><td class="v">${r.line}${kal?`<small>Kalshi: ${r.side==="O"?"SÍ":"NO"} ${r.line+.5}+</small>`:""}${r.alt?`<small class="up">Alterna: ${r.alt.side==="O"?"OVER":"UNDER"} ${r.alt.line} a ${Math.round(r.alt.cost*100)}¢</small>`:""}</td>
     <td class="v">${(r.prob*100).toFixed(0)}%</td><td>${kal?Math.round(r.kal.cost*100)+"¢":(r.odds>0?"+":"")+r.odds}</td>
     <td class="${r.edge>0?"up":"dn"}">${r.edge>0?"+":""}${(r.edge*100).toFixed(1)}%${r.warn?`<small class="dn">⚠ revisar</small>`:""}</td></tr>`}
 function topOf(rs,n){const by={};rs.forEach(r=>(by[r.d]=by[r.d]||[]).push(r));
@@ -1075,8 +1117,60 @@ function renderTop(){
      :`<p class="meta" style="margin-top:10px">Todavía no hay picks calificados con esta línea.</p>`);
 }
 $("tday").addEventListener("change",e=>{TP.day=e.target.value;renderTop()});
+$("topbox").addEventListener("click",e=>{const b=e.target.closest("button[data-pl]");if(!b)return;const L=PARLAYS[+b.dataset.pl];if(!L)return;
+  copyLB(L.map(x=>({p:x.r.p,opp:x.r.opp,k:x.r.k,side:x.side,line:x.line,odds:amOf(x.cost)})),b)});
 $("topbox").addEventListener("click",e=>{const b=e.target.closest("#lb5,#lb10");if(!b)return;const rows=topToday();copyLB(b.id==="lb5"?rows.slice(0,5):rows,b)});
 $("tsrc").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;$("tsrc").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));TP.src=b.dataset.v;renderTop()});
+// ================= Parlay a la medida: todo Under o todo Over, con la línea más segura o la principal =================
+const PZ={day:DAYS[0]||"",side:"U",mode:"safe",n:3,sel:null};
+$("pzday").innerHTML=$("bday").innerHTML;$("pzday").value=PZ.day;
+function pzLegs(){
+  if(!hasKal(PZ.day))return [];
+  const keep={...BP};Object.assign(BP,{day:PZ.day,src:"k",mk:"",side:PZ.side,minp:50,q:"",game:"",pos:""});
+  const rows=bestRows();Object.keys(BP).forEach(k=>delete BP[k]);Object.assign(BP,keep);
+  const out=[],seen=new Set();
+  rows.forEach(r=>{if(!r.kal||r.side!==PZ.side)return;
+    const o=PZ.mode==="safe"&&r.alt?r.alt:{side:r.side,line:r.line,prob:r.prob,cost:r.kal.cost,edge:r.edge};
+    if(o.edge<=.01)return;const key=r.p.name+"|"+r.k;if(seen.has(key))return;seen.add(key);
+    out.push({key,r,...o,warn:r.warn})});
+  return out.sort((a,b)=>(a.warn-b.warn)||b.prob-a.prob||b.edge-a.edge)}
+let PZL=[];
+function pzAuto(L){const sel=new Set(),perGame={},players=new Set();
+  for(const x of L){if(sel.size>=PZ.n)break;if(x.warn||players.has(x.r.p.name))continue;const g=[x.r.p.tm,x.r.opp].sort().join("-");if((perGame[g]||0)>=2)continue;
+    sel.add(x.key);players.add(x.r.p.name);perGame[g]=(perGame[g]||0)+1}
+  return sel}
+function renderPz(){
+  PZL=pzLegs();if(!PZ.sel)PZ.sel=pzAuto(PZL);
+  const box=$("pzbox"),LAB=(typeof MKLAB!=="undefined"?MKLAB:BMLAB);
+  if(!hasKal(PZ.day)){box.innerHTML=`<p class="meta" style="margin-top:12px">Kalshi todavía no tiene precios de jugadores para este día.</p>`;return}
+  if(!PZL.length){box.innerHTML=`<p class="meta" style="margin-top:12px">No hay ${PZ.side==="U"?"Unders":"Overs"} con valor para este día.</p>`;return}
+  const S=PZL.filter(x=>PZ.sel.has(x.key)),prob=S.reduce((s,x)=>s*x.prob,1),price=S.reduce((s,x)=>s*x.cost,1),ev=S.length?prob/price-1:0;
+  const sameGame=(()=>{const c={};S.forEach(x=>{const g=[x.r.p.tm,x.r.opp].sort().join("-");c[g]=(c[g]||0)+1});return Object.values(c).some(v=>v>1)})();
+  box.innerHTML=`<section class="panel" style="margin-top:12px">
+    <h3>Tu parlay: ${S.length} pata${S.length===1?"":"s"} · todo ${PZ.side==="U"?"UNDER":"OVER"}</h3>
+    ${S.length>=2?`<div class="tiles" style="margin:8px 0">
+      <div class="tile"><div class="k">Gana</div><div class="v">${Math.round(prob*100)}%</div><div class="s">de las veces (según el modelo)</div></div>
+      <div class="tile"><div class="k">Precio justo</div><div class="v">${Math.round(price*100)}¢</div><div class="s">paga ${(1/price).toFixed(2)}x · cuota ${amOf(price)>0?"+":""}${amOf(price)}</div></div>
+      <div class="tile"><div class="k">Valor</div><div class="v ${ev>0?"up":"dn"}">${ev>0?"+":""}${Math.round(ev*100)}%</div><div class="s">lo que el modelo cree que vale más que el precio</div></div></div>
+      ${typeof copyLB==="function"?`<button type="button" class="btn upd-btn" id="pzcopy">📲 Copiar parlay a Live Bets</button>`:""}
+      ${sameGame?`<p class="meta" style="margin:8px 0 0">⚠ Hay patas del mismo juego: no son independientes, la probabilidad real puede ser distinta.</p>`:""}`
+      :`<p class="meta">Escoge al menos 2 patas abajo.</p>`}
+    <p class="meta" style="margin:8px 0 0">Compara el "precio justo" con lo que te cobra Kalshi por el Combo: si Kalshi cobra menos, tiene valor. ${PZ.mode==="safe"?"Más segura = el mismo lado con más colchón (UNDER más alto u OVER más bajo) que todavía tiene valor; paga menos pero pega más.":"Principal = la línea de Kalshi más cerca de 50/50."}</p>
+  </section>
+  <section class="panel" style="margin-top:12px"><h3>Escoge las patas (${PZL.length} ${PZ.side==="U"?"Unders":"Overs"} con valor)</h3>
+  <div style="overflow-x:auto"><table class="caltbl"><thead><tr><th></th><th class="l">Jugador</th><th class="l">Mercado</th><th>Pick</th><th>Prob.</th><th>Precio</th><th>Edge</th></tr></thead><tbody>`+
+  PZL.map(x=>`<tr><td><input type="checkbox" data-pz="${esc(x.key)}" ${PZ.sel.has(x.key)?"checked":""} style="width:18px;height:18px"></td>
+    <td class="l name">${esc(x.r.p.name)}${injBadge(x.r.p)}<small>${x.r.p.tm} ${x.r.home?"vs":"@"} ${x.r.opp}</small></td><td class="l">${esc(LAB[x.r.k]||x.r.k)}</td>
+    <td><span class="pill ${x.side==="O"?"OVER":"UNDER"}">${x.side==="O"?"OVER":"UNDER"} ${x.line}</span><small>Kalshi: ${x.side==="O"?"SÍ":"NO"} ${x.line+.5}+</small></td>
+    <td class="v">${Math.round(x.prob*100)}%</td><td>${Math.round(x.cost*100)}¢</td><td class="up">+${(x.edge*100).toFixed(1)}%${x.warn?`<small class="dn">⚠ revisar</small>`:""}</td></tr>`).join("")+
+  `</tbody></table></div></section>`;
+}
+$("pzbox").addEventListener("change",e=>{const c=e.target.closest("input[data-pz]");if(!c)return;if(c.checked)PZ.sel.add(c.dataset.pz);else PZ.sel.delete(c.dataset.pz);renderPz()});
+$("pzbox").addEventListener("click",e=>{if(!e.target.closest("#pzcopy"))return;const S=PZL.filter(x=>PZ.sel.has(x.key));
+  copyLB(S.map(x=>({p:x.r.p,opp:x.r.opp,k:x.r.k,side:x.side,line:x.line,odds:amOf(x.cost)})),e.target.closest("#pzcopy"))});
+$("pzday").addEventListener("change",e=>{PZ.day=e.target.value;PZ.sel=null;renderPz()});
+[["pzside","side"],["pzmode","mode"],["pzn","n"]].forEach(([id,key])=>$(id).addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+  $(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));PZ[key]=key==="n"?+b.dataset.v:b.dataset.v;PZ.sel=null;renderPz()}));
 function renderCal(){
   const box=$("calbox");
   if(!MDL){box.innerHTML=`<p class="meta">Todavía no hay suficientes partidos para el backtest.</p>`;return}
