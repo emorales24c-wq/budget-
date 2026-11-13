@@ -872,16 +872,19 @@ function kalBest(name,k,day,pOver){
       const edge=prob-cost;if(edge<=0)return;if(!best||edge>best.edge)best={line,side,po,pu:1-po,prob,edge,cost,c,yes:ask,no:+(1-bid).toFixed(2),pm,tk:tk||""}})});
   return best;
 }
-// línea alterna MÁS SEGURA: el mismo lado del pick con más colchón (UNDER más alto u OVER más bajo),
-// que todavía tenga valor (edge de 1%+) y cueste hasta 85¢. Se queda con la de más probabilidad.
-function kalAlt(name,k,day,pOver,main){if(!main)return null;let best=null;
+// línea alterna MÁS SEGURA (como lo hace el usuario): el mismo lado del pick, subiendo la línea del UNDER (o bajando la del OVER)
+// hasta el escalón que pega ~80-92% de las veces y que el modelo todavía ve igual o más probable que su precio.
+// Dentro de ese rango se queda con el de mejor valor; si no hay, con el más probable que siga teniendo valor.
+function kalAlt(name,k,day,pOver,main){if(!main)return null;const cand=[];
   ((KAL[knorm(name)]||{})[k]||[]).forEach(([d,line,bid,ask])=>{if(d!==day||line===main.line)return;
     if(main.side==="U"?line<=main.line:line>=main.line)return;
     const pm=pOver(line),mkt=bid>0?(bid+ask)/2:ask,po=KW*pm+(1-KW)*mkt;
     const side=main.side,prob=side==="O"?po:1-po,c=side==="O"?ask:+(1-bid).toFixed(2);if(side==="U"&&!(bid>0))return;
-    const cost=c+kfee(c);if(cost>.85)return;const edge=prob-cost;if(edge<.01||prob<=main.prob)return;
-    if(!best||prob>best.prob)best={line,side,prob,edge,cost,c}});
-  return best}
+    const cost=c+kfee(c);if(cost>.95)return;const edge=prob-cost;if(edge<-.03||prob<=main.prob)return;
+    cand.push({line,side,prob,edge,cost,c})});
+  const inRange=cand.filter(x=>x.prob>=.78&&x.prob<=.93).sort((a,b)=>b.edge-a.edge);if(inRange[0])return inRange[0];
+  const pos=cand.filter(x=>x.edge>=0);
+  return pos.sort((a,b)=>b.prob-a.prob)[0]||null}
 const KALDAYS=new Set();Object.values(KAL).forEach(v=>Object.values(v).forEach(rs=>rs.forEach(r=>KALDAYS.add(r[0]))));const hasKal=d=>KALDAYS.has(d);
 // ===== Arbitraje dentro de Kalshi: en la escalera de un jugador, "15+" nunca debería costar menos que "20+".
 // Si SÍ en el escalón bajo + NO en el alto (más comisiones) cuesta menos de $1, se gana pase lo que pase.
@@ -1122,7 +1125,7 @@ $("topbox").addEventListener("click",e=>{const b=e.target.closest("button[data-p
 $("topbox").addEventListener("click",e=>{const b=e.target.closest("#lb5,#lb10");if(!b)return;const rows=topToday();copyLB(b.id==="lb5"?rows.slice(0,5):rows,b)});
 $("tsrc").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;$("tsrc").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));TP.src=b.dataset.v;renderTop()});
 // ================= Parlay a la medida: todo Under o todo Over, con la línea más segura o la principal =================
-const PZ={day:DAYS[0]||"",side:"U",mode:"safe",n:3,sel:null};
+const PZ={day:DAYS[0]||"",side:"U",mode:"safe",n:3,sel:null,kc:"",kp:""};
 $("pzday").innerHTML=$("bday").innerHTML;$("pzday").value=PZ.day;
 function pzLegs(){
   if(!hasKal(PZ.day))return [];
@@ -1131,10 +1134,13 @@ function pzLegs(){
   const out=[],seen=new Set();
   rows.forEach(r=>{if(!r.kal||r.side!==PZ.side)return;
     const o=PZ.mode==="safe"&&r.alt?r.alt:{side:r.side,line:r.line,prob:r.prob,cost:r.kal.cost,edge:r.edge};
-    if(o.edge<=.01)return;const key=r.p.name+"|"+r.k;if(seen.has(key))return;seen.add(key);
+    if(o.edge<(PZ.mode==="safe"&&r.alt?-.03:.01))return;const key=r.p.name+"|"+r.k;if(seen.has(key))return;seen.add(key);
     out.push({key,r,...o,warn:r.warn})});
-  return out.sort((a,b)=>(a.warn-b.warn)||b.prob-a.prob||b.edge-a.edge)}
+  return out.sort((a,b)=>(a.warn-b.warn)||(PZ.mode==="safe"?((b.prob>=.78)-(a.prob>=.78))||b.edge-a.edge:b.prob-a.prob||b.edge-a.edge))}
 let PZL=[];
+// valor real con el precio que Kalshi te da por el Combo: probabilidad × pago ÷ costo − 1
+function pzReal(prob){const c=parseFloat(PZ.kc),p=parseFloat(PZ.kp);if(!(c>0&&p>c))return `<span class="meta">Pon lo que Kalshi te cobra y paga por el Combo para ver el valor real.</span>`;
+  const v=prob*p/c-1,be=c/p;return `<b class="${v>0?"up":"dn"}">Valor real ${v>0?"+":""}${Math.round(v*100)}%</b> <span class="meta">· Kalshi lo cobra como ${Math.round(be*100)}%; el modelo dice ${Math.round(prob*100)}% · ${v>0?"✅ vale la pena":"❌ no vale la pena"}</span>`}
 function pzAuto(L){const sel=new Set(),perGame={},players=new Set();
   for(const x of L){if(sel.size>=PZ.n)break;if(x.warn||players.has(x.r.p.name))continue;const g=[x.r.p.tm,x.r.opp].sort().join("-");if((perGame[g]||0)>=2)continue;
     sel.add(x.key);players.add(x.r.p.name);perGame[g]=(perGame[g]||0)+1}
@@ -1152,19 +1158,26 @@ function renderPz(){
       <div class="tile"><div class="k">Gana</div><div class="v">${Math.round(prob*100)}%</div><div class="s">de las veces (según el modelo)</div></div>
       <div class="tile"><div class="k">Precio justo</div><div class="v">${Math.round(price*100)}¢</div><div class="s">paga ${(1/price).toFixed(2)}x · cuota ${amOf(price)>0?"+":""}${amOf(price)}</div></div>
       <div class="tile"><div class="k">Valor</div><div class="v ${ev>0?"up":"dn"}">${ev>0?"+":""}${Math.round(ev*100)}%</div><div class="s">lo que el modelo cree que vale más que el precio</div></div></div>
+      <div class="controls" style="border:0;padding:4px 0">
+        <div class="f"><label for="pzkc">Kalshi: Cost $</label><input id="pzkc" type="number" inputmode="decimal" step="0.01" value="${esc(PZ.kc)}" placeholder="10.00" style="width:90px"></div>
+        <div class="f"><label for="pzkp">Payout $</label><input id="pzkp" type="number" inputmode="decimal" step="0.01" value="${esc(PZ.kp)}" placeholder="15.00" style="width:90px"></div>
+        <div class="f" id="pzreal" style="align-self:end;font-size:.9rem">${pzReal(prob)}</div>
+      </div>
       ${typeof copyLB==="function"?`<button type="button" class="btn upd-btn" id="pzcopy">📲 Copiar parlay a Live Bets</button>`:""}
       ${sameGame?`<p class="meta" style="margin:8px 0 0">⚠ Hay patas del mismo juego: no son independientes, la probabilidad real puede ser distinta.</p>`:""}`
       :`<p class="meta">Escoge al menos 2 patas abajo.</p>`}
-    <p class="meta" style="margin:8px 0 0">Compara el "precio justo" con lo que te cobra Kalshi por el Combo: si Kalshi cobra menos, tiene valor. ${PZ.mode==="safe"?"Más segura = el mismo lado con más colchón (UNDER más alto u OVER más bajo) que todavía tiene valor; paga menos pero pega más.":"Principal = la línea de Kalshi más cerca de 50/50."}</p>
+    <p class="meta" style="margin:8px 0 0">Compara el "precio justo" con lo que te cobra Kalshi por el Combo: si Kalshi cobra menos, tiene valor. ${PZ.mode==="safe"?"Más segura = como lo haces tú: el mismo lado subiendo la línea del UNDER (o bajando la del OVER) hasta un escalón que pega ~80-90%. Cada pata puede tener valor casi neutro: lo que importa es que Kalshi cobre el Combo más barato que lo que dice el modelo.":"Principal = la línea de Kalshi más cerca de 50/50."}</p>
   </section>
   <section class="panel" style="margin-top:12px"><h3>Escoge las patas (${PZL.length} ${PZ.side==="U"?"Unders":"Overs"} con valor)</h3>
   <div style="overflow-x:auto"><table class="caltbl"><thead><tr><th></th><th class="l">Jugador</th><th class="l">Mercado</th><th>Pick</th><th>Prob.</th><th>Precio</th><th>Edge</th></tr></thead><tbody>`+
   PZL.map(x=>`<tr><td><input type="checkbox" data-pz="${esc(x.key)}" ${PZ.sel.has(x.key)?"checked":""} style="width:18px;height:18px"></td>
     <td class="l name">${esc(x.r.p.name)}${injBadge(x.r.p)}<small>${x.r.p.tm} ${x.r.home?"vs":"@"} ${x.r.opp}</small></td><td class="l">${esc(LAB[x.r.k]||x.r.k)}</td>
     <td><span class="pill ${x.side==="O"?"OVER":"UNDER"}">${x.side==="O"?"OVER":"UNDER"} ${x.line}</span><small>Kalshi: ${x.side==="O"?"SÍ":"NO"} ${x.line+.5}+</small></td>
-    <td class="v">${Math.round(x.prob*100)}%</td><td>${Math.round(x.cost*100)}¢</td><td class="up">+${(x.edge*100).toFixed(1)}%${x.warn?`<small class="dn">⚠ revisar</small>`:""}</td></tr>`).join("")+
+    <td class="v">${Math.round(x.prob*100)}%</td><td>${Math.round(x.cost*100)}¢</td><td class="${x.edge>=0?"up":"dn"}">${x.edge>=0?"+":""}${(x.edge*100).toFixed(1)}%${x.warn?`<small class="dn">⚠ revisar</small>`:""}</td></tr>`).join("")+
   `</tbody></table></div></section>`;
 }
+$("pzbox").addEventListener("input",e=>{if(e.target.id!=="pzkc"&&e.target.id!=="pzkp")return;PZ[e.target.id==="pzkc"?"kc":"kp"]=e.target.value;
+  const S=PZL.filter(x=>PZ.sel.has(x.key));$("pzreal").innerHTML=pzReal(S.reduce((s,x)=>s*x.prob,1))});
 $("pzbox").addEventListener("change",e=>{const c=e.target.closest("input[data-pz]");if(!c)return;if(c.checked)PZ.sel.add(c.dataset.pz);else PZ.sel.delete(c.dataset.pz);renderPz()});
 $("pzbox").addEventListener("click",e=>{if(!e.target.closest("#pzcopy"))return;const S=PZL.filter(x=>PZ.sel.has(x.key));
   copyLB(S.map(x=>({p:x.r.p,opp:x.r.opp,k:x.r.k,side:x.side,line:x.line,odds:amOf(x.cost)})),e.target.closest("#pzcopy"))});
