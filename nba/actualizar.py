@@ -212,6 +212,15 @@ try:
     print(f"  Lesiones: {sum(1 for v in INJ.values() if v['st']=='out')} OUT, {sum(1 for v in INJ.values() if v['st']!='out')} en duda")
 except SystemExit:
     print("  aviso: no se pudo bajar la página de lesiones")
+# OUT a mano: nba/data/out_manual.json = {"Jugador": "AAAA-MM-DD"} (vale hasta ese día inclusive).
+# Sirve cuando el usuario sabe de una baja antes que basketball-reference.
+MAN=os.path.join(HERE,"data","out_manual.json")
+if os.path.exists(MAN):
+    for name,hasta in json.load(open(MAN)).items():
+        if hasta>=HOY.isoformat():
+            prev=INJ.get(name,{})
+            INJ[name]={"st":"out","d":"OUT (marcado a mano: aviso de última hora)","u":HOY.isoformat(),"tm":prev.get("tm") or (LOGS[name][-1]["tm"] if LOGS.get(name) else ""),"nuevo":True,"manual":True}
+            print(f"  OUT a mano: {name}")
 
 NOTA_MEZCLA=(f"Mezclado con 2025-26 hasta que todos los equipos lleven {CORTE} partidos (hoy el mínimo es {MIN_GP}). Peso de 2026-27 = partidos/{CORTE}."
              if MEZCLA else "Solo temporada 2026-27 (todos los equipos llevan al menos "+str(CORTE)+" partidos).")
