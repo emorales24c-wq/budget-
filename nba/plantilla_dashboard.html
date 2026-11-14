@@ -417,7 +417,11 @@ function computeBoost(){
     const tot=b.act.reduce((s,p)=>s+baseMin(p),0);
     // solo una parte de los minutos del que falta se reparte de verdad (medida en el backtest)
     const red=MDL&&MDL.params.redist!=null?MDL.params.redist:0.4;
-    b.act.forEach(p=>{const room=Math.max(0,MAX_MIN-Math.round(baseMin(p)));EXTRA[p.name]=Math.min(room,red*b.out*baseMin(p)/tot)})});
+    b.act.forEach(p=>{const room=Math.max(0,MAX_MIN-Math.round(baseMin(p)));EXTRA[p.name]=Math.min(room,red*b.out*baseMin(p)/tot)});
+    // con muchas bajas el equipo igual juega 240 minutos: si los que quedan no llegan, se reparte lo que falta
+    let have=b.act.reduce((s,p)=>s+baseMin(p)+(EXTRA[p.name]||0),0);
+    for(let it=0;it<3&&have<235;it++){const open=b.act.filter(p=>baseMin(p)+(EXTRA[p.name]||0)<MAX_MIN);const w=open.reduce((s,p)=>s+baseMin(p),0);if(!w)break;
+      open.forEach(p=>{EXTRA[p.name]=Math.min(MAX_MIN-baseMin(p),(EXTRA[p.name]||0)+(235-have)*baseMin(p)/w)});have=b.act.reduce((s,p)=>s+baseMin(p)+(EXTRA[p.name]||0),0)}});
 }
 const modeNow=()=>G.mode==="auto"?(MDL?MDL.params.mode:"team"):G.mode;
 function b2bOf(tm){const s=G.day&&OPPD[G.day]&&OPPD[G.day][tm];if(!s)return 0;const g=s.g;return (s.home?g[5]:g[4])?1:0}
