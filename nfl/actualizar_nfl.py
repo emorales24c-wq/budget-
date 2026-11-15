@@ -154,6 +154,14 @@ for pid, d in st.sort_values("week").groupby("player_id"):
     else:
         snap = [None, None] + [None] * len(STATS) + [0]
     PL.append([last.player_display_name, last.team, last.pos, n, int(last.week)] + avg + snap)
+# Cambios de equipo que aún no están en los datos (traspasos recientes): nfl/data/team_manual.json
+TM = os.path.join(HERE, "data", "team_manual.json")
+if os.path.exists(TM):
+    _tm = json.load(open(TM))
+    for r in PL:
+        if r[0] in _tm:
+            print(f"  equipo a mano: {r[0]} {r[1]} -> {_tm[r[0]]}")
+            r[1] = _tm[r[0]]
 PL.sort(key=lambda r: (r[1], POS.index(r[2]), -r[5 + 2] - r[5 + 6] - r[5 + 10]))
 
 # Defensa por posición: lo que cada defensa permite por partido a QB/RB/WR/TE del rival
