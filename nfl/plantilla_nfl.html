@@ -1,0 +1,1090 @@
+<title>Proyecciones NFL 2026</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Layout: same skeleton as the NBA board — header, matchup strip, scoreboard, one dense table per position; rows expand into a prop calculator */
+:root{
+  --bg:#f2f5f3; --surface:#ffffff; --sunk:#e6ebe8; --ink:#14211b; --muted:#5a6b62; --line:#d6ded9;
+  --accent:#1f6b45; --accent-ink:#ffffff; --over:#1d7a46; --over-bg:#dcf1e4; --under:#b3261e; --under-bg:#f8dedb; --pass:#6b7280; --pass-bg:#eceef1;
+  --hot:29,122,70; --cold:179,38,30;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif; --body:"Barlow",system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e1512; --surface:#16201b; --sunk:#1c2822; --ink:#e5ece8; --muted:#93a59b; --line:#28362f;
+  --accent:#5cc28c; --accent-ink:#06130c; --over:#5fd08f; --over-bg:#163625; --under:#f2857c; --under-bg:#3d1c1a; --pass:#a2abb6; --pass-bg:#252d37; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1512; --surface:#16201b; --sunk:#1c2822; --ink:#e5ece8; --muted:#93a59b; --line:#28362f;
+  --accent:#5cc28c; --accent-ink:#06130c; --over:#5fd08f; --over-bg:#163625; --under:#f2857c; --under-bg:#3d1c1a; --pass:#a2abb6; --pass-bg:#252d37; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.4}
+.wrap{max-width:1280px;margin:0 auto;padding-block:20px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end;justify-content:space-between;margin-bottom:16px}
+h1{font-family:var(--display);font-weight:700;font-size:2.2rem;letter-spacing:.01em;margin:0;line-height:1;text-wrap:balance}
+h1 span{color:var(--accent)}
+.meta{color:var(--muted);font-size:.85rem;max-width:62ch}
+.upd{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:end;padding-block:10px;border-bottom:1px solid var(--line)}
+.f{display:flex;flex-direction:column;gap:3px;min-width:0}
+.f label,.k{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+input,select,button{font:inherit;color:var(--ink)}
+input[type=text],input[type=number],select{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-height:34px}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+#game{max-width:100%}
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:transparent;padding:6px 12px;min-height:34px;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:6px 12px;min-height:34px;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.upd-btn{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.upd-btn[disabled]{opacity:.6;cursor:default}
+.swap{align-self:end;min-height:34px;min-width:40px;border:1px solid var(--line);background:var(--surface);border-radius:6px;font-size:1.2rem;line-height:1;cursor:pointer;color:var(--accent)}
+.swap[disabled]{opacity:.4;cursor:default}
+/* menú lateral con íconos; en el celular pasa a una barra abajo */
+.rail{position:fixed;z-index:20;left:0;top:0;bottom:0;width:88px;padding-top:calc(16px + env(safe-area-inset-top,0px));padding-left:env(safe-area-inset-left,0px);background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:6px}
+.rail button{width:74px;border:0;background:transparent;border-radius:12px;padding:9px 4px 7px;display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--muted);cursor:pointer;font-size:.72rem;font-weight:600;line-height:1.1;text-align:center}
+.rail button:hover{color:var(--ink);background:var(--sunk)}
+.rail button[aria-selected=true]{color:var(--accent);background:var(--sunk)}
+@media (min-width:761px){.wrap{padding-left:calc(104px + env(safe-area-inset-left,0px))}}
+@media (max-width:760px){
+  .rail{top:auto;right:0;bottom:0;width:auto;height:auto;flex-direction:row;justify-content:space-around;padding:4px max(6px,env(safe-area-inset-right,0px)) calc(4px + env(safe-area-inset-bottom,0px)) max(6px,env(safe-area-inset-left,0px));border-right:0;border-top:1px solid var(--line)}
+  .rail button{width:auto;flex:1;padding:6px 2px;font-size:.66rem}
+  .wrap{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+}
+#besttbl td input{width:76px}
+#besttbl input.refl{border-style:dashed;color:var(--muted)}
+#bmk,#bsd,#bpos,#bview{flex-wrap:wrap}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:12px 0}
+.pkh{font-family:var(--display);font-size:1.5rem;margin:18px 0 0}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.tile .k{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.tile .v{font-family:var(--display);font-size:1.6rem;font-weight:700;font-variant-numeric:tabular-nums}
+.tile .s{font-size:.72rem;color:var(--muted)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-top:12px}
+.panel h3{font-family:var(--display);font-size:1.15rem;margin:0 0 8px;letter-spacing:.02em}
+.caltbl{min-width:560px}.caltbl th{cursor:default}.caltbl td,.caltbl th{text-align:right}.caltbl td.l,.caltbl th.l{text-align:left}
+.score{margin-top:14px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:14px 24px;align-items:center}
+.score .hint{grid-column:1/-1;color:var(--muted);margin:0}
+.board{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;text-align:center}
+.board .tm{font-family:var(--display);font-weight:600;font-size:1rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.board .sc{font-family:var(--display);font-weight:700;font-size:3rem;line-height:1;font-variant-numeric:tabular-nums}
+.board .vs{font-family:var(--display);color:var(--muted);font-size:1.2rem}
+.tag{font-size:.72rem;color:var(--muted)}
+.lines{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.lines .big{font-family:var(--display);font-weight:700;font-size:1.6rem;font-variant-numeric:tabular-nums}
+.lines input{width:90px}
+.res{font-size:.82rem;font-variant-numeric:tabular-nums;display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px}
+@media (max-width:760px){.score{grid-template-columns:1fr}}
+.tablebox{overflow-x:auto;margin-top:10px;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;min-width:860px;font-variant-numeric:tabular-nums}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th{font-family:var(--display);font-weight:600;font-size:.9rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:var(--sunk);cursor:pointer;user-select:none}
+th.l,td.l{text-align:left}
+th[aria-sort]{color:var(--ink)}
+th[aria-sort=descending]::after{content:" ▾"} th[aria-sort=ascending]::after{content:" ▴"}
+th.proj{color:var(--accent)}
+td.name{font-weight:600}
+td small,.wt{display:block;font-weight:400;color:var(--muted);font-size:.72rem}
+td.v{font-weight:600;font-size:1rem}
+td.v small.up{color:var(--over)} td.v small.dn{color:var(--under)}
+td input[type=number]{width:70px;text-align:right;min-height:30px;padding:4px 6px}
+.exp{border:0;background:transparent;cursor:pointer;color:var(--accent);font-size:1rem;padding:2px 6px}
+tr.warn td.v{color:var(--muted)}
+tr.grp td{background:var(--sunk);font-family:var(--display);font-weight:700;font-size:1rem;letter-spacing:.03em;text-transform:uppercase;padding-top:10px}
+tr.grp td span{font-family:var(--body);font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-size:.82rem;margin-left:6px}
+.usecell{display:flex;gap:4px;justify-content:flex-end;align-items:center}
+.outb{border:1px solid var(--line);background:var(--surface);border-radius:5px;padding:3px 7px;min-height:30px;font-size:.72rem;font-weight:700;letter-spacing:.05em;color:var(--muted);cursor:pointer}
+.outb[aria-pressed=true]{background:var(--under);border-color:var(--under);color:#fff}
+tr.is-out td{opacity:.55} tr.is-out td.v{color:var(--under);font-size:.85rem}
+tr.is-out .pn{text-decoration:line-through}
+tr.is-out td:nth-child(3){opacity:1}
+small.boost{color:var(--over);font-weight:600}
+small.qbdn{color:var(--under);font-weight:600}
+.inj{display:inline-block;margin-left:6px;border-radius:4px;padding:0 5px;font-size:.66rem;font-weight:700;letter-spacing:.04em;vertical-align:middle}
+.inj.out{background:var(--under-bg);color:var(--under)} .inj.duda{background:var(--warn-bg,#f7ead0);color:var(--warn,#8a5a00)}
+small.snp b{font-weight:700}
+tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
+.props{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;padding:6px 0}
+.prop{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px;display:grid;gap:6px}
+.prop h4{margin:0;font-family:var(--display);font-size:1.05rem;letter-spacing:.03em;display:flex;justify-content:space-between}
+.prop h4 span{color:var(--accent)}
+.prop .in{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.prop .in input{width:100%;min-height:30px}
+.prop .in label{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.prop .out{display:flex;justify-content:space-between;align-items:center;font-size:.85rem;font-variant-numeric:tabular-nums}
+.pill{border-radius:999px;padding:2px 10px;font-weight:700;font-size:.78rem;letter-spacing:.05em}
+.pill.OVER{background:var(--over-bg);color:var(--over)} .pill.UNDER{background:var(--under-bg);color:var(--under)} .pill.PASS{background:var(--pass-bg);color:var(--pass)}
+.up{color:var(--over)} .dn{color:var(--under)}
+.count{color:var(--muted);font-size:.85rem;margin-left:auto}
+.dtbl td.c{font-weight:600;text-align:center;min-width:76px}
+.dtbl th{text-align:center} .dtbl th.l{text-align:left}
+.dtbl tr.hl td{outline:2px solid var(--accent);outline-offset:-2px}
+.mu{margin-top:10px}
+.mu table{min-width:620px}
+.mu td,.mu th{text-align:center}
+.mu td.l,.mu th.l{text-align:left}
+.mu th{cursor:default}
+.mu td small{display:inline;margin-left:4px}
+.daybox{margin-top:14px}
+.score[hidden]{display:none}
+.dayhead{font-size:.9rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px}
+.dayhead b{color:var(--ink);font-family:var(--display);font-size:1.15rem;letter-spacing:.02em}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+.gcard{display:grid;gap:3px;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;cursor:pointer;font-variant-numeric:tabular-nums}
+.gcard:hover{border-color:var(--accent)}
+.gcard.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.gcard .gr{display:flex;justify-content:space-between;font-family:var(--display);font-weight:600;font-size:1.05rem}
+.gcard .gr small{font-family:var(--body);font-weight:400;color:var(--muted);font-size:.7rem}
+.gcard .gt{font-size:.72rem;color:var(--muted)}
+.foot{color:var(--muted);font-size:.8rem;margin-top:14px;max-width:75ch;display:grid;gap:6px}
+@media (max-width:640px){h1{font-size:1.8rem}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+<header>
+  <div><h1>Proyecciones <span>NFL</span> 2026</h1></div>
+  <div class="upd">
+    <button type="button" class="btn upd-btn" id="upd" hidden>Actualizar datos</button>
+    <span class="meta" id="updmsg">Datos del __FECHA__</span>
+  </div>
+  <p class="meta">Elige un partido de la semana o dos equipos. Ajusta el uso esperado de cada jugador (100% = su promedio) y la tabla proyecta sus stats contra esa defensa. Toca ▸ para meter la línea y las cuotas de un prop.</p>
+</header>
+
+<nav class="rail" role="tablist" aria-label="Secciones">
+  <button type="button" role="tab" id="tab-proj" aria-selected="true" aria-controls="view-proj"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15l3-4 3 3 5-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Proyecciones</span></button>
+  <button type="button" role="tab" id="tab-top" aria-selected="false" aria-controls="view-top"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Top 5 / 10</span></button>
+  <button type="button" role="tab" id="tab-calc" aria-selected="false" aria-controls="view-calc"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 7h8M8 11h2M12 11h2M16 11h0M8 15h2M12 15h2M8 18h2M12 18h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Calcular</span></button>
+  <button type="button" role="tab" id="tab-par" aria-selected="false" aria-controls="view-par"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="19" cy="18" r="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><span>Parlay</span></button>
+  <button type="button" role="tab" id="tab-best" aria-selected="false" aria-controls="view-best"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg><span>Mejores props</span></button>
+  <button type="button" role="tab" id="tab-td" aria-selected="false" aria-controls="view-td"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><ellipse cx="12" cy="12" rx="9" ry="5.5" transform="rotate(-35 12 12)" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9.5 14.5l5-5M10.5 11l1 1M12 9.5l1 1M13.5 12.5l-1-1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>Anotador TD</span></button>
+  <button type="button" role="tab" id="tab-rec" aria-selected="false" aria-controls="view-rec"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Récord</span></button>
+  <button type="button" role="tab" id="tab-dvp" aria-selected="false" aria-controls="view-dvp"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Defensa</span></button>
+</nav>
+
+<div id="view-proj" role="tabpanel" aria-labelledby="tab-proj">
+<div class="controls">
+  <div class="f"><label for="day">Día</label><select id="day"></select></div>
+  <div class="f"><label for="game">Partido</label><select id="game"></select></div>
+  <div class="f"><label for="team">Equipo</label><select id="team"></select></div>
+  <button type="button" class="swap" id="swap" title="Intercambiar equipo y rival" aria-label="Intercambiar equipo y rival">⇄</button>
+  <div class="f"><label for="rival">Rival</label><select id="rival"></select></div>
+  <div class="f"><label>Condición</label><div class="seg" id="home"><button type="button" data-v="1" aria-pressed="true">Local</button><button type="button" data-v="0" aria-pressed="false">Visita</button></div></div>
+</div>
+<section class="daybox" id="daybox" aria-live="polite"></section>
+<section class="score" id="score" aria-live="polite"></section>
+<section class="mu" id="mu"></section>
+<div class="controls">
+  <div class="f"><label>Posición</label><div class="seg" id="pos"><button type="button" data-v="QB" aria-pressed="false">QB</button><button type="button" data-v="RB" aria-pressed="false">RB</button><button type="button" data-v="WR" aria-pressed="true">WR</button><button type="button" data-v="TE" aria-pressed="false">TE</button></div></div>
+  <div class="f"><label>Vista</label><div class="seg" id="group"><button type="button" data-v="1" aria-pressed="true">Por equipo</button><button type="button" data-v="0" aria-pressed="false">Todos juntos</button></div></div>
+  <div class="f"><label for="q">Buscar jugador</label><input id="q" type="text" placeholder="Ej. Jefferson" autocomplete="off"></div>
+  <button class="btn" id="reset" type="button">Borrar mis cambios</button>
+  <span class="count" id="count"></span>
+</div>
+<div class="tablebox"><table id="tbl"><thead id="th"></thead><tbody id="tb"></tbody></table></div>
+</div>
+
+<div id="view-td" role="tabpanel" aria-labelledby="tab-td" hidden>
+  <div class="controls">
+    <div class="f"><label for="tdday">Día</label><select id="tdday"></select></div>
+    <div class="f"><label>Posición</label><div class="seg" id="tdpos"><button type="button" data-v="" aria-pressed="true">Todas</button><button type="button" data-v="QB" aria-pressed="false">QB</button><button type="button" data-v="RB" aria-pressed="false">RB</button><button type="button" data-v="WR" aria-pressed="false">WR</button><button type="button" data-v="TE" aria-pressed="false">TE</button></div></div>
+    <div class="f"><label>Vista</label><div class="seg" id="tdgroup"><button type="button" data-v="1" aria-pressed="true">Por partido</button><button type="button" data-v="0" aria-pressed="false">Todos juntos</button></div></div>
+    <div class="f"><label for="tdmin">Prob. mínima %</label><input id="tdmin" type="number" min="0" max="100" step="1" value="10" style="width:80px"></div>
+    <div class="f"><label for="tdq">Buscar jugador</label><input id="tdq" type="text" placeholder="Ej. Barkley" autocomplete="off"></div>
+    <span class="count" id="tdcount"></span>
+  </div>
+  <p class="meta" style="margin:10px 0 0">Probabilidad de que cada jugador anote al menos un touchdown (por tierra o recepción; los TD de pase del QB no cuentan). Sale de sus TD esperados en el partido: su tasa de TD por snap (mezclada con la de su posición, porque los TD son pocos) × snaps esperados × la defensa rival contra su posición. <b>Cuota justa</b> = la cuota sin ganancia de la casa. Escribe la cuota de tu casa para ver el edge. Los OUT y los Snaps % que pongas en Proyecciones también cuentan aquí.</p>
+  <div class="tablebox"><table id="tdtbl"><thead><tr><th class="l">Jugador</th><th class="l">Rival</th><th>Snaps %</th><th>TD esperados</th><th>Prob. TD</th><th>Cuota justa</th><th>Tu cuota</th><th>Edge</th><th></th></tr></thead><tbody id="tdtb"></tbody></table></div>
+</div>
+
+<div id="view-best" role="tabpanel" aria-labelledby="tab-best" hidden>
+  <div class="controls">
+    <div class="f"><label for="bday">Día</label><select id="bday"></select></div>
+    <div class="f"><label>Línea</label><div class="seg" id="bsrc"><button type="button" data-v="k" aria-pressed="true">Kalshi (precio real)</button><button type="button" data-v="ref" aria-pressed="false">Referencia</button></div></div>
+    <div class="f"><label>Posición</label><div class="seg" id="bpos"><button type="button" data-v="" aria-pressed="true">Todas</button><button type="button" data-v="QB" aria-pressed="false">QB</button><button type="button" data-v="RB" aria-pressed="false">RB</button><button type="button" data-v="WR" aria-pressed="false">WR</button><button type="button" data-v="TE" aria-pressed="false">TE</button></div></div>
+    <div class="f"><label>Mercado</label><div class="seg" id="bmk"><button type="button" data-v="" aria-pressed="true">Todos</button><button type="button" data-v="pyd" aria-pressed="false">Yds pase</button><button type="button" data-v="cmp" aria-pressed="false">Comp</button><button type="button" data-v="att" aria-pressed="false">Int. pase</button><button type="button" data-v="ptd" aria-pressed="false">TD pase</button><button type="button" data-v="int" aria-pressed="false">INT</button><button type="button" data-v="ryd" aria-pressed="false">Yds tierra</button><button type="button" data-v="car" aria-pressed="false">Acarreos</button><button type="button" data-v="rec" aria-pressed="false">Recep.</button><button type="button" data-v="recyd" aria-pressed="false">Yds recep.</button><button type="button" data-v="rr" aria-pressed="false">Tierra+recep.</button><button type="button" data-v="tgt" aria-pressed="false">Targets</button></div></div>
+    <div class="f"><label>Lado</label><div class="seg" id="bsd"><button type="button" data-v="" aria-pressed="true">Over y Under</button><button type="button" data-v="O" aria-pressed="false">Over</button><button type="button" data-v="U" aria-pressed="false">Under</button></div></div>
+    <div class="f"><label>Vista</label><div class="seg" id="bview"><button type="button" data-v="tm" aria-pressed="true">Por equipo</button><button type="button" data-v="mk" aria-pressed="false">Por mercado</button><button type="button" data-v="pl" aria-pressed="false">Por jugador</button><button type="button" data-v="all" aria-pressed="false">Todos juntos</button></div></div>
+    <div class="f"><label for="bminp">Prob. mínima %</label><input id="bminp" type="number" min="0" max="99" step="1" value="55" style="width:80px"></div>
+    <div class="f"><label for="bq">Buscar</label><input id="bq" type="text" placeholder="Jugador o equipo" autocomplete="off"></div>
+    <span class="count" id="bcount"></span>
+  </div>
+  <p class="meta" style="margin:10px 0 0">Los props con más probabilidad de cada jugador de los partidos del día, de mejor a peor. <b>Línea</b>: viene la de referencia (su producción con el rol de hoy —snaps con los OUT y el QB que va a lanzar— pero sin el ajuste por la defensa rival, redondeada al .5 más cercano; así el edge sale sobre todo del matchup); escribe la de tu casa y la cuota para que se recalcule todo. Solo salen jugadores con rol real (QB con 60%+ de los snaps esperados; los demás con 35%+) y los mercados que las casas suelen ofrecer. El error de cada stat se midió con todos los partidos de la temporada. Las probabilidades usan su producción por snap, snaps esperados, la defensa rival contra su posición y los OUT que marques. <b>Edge</b> = probabilidad del modelo − la que paga la cuota (-110 si no escribes una). Los TD por tierra o recepción están en Anotador TD.</p>
+  <p class="meta" id="bsrcmsg" style="margin:8px 0 0"></p>
+  <div id="barb"></div>
+  <section class="daybox" id="bcards" aria-live="polite"></section>
+  <div class="tablebox"><table id="besttbl"><thead><tr><th class="l">Jugador</th><th class="l">Mercado</th><th>Línea</th><th>Proyección</th><th>Prom.</th><th>Over</th><th>Under</th><th>Pick</th><th>Cuota / precio</th><th>Edge</th></tr></thead><tbody id="besttb"></tbody></table></div>
+</div>
+
+<div id="view-calc" role="tabpanel" aria-labelledby="tab-calc" hidden>
+  <div class="controls">
+    <div class="f" style="flex:1;min-width:200px"><label for="cplayer">Jugador</label><input id="cplayer" list="cplist" type="text" placeholder="Escribe el nombre" autocomplete="off"><datalist id="cplist"></datalist></div>
+    <div class="f"><label for="cmk">Prop</label><select id="cmk"></select></div>
+    <div class="f"><label for="cline">Línea</label><input id="cline" type="number" step="0.5" inputmode="decimal" placeholder="Ej. 1.5" style="width:90px"></div>
+    <div class="f"><label for="cprice">Tu precio (opcional)</label><input id="cprice" type="text" inputmode="decimal" placeholder="¢ o cuota (-110)" style="width:120px"></div>
+  </div>
+  <p class="meta" style="margin:6px 0 0">La línea va como Over/Under: 1.5 = "2+" en Kalshi. Usa el partido de hoy o el próximo del jugador, con los OUT y los minutos de la página.</p>
+  <div id="cbox"></div>
+</div>
+
+<div id="view-par" role="tabpanel" aria-labelledby="tab-par" hidden>
+  <div class="controls">
+    <div class="f"><label for="pzday">Día</label><select id="pzday"></select></div>
+    <div class="f"><label>Lado</label><div class="seg" id="pzside"><button type="button" data-v="U" aria-pressed="true">Todo Under</button><button type="button" data-v="O" aria-pressed="false">Todo Over</button></div></div>
+    <div class="f"><label>Línea</label><div class="seg" id="pzmode"><button type="button" data-v="safe" aria-pressed="true">Más segura</button><button type="button" data-v="main" aria-pressed="false">Principal</button></div></div>
+    <div class="f"><label>Patas</label><div class="seg" id="pzn"><button type="button" data-v="2" aria-pressed="false">2</button><button type="button" data-v="3" aria-pressed="true">3</button><button type="button" data-v="4" aria-pressed="false">4</button><button type="button" data-v="5" aria-pressed="false">5</button></div></div>
+  </div>
+  <div id="pzbox"></div>
+</div>
+
+<div id="view-top" role="tabpanel" aria-labelledby="tab-top" hidden>
+  <div class="controls">
+    <div class="f"><label for="tday">Día</label><select id="tday"></select></div>
+    <div class="f"><label>Línea</label><div class="seg" id="tsrc"><button type="button" data-v="k" aria-pressed="true">Kalshi (precio real)</button><button type="button" data-v="ref" aria-pressed="false">Referencia</button></div></div>
+  </div>
+  <div id="topbox"></div>
+</div>
+
+<div id="view-rec" role="tabpanel" aria-labelledby="tab-rec" hidden>
+  <p class="meta" style="margin:10px 0 0">Récord real de los Mejores props. Cada vez que se actualizan los datos se guardan los props que recomienda el modelo para los partidos que todavía no empiezan (la última foto antes de cada partido, con la línea de referencia y sin tus cambios), y cuando sale el box score se califican solos. Ganancia en unidades apostando 1 a cada pick a -110 (ganar paga 0.91): para no perder hace falta acertar más de 52.4%. Si el jugador no juega, el pick se anula.</p>
+  <div class="controls">
+    <div class="f"><label>Línea</label><div class="seg" id="pksrc"><button type="button" data-v="ref" aria-pressed="true">Referencia (-110)</button><button type="button" data-v="k" aria-pressed="false">Kalshi (precio real)</button></div></div>
+    <div class="f"><label>Cuáles</label><div class="seg" id="pktop"><button type="button" data-v="5" aria-pressed="false">Top 5 de la semana</button><button type="button" data-v="10" aria-pressed="false">Top 10</button><button type="button" data-v="25" aria-pressed="false">Top 25</button><button type="button" data-v="0" aria-pressed="true">Todos</button></div></div>
+    <div class="f"><label for="pkmin">Prob. mínima %</label><select id="pkmin"><option value="55">55</option><option value="60">60</option><option value="65">65</option><option value="70">70</option></select></div>
+    <div class="f"><label for="pkmk">Mercado</label><select id="pkmk"></select></div>
+    <div class="f"><label>Posición</label><div class="seg" id="pkpos"><button type="button" data-v="" aria-pressed="true">Todas</button><button type="button" data-v="QB" aria-pressed="false">QB</button><button type="button" data-v="RB" aria-pressed="false">RB</button><button type="button" data-v="WR" aria-pressed="false">WR</button><button type="button" data-v="TE" aria-pressed="false">TE</button></div></div>
+    <div class="f"><label>Lado</label><div class="seg" id="pksd"><button type="button" data-v="" aria-pressed="true">Ambos</button><button type="button" data-v="O" aria-pressed="false">Over</button><button type="button" data-v="U" aria-pressed="false">Under</button></div></div>
+  </div>
+  <div id="pkbox"></div>
+</div>
+
+<div id="view-dvp" role="tabpanel" aria-labelledby="tab-dvp" hidden>
+  <div class="controls">
+    <div class="f"><label>Posición del rival</label><div class="seg" id="dpos"><button type="button" data-v="QB" aria-pressed="false">QB</button><button type="button" data-v="RB" aria-pressed="false">RB</button><button type="button" data-v="WR" aria-pressed="true">WR</button><button type="button" data-v="TE" aria-pressed="false">TE</button></div></div>
+    <div class="f"><label>Mostrar</label><div class="seg" id="dmode"><button type="button" data-v="g" aria-pressed="true">Por partido</button><button type="button" data-v="f" aria-pressed="false">Factor</button></div></div>
+  </div>
+  <p class="meta" style="margin:10px 0 0">Lo que cada defensa le permite por partido a todos los jugadores de esa posición del rival (por ejemplo, la suma de todos los WR). <b class="up">Verde</b> = permite más que el promedio de liga (bueno para el Over); <b class="dn">rojo</b> = permite menos. El factor es el que usan las proyecciones. Toca una columna para ordenar.</p>
+  <div class="tablebox"><table id="dtbl" class="dtbl"><thead id="dth"></thead><tbody id="dtb"></tbody></table></div>
+</div>
+
+<div class="foot">
+  <div><b>Datos:</b> nflverse (datos abiertos de la NFL en GitHub): stats de cada jugador por semana, marcadores y líneas de Las Vegas. teamrankings.com: stats de equipo (jugadas, puntos y yardas por jugada, pase, tierra, 3ra oportunidad, zona roja). Temporada regular 2026, semanas 1 a __SEMANAS__, actualizados el __FECHA__.</div>
+  <div><b>Cálculo:</b> cada stat = producción por snap del jugador (total ÷ snaps ofensivos jugados) × snaps esperados (Snaps % × snaps ofensivos por partido de su equipo) × lo que la defensa rival permite a su posición (÷ promedio de liga) × local (±1%). Con pocos partidos la defensa se acerca al promedio (se mezcla con __SHRINK__ partidos de liga). Marcador (teamrankings): jugadas esperadas (promedio de las jugadas del equipo y las que permite el rival) × puntos por jugada del equipo × puntos por jugada que permite el rival ÷ promedio de liga, +1 punto al local. Yardas, intentos y recepciones: distribución normal; touchdowns e intercepciones: Poisson. Lesiones: el reporte oficial de la semana (nflverse) marca OUT solo a los jugadores "Out"; tócalo para quitarlo. QB: el pase se proyecta por intento (intentos del equipo × completos, yardas, TD e INT por intento del QB, mezclados con la liga si tiene pocos intentos); si cambia el QB titular, las recepciones, yardas y TD de sus receptores se ajustan por cómo lanza el nuevo QB contra el normal del equipo, y el equipo lanza ~10% menos. TD = probabilidad de anotar al menos un touchdown (por tierra o recepción). Snaps %: por defecto su promedio de la temporada; debajo del nombre ves el de las últimas 3 semanas (▲ sube, ▼ baja). OUT: su % de snaps pasa a los jugadores de su misma posición en su equipo, en proporción a los snaps que ya juega cada uno (máximo 100%), y cada uno produce según lo que hace por snap. Si el OUT es el QB, el suplente recibe sus snaps; como los suplentes casi no juegan, su producción por snap en el pase se mezcla con el promedio de los QB de la liga (pesa como 150 snaps). Los pocos jugadores sin datos de snaps usan Uso % sobre su promedio por partido.</div>
+  <div>Herramienta educativa: no garantiza resultados. Apuesta con responsabilidad.</div>
+</div>
+</div>
+
+<script>
+const DATA=__DATA__;
+const HOME_ADV=0.01, HOME_PTS=1, MIN_EDGE=0.05, SD_TOTAL=13, SD_SPREAD=13;
+const SK=DATA.stats; const IDX={}; SK.forEach((k,i)=>IDX[k]=i);
+const LAB={cmp:"Comp",att:"Int. pase",pyd:"Yds pase",ptd:"TD pase",int:"INT",car:"Acarreos",ryd:"Yds tierra",rtd:"TD tierra",tgt:"Targets",rec:"Recep.",recyd:"Yds recep.",rectd:"TD recep."};
+const COLS={QB:["cmp","att","pyd","ptd","int","ryd"],RB:["car","ryd","rtd","tgt","rec","recyd"],WR:["tgt","rec","recyd","rectd"],TE:["tgt","rec","recyd","rectd"]};
+const PROPS={QB:["pyd","cmp","att","ptd","int","ryd"],RB:["ryd","car","rec","recyd","rr"],WR:["recyd","rec","tgt"],TE:["recyd","rec","tgt"]};
+const CV={cmp:.18,att:.15,pyd:.22,car:.30,ryd:.45,tgt:.35,rec:.40,recyd:.55,rr:.40};
+const POISSON={ptd:1,int:1,rtd:1,rectd:1};
+const TEAMS={}; DATA.t.forEach(t=>TEAMS[t[0]]={ab:t[0],name:t[1],pf:t[2],pa:t[3],n:t[4]});
+const TL=Object.values(TEAMS).sort((a,b)=>a.name.localeCompare(b.name));
+const played=TL.filter(t=>t.n);
+const LGPTS=played.reduce((s,t)=>s+t.pf,0)/played.length;
+const DV=DATA.dvp;
+const TRD=DATA.tr||{};
+const TRK=["plays","oplays","ppp","oppp","ypp","oypp","pass","opass","rush","orush","third","othird","rz","orz","pts","opts"];
+const LGT={};TRK.forEach(k=>{const v=Object.values(TRD).map(x=>x[k]).filter(x=>x!=null);LGT[k]=v.reduce((s,x)=>s+x,0)/v.length});
+const RANK={};TRK.forEach(k=>{const arr=Object.entries(TRD).filter(([,x])=>x[k]!=null).sort((a,b)=>b[1][k]-a[1][k]);RANK[k]={};arr.forEach(([ab],i)=>RANK[k][ab]=i+1)});
+const P=DATA.p.map((r,i)=>({i,name:r[0],tm:r[1],pos:r[2],g:r[3],wk:r[4],a:r.slice(5,17),sp:r[17],sp3:r[18],rate:r[19]==null?null:r.slice(19,31),snapsTot:r[31]||0}));
+// QB con pocos snaps (suplentes): su producción por snap en el pase se mezcla con el promedio de los QB de la liga
+const QB_K=150, PRATE=DATA.posRate||{};
+P.forEach(p=>{if(p.pos==="QB"&&p.rate&&PRATE.QB){const n=p.snapsTot;p.rate=p.rate.map((x,i)=>i<8?(n*x+QB_K*PRATE.QB[i])/(n+QB_K):x)}});
+// TD por tierra y por recepción: son pocos por jugador, así que su tasa por snap se mezcla con la de su posición (pesa como TD_K snaps)
+const TD_K=250, TDI=[SK.indexOf("rtd"),SK.indexOf("rectd")];
+P.forEach(p=>{const lg=PRATE[p.pos];if(!p.rate||!lg)return;const n=p.snapsTot;TDI.forEach(i=>{p.rate[i]=(n*p.rate[i]+TD_K*lg[i])/(n+TD_K)})});
+const TSN=DATA.teamSnaps||{};
+const NEXT=DATA.next||[];
+const OPP={}; NEXT.forEach(g=>{if(!OPP[g[3]])OPP[g[3]]={opp:g[4],home:0,g};if(!OPP[g[4]])OPP[g[4]]={opp:g[3],home:1,g}});
+const DAYS=[...new Set(NEXT.map(g=>g[1]))];
+const OPPD={}; NEXT.forEach(g=>{const d=OPPD[g[1]]||(OPPD[g[1]]={});d[g[3]]={opp:g[4],home:0,g};d[g[4]]={opp:g[3],home:1,g}});
+
+let S={}; const KEY="nfl-proj-v1";
+try{S=JSON.parse(localStorage.getItem(KEY)||"{}")||{}}catch(e){S={}}
+// tus cambios (OUT, snaps, líneas) valen solo para el día en que los hiciste
+(function(){const n=new Date(),d=n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0")+"-"+String(n.getDate()).padStart(2,"0");
+  try{if(localStorage.getItem(KEY+"-dia")!==d){S={};localStorage.setItem(KEY,"{}");localStorage.setItem(KEY+"-dia",d)}}catch(e){}})();
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+const ov=n=>S[n]||(S[n]={});
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+// hora del partido en la zona del que mira la página (los horarios vienen en hora del este, UTC-5 en invierno)
+function locT(d,t){const m=String(t||"").trim().toLowerCase().match(/^(\d{1,2}):(\d{2})\s*([ap])?/);if(!m||!d)return esc(t)+" ET";
+  let h=+m[1]%12;if(m[3]==="p")h+=12;else if(!m[3])h=+m[1];
+  const x=new Date(Date.UTC(+d.slice(0,4),+d.slice(5,7)-1,+d.slice(8,10),h+5,+m[2]));
+  return x.toLocaleTimeString("es",{hour:"numeric",minute:"2-digit",hour12:true})+" (tu hora)"}
+const f1=x=>(Math.round(x*10)/10).toFixed(1);
+const pct=x=>(x*100).toFixed(0)+"%";
+
+const first=NEXT[0];
+const G={group:1,day:DAYS[0]||"",team:DAYS[0]?"":(first?first[4]:"KC"),rival:first?first[3]:"BUF",home:1,pos:"WR",q:"",sort:null,dir:-1};
+const open=new Set();
+
+// math
+function erf(x){const s=Math.sign(x);x=Math.abs(x);const t=1/(1+.3275911*x);const y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-.284496736)*t+.254829592)*t*Math.exp(-x*x);return s*y}
+const ncdf=(x,m,sd)=>.5*(1+erf((x-m)/(sd*Math.SQRT2)));
+function pcdf(k,l){let s=0,t=Math.exp(-l);for(let i=0;i<=k;i++){s+=t;t*=l/(i+1)}return s}
+const impl=o=>o<0?-o/(-o+100):100/(o+100);
+
+function facD(rival,pos,k){const d=DV[rival]&&DV[rival][pos];return d?d[SK.length+IDX[k]]:1}
+// Snaps: cada stat = producción por snap × snaps esperados (% de snaps × snaps del equipo por partido).
+// Jugadores OUT: su % de snaps pasa a los de su misma posición en su equipo que no tengan % puesto a mano,
+// en proporción a los snaps que ya juega cada uno (máximo 100%).
+// lesiones del reporte oficial: "Out" sale OUT solo (tócalo para quitarlo)
+const INJ=DATA.inj||{};
+const injOut=p=>{const j=INJ[p.name];return !!(j&&j.st==="out"&&j.tm===p.tm)};
+const isOut=p=>{const o=S[p.name]||{};return o.out===true||(o.out!==false&&injOut(p))};
+function injBadge(p){const j=INJ[p.name];if(!j||j.tm!==p.tm)return "";const lab=j.st==="out"?"Lesión: OUT":j.st==="dudoso"?"Dudoso":"En duda";
+  return `<span class="inj ${j.st==="out"?"out":"duda"}" title="${esc(j.les)}${j.pr?" · "+esc(j.pr):""} (semana ${j.wk})">${lab}</span>`}
+const hasSnaps=p=>p.rate&&p.sp!=null&&TSN[p.tm];
+const manualPct=p=>{const o=S[p.name]||{};return o.s!=null?o.s/100:null};
+const basePct=p=>{const m=manualPct(p);return m!=null?m:(p.sp||0)};
+let EXTRA={}, OUTS={};
+function computeBoost(){
+  EXTRA={};OUTS={};const by={};
+  P.forEach(p=>{if(!hasSnaps(p))return;const key=p.tm+"|"+p.pos,b=by[key]||(by[key]={out:0,act:[]});
+    if(isOut(p)){b.out+=basePct(p);(OUTS[p.tm]||(OUTS[p.tm]=[])).push(p.name)}
+    else if(manualPct(p)==null&&p.sp>0)b.act.push(p)});
+  Object.values(by).forEach(b=>{if(!b.out||!b.act.length)return;const tot=b.act.reduce((s,p)=>s+p.sp,0);
+    b.act.forEach(p=>EXTRA[p.name]=Math.min(1-p.sp,b.out*p.sp/tot))});
+  computeQB();
+}
+// QB: el pase se proyecta por intento (intentos del equipo × % de snaps × % completos, yardas, TD e INT por intento,
+// mezclados con la liga cuando tiene pocos intentos). Los receptores se ajustan por la calidad del QB que va a lanzar
+// contra la del QB normal del equipo esta temporada.
+const QB_ATT_K=40; // pesa como 40 intentos: un partido real de un suplente ya cuenta bastante
+const BACKUP_ATT=0.9; // con un QB suplente el equipo lanza ~10% menos y corre más
+const qbTot=p=>({att:p.a[IDX.att]*p.g,cmp:p.a[IDX.cmp]*p.g,pyd:p.a[IDX.pyd]*p.g,ptd:p.a[IDX.ptd]*p.g,int:p.a[IDX.int]*p.g});
+const LGQ=(()=>{const s={att:0,cmp:0,pyd:0,ptd:0,int:0};P.forEach(p=>{if(p.pos!=="QB")return;const x=qbTot(p);for(const k in s)s[k]+=x[k]});return {cmp:s.cmp/s.att,pyd:s.pyd/s.att,ptd:s.ptd/s.att,int:s.int/s.att}})();
+// con pocos intentos se mezcla con un nivel de suplente (peor que el promedio de la liga), no con el promedio
+const BACKUP={cmp:.93,pyd:.82,ptd:.65,int:1.25};
+const qbRates=p=>{const x=qbTot(p),r={};["cmp","pyd","ptd","int"].forEach(k=>r[k]=(x[k]+QB_ATT_K*LGQ[k]*BACKUP[k])/(x.att+QB_ATT_K));return r};
+let QBF={}, TEAMATT={};
+function computeQB(){
+  QBF={};TEAMATT={};const by={};
+  P.forEach(p=>{if(p.pos!=="QB")return;(by[p.tm]||(by[p.tm]=[])).push(p)});
+  Object.entries(by).forEach(([tm,qs])=>{
+    const tot={att:0,cmp:0,pyd:0,ptd:0};qs.forEach(q=>{const x=qbTot(q);for(const k in tot)tot[k]+=x[k]});
+    const n=(TEAMS[tm]&&TEAMS[tm].n)||Math.max(...qs.map(q=>q.g));TEAMATT[tm]=n?tot.att/n:0;
+    if(!tot.att)return;
+    const norm={cmp:tot.cmp/tot.att,pyd:tot.pyd/tot.att,ptd:tot.ptd/tot.att};
+    const act=qs.filter(q=>!isOut(q)&&hasSnaps(q)&&expPct(q)>0);const w=act.reduce((s,q)=>s+expPct(q),0);if(!w)return;
+    const now={cmp:0,pyd:0,ptd:0};act.forEach(q=>{const r=qbRates(q);for(const k in now)now[k]+=r[k]*expPct(q)/w});
+    const cl=x=>Math.min(1.25,Math.max(0.55,x));
+    const main=act.slice().sort((a,b)=>expPct(b)-expPct(a))[0];
+    const changed=qs.some(q=>isOut(q)&&q.sp>=.5), va=changed?BACKUP_ATT:1;
+    QBF[tm]={rec:cl(now.cmp/norm.cmp)*va,recyd:cl(now.pyd/norm.pyd)*va,rectd:cl(norm.ptd?now.ptd/norm.ptd:1)*va,tgt:va,att:va,qb:main.name,changed};
+  });
+}
+const expPct=p=>{const m=manualPct(p);return m!=null?m:(p.sp||0)+(EXTRA[p.name]||0)};
+const usoOf=p=>{const o=S[p.name]||{};return (o.u!=null?o.u:100)/100};
+function project(p,ctxOverride){
+  const o=S[p.name]||{}, snaps=hasSnaps(p), pct=snaps?expPct(p):null, uso=snaps?null:usoOf(p);
+  if(isOut(p)) return {ok:false,out:true,pct,uso};
+  const ctx=ctxOverride!==undefined?ctxOverride:G.team?{rival:p.tm===G.team?G.rival:G.team,home:p.tm===G.team?G.home:1-G.home}:G.day&&OPPD[G.day]?(OPPD[G.day][p.tm]||null):(OPP[p.tm]||null);
+  if(!ctx||ctx.rival===p.tm) return {ok:false,pct,uso};
+  const rival=ctx.rival||ctx.opp, h=ctx.neutral?1:(ctx.home?1+HOME_ADV:1-HOME_ADV);
+  const fac=ctx.neutral?(()=>1):facD;
+  const pr={ok:true,pct,uso,rival,home:ctx.home};
+  if(snaps){pr.snaps=pct*TSN[p.tm];SK.forEach((k,i)=>pr[k]=p.rate[i]*pr.snaps*fac(rival,p.pos,k)*h)}
+  else SK.forEach((k,i)=>pr[k]=p.a[i]*uso*fac(rival,p.pos,k)*h);
+  if(p.pos==="QB"&&TEAMATT[p.tm]&&(snaps||uso!=null)){ // pase por intento
+    const r=qbRates(p),share=snaps?pct:Math.min(1,uso);const att=TEAMATT[p.tm]*share*((QBF[p.tm]&&QBF[p.tm].att)||1);
+    pr.att=att*fac(rival,"QB","att")*h;["cmp","pyd","ptd","int"].forEach(k=>pr[k]=att*r[k]*fac(rival,"QB",k)*h);
+  }else if(p.pos!=="QB"&&QBF[p.tm]){const q=QBF[p.tm];pr.rec*=q.rec;pr.recyd*=q.recyd;pr.rectd*=q.rectd;pr.tgt*=q.tgt||1;pr.qbf=q}
+  pr.rr=pr.ryd+pr.recyd;
+  pr.td=1-Math.exp(-(pr.rtd+pr.rectd));
+  return pr;
+}
+
+// selects
+const opts=TL.map(t=>`<option value="${t.ab}">${esc(t.name)}</option>`).join("");
+$("team").innerHTML=`<option value="">Todos los del día</option>`+opts; $("rival").innerHTML=opts;
+const dayName=d=>{const x=new Date(d+"T12:00:00");return ["dom","lun","mar","mié","jue","vie","sáb"][x.getDay()]};
+$("game").innerHTML=`<option value="">— Elegir equipos a mano —</option>`+NEXT.map((g,i)=>`<option value="${i}">${g[3]} @ ${g[4]} · ${dayName(g[1])} ${g[2]}</option>`).join("");
+$("day").innerHTML=DAYS.map(d=>`<option value="${d}">${fmtDay(d)} (${NEXT.filter(g=>g[1]===d).length} partido${NEXT.filter(g=>g[1]===d).length>1?"s":""})</option>`).join("")+`<option value="">Todos los próximos partidos</option>`;
+$("day").value=G.day;
+$("day").addEventListener("change",e=>{G.day=e.target.value;G.team="";resetLines();render()});
+function syncSel(){$("team").value=G.team;$("rival").value=G.rival;$("swap").disabled=!G.team;$("rival").disabled=!G.team;
+  $("home").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(+x.dataset.v===G.home)));
+  const gi=NEXT.findIndex(g=>(g[3]===G.team&&g[4]===G.rival)||(g[4]===G.team&&g[3]===G.rival));$("game").value=gi>=0?String(gi):""}
+
+// scoreboard
+const GL={total:"",spread:""};
+function score(){return G.team?scoreFor(G.team,G.rival,G.home):null}
+function scoreFor(tm,rv,home){
+  const t=TEAMS[tm],o=TEAMS[rv]; if(!t||!o||t===o||!t.n||!o.n) return null;
+  const A=TRD[tm],B=TRD[rv],hp=home?HOME_PTS:-HOME_PTS;
+  if(A&&B&&A.plays&&B.plays&&A.ppp&&B.ppp){
+    const pa=(A.plays+B.oplays)/2, pb=(B.plays+A.oplays)/2;
+    const a=pa*A.ppp*(B.oppp/LGT.oppp)+hp, b=pb*B.ppp*(A.oppp/LGT.oppp)-hp;
+    const qa=QBF[tm]&&QBF[tm].changed?Math.pow(QBF[tm].recyd,0.6):1, qb=QBF[rv]&&QBF[rv].changed?Math.pow(QBF[rv].recyd,0.6):1; // QB titular OUT: el equipo anota menos
+    return {a:a*qa,b:b*qb,total:a*qa+b*qb,pa,pb,qa,qb};
+  }
+  const a=t.pf*(o.pa/LGPTS)+hp, b=o.pf*(t.pa/LGPTS)-hp;
+  return {a,b,total:a+b};
+}
+function vegas(){const g=NEXT.find(g=>(g[3]===G.team&&g[4]===G.rival)||(g[4]===G.team&&g[3]===G.rival));if(!g||g[5]==null)return null;
+  const homeTm=g[4], fav=g[5]>0?homeTm:g[3]; return {fav,spread:Math.abs(g[5]),total:g[6],teamSpread:(G.team===homeTm?-g[5]:g[5])}}
+function lineRes(sc){
+  let tot="Escribe la línea del total",spr=`Escribe el spread de ${G.team}`;
+  if(GL.total!==""&&!isNaN(+GL.total)){const po=1-ncdf(+GL.total,sc.total,SD_TOTAL);const pk=po>=.5+MIN_EDGE/2?"OVER":po<=.5-MIN_EDGE/2?"UNDER":"PASS";tot=`O ${pct(po)} · U ${pct(1-po)} <span class="pill ${pk}">${pk}</span>`}
+  if(GL.spread!==""&&!isNaN(+GL.spread)){const pc=1-ncdf(-(+GL.spread),sc.a-sc.b,SD_SPREAD);const pk=pc>=.5+MIN_EDGE/2?"CUBRE":pc<=.5-MIN_EDGE/2?"NO CUBRE":"PASS";spr=`Cubre ${pct(pc)} <span class="pill ${pk==="CUBRE"?"OVER":pk==="NO CUBRE"?"UNDER":"PASS"}">${pk}</span>`}
+  return {tot,spr};
+}
+const MUROWS=[["Puntos por partido","pts","opts",1],["Jugadas por partido","plays","oplays",1],["Yardas por jugada","ypp","oypp",2],["Puntos por jugada","ppp","oppp",3],
+  ["Yardas por pase","pass","opass",1],["Yardas por tierra","rush","orush",1],["3ra oportunidad","third","othird","%"],["Zona roja (TD)","rz","orz","%"]];
+function renderMu(){
+  const box=$("mu");
+  if(!G.team||!TRD[G.team]||!TRD[G.rival]||G.team===G.rival){box.innerHTML="";return}
+  const A=G.team,B=G.rival;
+  const fmt=(v,d)=>v==null?"—":d==="%"?(v*100).toFixed(0)+"%":v.toFixed(d);
+  const cell=(ab,k,d)=>{const v=TRD[ab][k],lg=LGT[k],x=v==null||!lg?0:Math.max(-1,Math.min(1,(v/lg-1)/.15));
+    const bg=x>=0?`rgba(var(--hot),${(x*.4).toFixed(2)})`:`rgba(var(--cold),${(-x*.4).toFixed(2)})`;
+    return `<td style="background:${bg}">${fmt(v,d)}<small>#${RANK[k][ab]||"–"}</small></td>`};
+  box.innerHTML=`<div class="tablebox"><table><thead><tr><th class="l">Cara a cara (teamrankings)</th><th>Ofensiva ${A}</th><th>Defensa ${B} permite</th><th>Ofensiva ${B}</th><th>Defensa ${A} permite</th><th>Liga</th></tr></thead><tbody>`+
+    MUROWS.map(([lab,ko,kd,d])=>`<tr><td class="l name">${lab}</td>${cell(A,ko,d)}${cell(B,kd,d)}${cell(B,ko,d)}${cell(A,kd,d)}<td>${fmt(LGT[ko],d)}</td></tr>`).join("")+
+    `</tbody></table></div><p class="meta" style="margin:6px 0 0"><b class="up">Verde</b> = más que el promedio de liga (para la ofensiva es bueno; en "permite" quiere decir que esa defensa cede más, bueno para el Over). # = lugar entre 32 equipos, de mayor a menor.</p>`;
+}
+function fmtDay(d){const MES=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];const x=new Date(d+"T12:00:00"),n=new Date(),iso=v=>`${v.getFullYear()}-${String(v.getMonth()+1).padStart(2,"0")}-${String(v.getDate()).padStart(2,"0")}`;
+  const tm=new Date(n);tm.setDate(n.getDate()+1);
+  return (d===iso(n)?"Hoy · ":d===iso(tm)?"Mañana · ":"")+dayName(d)+" "+x.getDate()+" "+MES[x.getMonth()]}
+function renderDay(){
+  const box=$("daybox");
+  if(!G.day||!OPPD[G.day]){box.innerHTML="";return}
+  const games=NEXT.filter(g=>g[1]===G.day);
+  box.innerHTML=`<div class="dayhead"><b>${fmtDay(G.day)}</b> · ${games.length} partido${games.length>1?"s":""}${G.team?` · <button type="button" class="btn" id="dayall">Ver todos los partidos del día</button>`:" · toca un partido para ver solo esos dos equipos"}</div><div class="cards">`+
+    games.map(g=>{const sc=scoreFor(g[4],g[3],1),on=G.team&&((G.team===g[4]&&G.rival===g[3])||(G.team===g[3]&&G.rival===g[4]));
+      const sp=sc?sc.b-sc.a:0, fav=!sc?"":Math.abs(sp)<.05?"Parejo":(sp<0?g[4]:g[3])+" -"+Math.abs(sp).toFixed(1);
+      const lv=g[5]==null?"":` · LV ${g[5]>0?g[4]:g[3]} -${Math.abs(g[5]).toFixed(1)}, ${g[6]}`;
+      return `<button type="button" class="gcard${on?" on":""}" data-gi="${NEXT.indexOf(g)}">
+        <span class="gt">${locT(g[1],g[2])} · semana ${g[0]}</span>
+        <span class="gr"><span>${g[3]}</span><b>${sc?f1(sc.b):"—"}</b></span>
+        <span class="gr"><span>${g[4]} <small>local</small></span><b>${sc?f1(sc.a):"—"}</b></span>
+        <span class="gt">Total ${sc?f1(sc.total):"—"} · ${fav}${lv}</span></button>`}).join("")+`</div>`;
+}
+$("daybox").addEventListener("click",e=>{
+  if(e.target.closest("#dayall")){G.team="";render();return}
+  const c=e.target.closest(".gcard");if(!c)return;const g=NEXT[+c.dataset.gi];
+  G.team=g[4];G.rival=g[3];G.home=1;resetLines();render()});
+function renderScore(){
+  renderDay();
+  renderMu();
+  const box=$("score");
+  if(!G.team){box.hidden=!!(G.day&&OPPD[G.day]);box.innerHTML=`<p class="hint">Mostrando a todos los jugadores contra su rival de los próximos días. Elige un día, un partido o un equipo para ver el marcador proyectado.</p>`;return}
+  box.hidden=false;
+  const sc=score(); if(!sc){box.innerHTML=`<p class="hint">Elige dos equipos distintos.</p>`;return}
+  const T1=TEAMS[G.team],T2=TEAMS[G.rival],sp=sc.b-sc.a,v=vegas(),r=lineRes(sc);
+  const fav=Math.abs(sp)<.05?"Parejo":(sp<0?T1.ab:T2.ab)+" -"+Math.abs(sp).toFixed(1);
+  if(GL.spread===""&&v) GL.spread=String(v.teamSpread); if(GL.total===""&&v&&v.total!=null) GL.total=String(v.total);
+  const r2=lineRes(sc);
+  box.innerHTML=`<div class="board">
+    <div><div class="tm">${esc(T1.name)}</div><div class="sc">${f1(sc.a)}</div><div class="tag">${G.home?"Local":"Visita"}</div></div>
+    <div class="vs">vs</div>
+    <div><div class="tm">${esc(T2.name)}</div><div class="sc">${f1(sc.b)}</div><div class="tag">${G.home?"Visita":"Local"}</div></div></div>
+   <div class="lines">
+    <div><div class="k">Total proyectado</div><div class="big">${f1(sc.total)}</div>
+      <label class="k" for="gtot">Línea total</label><br><input id="gtot" type="number" step="0.5" value="${GL.total}">
+      <div class="res" id="rtot">${r2.tot}</div></div>
+    <div><div class="k">Spread proyectado</div><div class="big">${fav}</div>
+      <label class="k" for="gspr">Spread de ${esc(T1.ab)}</label><br><input id="gspr" type="number" step="0.5" value="${GL.spread}">
+      <div class="res" id="rspr">${r2.spr}</div></div>
+    <div class="tag" style="grid-column:1/-1">${sc.pa?`Jugadas esperadas: ${T1.ab} ${f1(sc.pa)} · ${T2.ab} ${f1(sc.pb)}. `:""}${v?`Las Vegas: ${v.fav} -${v.spread.toFixed(1)} · total ${v.total} (ya puesto en las líneas; cámbialo por el de tu casa).`:"Sin línea de Las Vegas para este cruce."}</div></div>`;
+}
+$("score").addEventListener("input",e=>{const id=e.target.id;if(id!=="gtot"&&id!=="gspr")return;GL[id==="gtot"?"total":"spread"]=e.target.value;const sc=score();if(!sc)return;const r=lineRes(sc);$("rtot").innerHTML=r.tot;$("rspr").innerHTML=r.spr});
+
+// players table
+function headHTML(){
+  const c=COLS[G.pos];
+  return `<tr><th class="l" data-k="name">Jugador</th><th data-k="g">PJ</th><th data-k="uso" title="% de snaps ofensivos esperados">Snaps %</th><th class="l" data-k="rival">Rival</th>`+
+    c.map(k=>`<th class="proj" data-k="${k}">${LAB[k]}</th>`).join("")+(G.pos==="QB"?"":`<th class="proj" data-k="td">TD %</th>`)+`<th aria-label="Props"></th></tr>`;
+}
+function cellsHTML(p,pr){
+  const c=COLS[G.pos];
+  let h=c.map(k=>{if(pr.out)return `<td class="v" data-c="${k}">OUT</td>`;if(!pr.ok)return `<td class="v" data-c="${k}">—</td>`;const v=pr[k],s=p.a[IDX[k]],cls=v>s*1.02?"up":v<s*.98?"dn":"";
+    return `<td class="v" data-c="${k}">${f1(v)}<small class="${cls}">${f1(s)}</small></td>`}).join("");
+  if(G.pos!=="QB") h+=`<td class="v" data-c="td">${pr.out?"OUT":pr.ok?pct(pr.td):"—"}</td>`;
+  return h;
+}
+function snapInfo(p){
+  if(!hasSnaps(p)) return `<small class="snp">sin snaps · uso %</small>`;
+  const d=p.sp3-p.sp, ar=d>0.03?`<b class="up">▲</b>`:d<-0.03?`<b class="dn">▼</b>`:"";
+  return `<small class="snp">snaps temp ${Math.round(p.sp*100)}% · últ. 3 ${Math.round(p.sp3*100)}% ${ar}</small>`;
+}
+function boostNote(p){const ex=EXTRA[p.name]||0,parts=[];if(ex>0.005&&!isOut(p))parts.push(`<small class="boost" title="Por jugadores OUT: ${esc((OUTS[p.tm]||[]).join(", "))}">+${Math.round(ex*100)}% snaps por OUT</small>`);
+  const q=QBF[p.tm];if(q&&q.changed&&p.pos!=="QB"&&!isOut(p)&&Math.abs(q.recyd-1)>.02)parts.push(`<small class="${q.recyd<1?"qbdn":"boost"}">QB ${esc(q.qb)}: ${q.recyd<1?"":"+"}${Math.round((q.recyd-1)*100)}% yds recibidas</small>`);
+  return parts.join("")}
+function rowHTML(p){
+  const pr=project(p),o=S[p.name]||{};
+  const rv=pr.ok?`${pr.home?"vs":"@"} ${pr.rival}`:"—";
+  const why=boostNote(p);
+  return `<tr data-i="${p.i}" class="${pr.out?"is-out":pr.ok?"":"warn"}">
+   <td class="l name"><span class="pn">${esc(p.name)}</span>${injBadge(p)}<small>${p.tm} · ${p.pos} · últ. sem ${p.wk}</small>${snapInfo(p)}${why}</td>
+   <td>${p.g}</td>
+   <td><div class="usecell">${hasSnaps(p)?`<input type="number" min="0" max="100" step="1" value="${Math.round(expPct(p)*100)}" data-a="s" aria-label="% de snaps esperados de ${esc(p.name)}"${pr.out?" disabled":""}>`:`<input type="number" min="0" max="300" step="5" value="${o.u!=null?o.u:100}" data-a="u" title="Sin datos de snaps: uso % de su promedio" aria-label="Uso esperado de ${esc(p.name)}"${pr.out?" disabled":""}>`}<button type="button" class="outb" data-a="out" aria-pressed="${pr.out?"true":"false"}" title="Marcar a ${esc(p.name)} como OUT">OUT</button></div></td>
+   <td class="l" data-c="rv">${rv}</td>
+   ${cellsHTML(p,pr)}
+   <td><button type="button" class="exp" data-a="e" aria-expanded="${open.has(p.i)}" aria-label="Props de ${esc(p.name)}">${open.has(p.i)?"▾":"▸"}</button></td></tr>`+(open.has(p.i)?detailHTML(p,pr):"");
+}
+// desviación real medida semana a semana (DATA.sd: c0 + c1 × proyección); TD e INT con Poisson
+const SDN=DATA.sd||{};
+function probOverN(k,m,line){if(POISSON[k])return shrinkP(1-pcdf(Math.floor(line),m));const s=SDN[k];return shrinkP(1-ncdf(line,m,Math.max(.5,s?s[0]+s[1]*m:m*CV[k])))}
+// corrección de optimismo medida con el récord real de los Mejores props (pestaña Récord)
+const PKB=(DATA.pkcal&&DATA.pkcal.b)||1;
+function shrinkP(p){if(PKB===1)return p;p=Math.min(.999,Math.max(.001,p));return 1/(1+Math.exp(-PKB*Math.log(p/(1-p))))}
+function propOut(p,pr,k){
+  const l=((S[p.name]||{}).l||{})[k]||{};
+  if(pr.out) return `<span>Jugador OUT</span>`;
+  if(!pr.ok) return `<span>Sin rival esta semana</span>`;
+  if(l.line==null||l.line==="") return `<span>Escribe la línea</span>`;
+  const m=pr[k],line=+l.line;
+  const po=probOverN(k,m,line);
+  const io=l.oo!=null&&l.oo!==""?impl(+l.oo):null, iu=l.ou!=null&&l.ou!==""?impl(+l.ou):null;
+  const eo=io!=null?po-io:null, eu=iu!=null?(1-po)-iu:null;
+  const pick=eo!=null&&eo>=MIN_EDGE?"OVER":eu!=null&&eu>=MIN_EDGE?"UNDER":"PASS";
+  const sg=x=>x==null?"–":(x>=0?"+":"")+(x*100).toFixed(1)+"%";
+  return `<span>O ${(po*100).toFixed(1)}% · U ${((1-po)*100).toFixed(1)}%<br><small>Edge O ${sg(eo)} · U ${sg(eu)}</small></span><span class="pill ${pick}">${pick}</span>`;
+}
+const PLAB=Object.assign({},LAB,{rr:"Yds tierra+recep."});
+function propsFor(p){const base=PROPS[p.pos].slice();if(p.pos!=="QB")base.push(p.pos==="RB"?"rtd":"rectd");return base}
+function detailHTML(p,pr){
+  const L=(S[p.name]||{}).l||{};
+  return `<tr class="detail" data-d="${p.i}"><td colspan="20"><div class="props">`+propsFor(p).map(k=>{const l=L[k]||{};
+   return `<div class="prop" data-k="${k}"><h4>${PLAB[k]}<span>${pr.ok?f1(pr[k]):"—"}</span></h4>
+   <div class="in"><div><label for="l${p.i}${k}">Línea</label><input id="l${p.i}${k}" type="number" step="0.5" data-a="line" value="${l.line??""}"></div>
+   <div><label for="o${p.i}${k}">Cuota O</label><input id="o${p.i}${k}" type="number" step="5" placeholder="-110" data-a="oo" value="${l.oo??""}"></div>
+   <div><label for="u${p.i}${k}">Cuota U</label><input id="u${p.i}${k}" type="number" step="5" placeholder="-110" data-a="ou" value="${l.ou??""}"></div></div>
+   <div class="out">${propOut(p,pr,k)}</div></div>`}).join("")+`</div></td></tr>`;
+}
+// Agrupar por equipo: con un partido elegido, primero el equipo y luego el rival;
+// en la vista del día, por partido (orden del calendario) y dentro de cada uno visita y local.
+function groupKey(){
+  if(!G.group) return G.team?(p=>p.tm===G.team?0:1):null;
+  if(G.team) return p=>p.tm===G.team?0:1;
+  if(G.day&&OPPD[G.day]){const games=NEXT.filter(g=>g[1]===G.day);return p=>{const i=games.findIndex(g=>g[3]===p.tm||g[4]===p.tm);return i*2+(games[i]&&games[i][4]===p.tm?1:0)}}
+  return null;
+}
+function visible(){
+  const q=G.q.trim().toLowerCase();
+  const dayT=!G.team&&G.day&&OPPD[G.day]?OPPD[G.day]:null;
+  let rows=P.filter(p=>p.pos===G.pos&&(G.team?(p.tm===G.team||p.tm===G.rival):(!dayT||dayT[p.tm]))&&(!q||p.name.toLowerCase().includes(q)));
+  const pr=new Map(rows.map(p=>[p.i,project(p)]));
+  const k=G.sort||COLS[G.pos][G.pos==="QB"?2:G.pos==="RB"?1:2];
+  const key=p=>{const r=pr.get(p.i);if(k==="name")return p.name;if(k==="g")return p.g;if(k==="uso")return r.pct!=null?r.pct:(r.uso||0);if(k==="rival")return r.ok?r.rival:"";return r.ok?r[k]:-1};
+  rows.sort((a,b)=>{const x=key(a),y=key(b);return (typeof x==="string"?x.localeCompare(y):x-y)*(G.sort?G.dir:-1)});
+  const gk=groupKey(); if(gk) rows.sort((a,b)=>gk(a)-gk(b));
+  return rows;
+}
+function render(){
+  computeBoost();
+  $("th").innerHTML=headHTML();
+  const rows=visible();
+  let html="",cur=null;
+  const gk=groupKey();
+  rows.forEach(p=>{if(gk&&p.tm!==cur){cur=p.tm;const c=G.team?{opp:cur===G.team?G.rival:G.team,home:cur===G.team?G.home:1-G.home}:(OPPD[G.day][cur]),opp=c.opp,hm=c.home;
+    html+=`<tr class="grp"><td colspan="20" class="l">${esc(TEAMS[cur].name)} <span>${hm?"local":"visita"} · contra la defensa de ${esc(TEAMS[opp].name)}</span></td></tr>`}
+    html+=rowHTML(p)});
+  $("tb").innerHTML=html||`<tr><td colspan="20" class="l">Ningún jugador coincide.</td></tr>`;
+  $("count").textContent=rows.length+" jugadores";
+  document.querySelectorAll("#th th[data-k]").forEach(th=>{if(th.dataset.k===G.sort)th.setAttribute("aria-sort",G.dir<0?"descending":"ascending")});
+  syncSel(); renderScore();
+}
+function refreshRow(tr){
+  const p=P[+tr.dataset.i],pr=project(p);
+  const si=tr.querySelector('input[data-a="s"]'); if(si&&si!==document.activeElement) si.value=Math.round(expPct(p)*100);
+  const nb=tr.querySelector("small.boost"),nn=boostNote(p);
+  if(nb) nb.outerHTML=nn||""; else if(nn) tr.querySelector("td.name").insertAdjacentHTML("beforeend",nn);
+  const tmp=document.createElement("tbody");tmp.innerHTML=`<tr>${cellsHTML(p,pr)}</tr>`;
+  tmp.querySelectorAll("td[data-c]").forEach(td=>{const old=tr.querySelector(`[data-c="${td.dataset.c}"]`);if(old)old.replaceWith(td)});
+  const d=tr.nextElementSibling;
+  if(d&&d.dataset.d==tr.dataset.i)d.querySelectorAll(".prop").forEach(el=>{const k=el.dataset.k;el.querySelector("h4 span").textContent=pr.ok?f1(pr[k]):"—";el.querySelector(".out").innerHTML=propOut(p,pr,k)});
+}
+$("tb").addEventListener("input",e=>{const el=e.target,a=el.dataset.a;if(!a)return;
+  const d=el.closest("tr.detail");
+  if(d){const p=P[+d.dataset.d],k=el.closest(".prop").dataset.k,o=ov(p.name);o.l=o.l||{};o.l[k]=o.l[k]||{};o.l[k][a]=el.value;save();refreshRow(d.previousElementSibling);return}
+  const tr=el.closest("tr"),p=P[+tr.dataset.i];
+  if(a==="u"){const v=parseFloat(el.value);if(isNaN(v))return;ov(p.name).u=Math.max(0,Math.min(300,v))}
+  if(a==="s"){const v=parseFloat(el.value);if(isNaN(v))return;ov(p.name).s=Math.max(0,Math.min(100,v))}
+  save();computeBoost();
+  if((OUTS[p.tm]||[]).length){document.querySelectorAll("#tb tr[data-i]").forEach(r=>{if(P[+r.dataset.i].tm===p.tm)refreshRow(r)})}else refreshRow(tr)});
+$("tb").addEventListener("click",e=>{const ob=e.target.closest("button[data-a=out]");
+  if(ob){const p=P[+ob.closest("tr").dataset.i],o=ov(p.name);if(isOut(p)){if(injOut(p))o.out=false;else delete o.out}else{if(injOut(p))delete o.out;else o.out=true}save();render();return}
+  const b=e.target.closest("button[data-a=e]");if(!b)return;const tr=b.closest("tr"),p=P[+tr.dataset.i];
+  open.has(p.i)?open.delete(p.i):open.add(p.i);const d=tr.nextElementSibling;if(d&&d.classList.contains("detail"))d.remove();
+  if(open.has(p.i))tr.insertAdjacentHTML("afterend",detailHTML(p,project(p)));b.textContent=open.has(p.i)?"▾":"▸";b.setAttribute("aria-expanded",String(open.has(p.i)))});
+$("th").addEventListener("click",e=>{const th=e.target.closest("th[data-k]");if(!th)return;const k=th.dataset.k;
+  if(G.sort===k)G.dir*=-1;else{G.sort=k;G.dir=(k==="name"||k==="rival")?1:-1}render()});
+function resetLines(){GL.total="";GL.spread=""}
+$("game").addEventListener("change",e=>{const g=NEXT[+e.target.value];if(!g)return;G.team=g[4];G.rival=g[3];G.home=1;G.day=g[1];$("day").value=G.day;resetLines();render()});
+$("team").addEventListener("change",e=>{G.team=e.target.value;if(G.team){const o=(G.day&&OPPD[G.day]&&OPPD[G.day][G.team])||OPP[G.team];if(o){G.rival=o.opp;G.home=o.home}else if(G.rival===G.team)G.rival=TL.find(t=>t.ab!==G.team).ab}resetLines();render()});
+$("rival").addEventListener("change",e=>{G.rival=e.target.value;resetLines();render()});
+$("swap").addEventListener("click",()=>{if(!G.team)return;[G.team,G.rival]=[G.rival,G.team];G.home=G.home?0:1;resetLines();render()});
+$("home").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;G.home=+b.dataset.v;render()});
+function seg(id,fn){$(id).addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;$(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));fn(b.dataset.v)})}
+seg("group",v=>{G.group=+v;render()});
+seg("pos",v=>{G.pos=v;G.sort=null;render()});
+$("q").addEventListener("input",e=>{G.q=e.target.value;render()});
+$("reset").addEventListener("click",()=>{S={};save();open.clear();render()});
+
+// defensa por posición
+const DCOLS={QB:["att","cmp","pyd","ptd","int","ryd"],RB:["car","ryd","rtd","rec","recyd"],WR:["tgt","rec","recyd","rectd"],TE:["tgt","rec","recyd","rectd"]};
+const D={pos:"WR",mode:"g",sort:"recyd",dir:-1};
+function renderDvp(){
+  const c=DCOLS[D.pos];
+  $("dth").innerHTML=`<tr><th class="l" data-k="name">Defensa</th><th data-k="n">PJ</th>`+c.map(k=>`<th data-k="${k}">${LAB[k]}</th>`).join("")+`</tr>`;
+  const rows=TL.map(t=>({t,d:DV[t.ab]}));
+  const val=(r,k)=>r.d&&r.d.n?(D.mode==="g"?r.d[D.pos][IDX[k]]:r.d[D.pos][SK.length+IDX[k]]):-1;
+  rows.sort((a,b)=>D.sort==="name"?a.t.name.localeCompare(b.t.name)*D.dir:D.sort==="n"?((a.d?a.d.n:0)-(b.d?b.d.n:0))*D.dir:(val(a,D.sort)-val(b,D.sort))*D.dir);
+  const hl=G.team?[G.rival]:[];
+  $("dtb").innerHTML=rows.map(r=>`<tr class="${hl.includes(r.t.ab)?"hl":""}"><td class="l name">${esc(r.t.name)}<small>${r.t.ab}</small></td><td>${r.d?r.d.n:0}</td>`+
+    c.map(k=>{if(!r.d||!r.d.n)return `<td class="c">—</td>`;const v=r.d[D.pos],f=v[SK.length+IDX[k]],x=Math.max(-1,Math.min(1,(f-1)/.25));
+      const bg=x>=0?`rgba(var(--hot),${(x*.45).toFixed(2)})`:`rgba(var(--cold),${(-x*.45).toFixed(2)})`;
+      return `<td class="c" style="background:${bg}">${D.mode==="g"?f1(v[IDX[k]]):"×"+f.toFixed(2)}</td>`}).join("")+`</tr>`).join("");
+  document.querySelectorAll("#dth th[data-k]").forEach(th=>{if(th.dataset.k===D.sort)th.setAttribute("aria-sort",D.dir<0?"descending":"ascending")});
+}
+seg("dpos",v=>{D.pos=v;D.sort=DCOLS[v][v==="QB"?2:v==="RB"?1:2];renderDvp()}); seg("dmode",v=>{D.mode=v;renderDvp()});
+$("dth").addEventListener("click",e=>{const th=e.target.closest("th[data-k]");if(!th)return;const k=th.dataset.k;if(D.sort===k)D.dir*=-1;else{D.sort=k;D.dir=k==="name"?1:-1}renderDvp()});
+function showTab(w){["proj","best","dvp","td","rec","top","par","calc"].forEach(k=>{$("view-"+k).hidden=k!==w;$("tab-"+k).setAttribute("aria-selected",String(k===w))});if(w==="dvp")renderDvp();if(w==="td")renderTd();if(w==="best")renderBest();if(w==="rec")renderPk();if(w==="top")renderTop();if(w==="par")renderPz();if(w==="calc")renderCalc();window.scrollTo(0,0)}
+// Anotador de TD: probabilidad de anotar al menos un TD (tierra o recepción) en cada partido
+const TD={day:DAYS[0]||"",pos:"",group:1,min:10,q:""};
+const fairOdds=p=>p<=0||p>=1?"—":p>=.5?String(-Math.round(p/(1-p)*100)):"+"+Math.round((1-p)/p*100);
+$("tdday").innerHTML=DAYS.map(d=>`<option value="${d}">${fmtDay(d)} (${NEXT.filter(g=>g[1]===d).length} partido${NEXT.filter(g=>g[1]===d).length>1?"s":""})</option>`).join("")+`<option value="">Todos los próximos partidos</option>`;
+$("tdday").value=TD.day;
+function tdRows(){
+  const games=NEXT.filter(g=>!TD.day||g[1]===TD.day), q=TD.q.trim().toLowerCase(), rows=[];
+  games.forEach((g,gi)=>{[[g[3],g[4],0],[g[4],g[3],1]].forEach(([tm,opp,home])=>{
+    P.forEach(p=>{if(p.tm!==tm||(TD.pos&&p.pos!==TD.pos)||(q&&!p.name.toLowerCase().includes(q)))return;
+      const pr=project(p,{rival:opp,home});
+      if(pr.out){rows.push({p,g,gi,home,opp,out:true,prob:-1});return}
+      if(!pr.ok)return;
+      const lam=pr.rtd+pr.rectd, prob=1-Math.exp(-lam);
+      if(prob*100<TD.min)return;
+      rows.push({p,g,gi,home,opp,pr,lam,prob})})})});
+  return rows;
+}
+// precio de Kalshi para "1+ touchdowns" (SÍ = anota)
+function tdKal(r){const x=((KAL[knorm(r.p.name)]||{}).td||[]).find(e=>e[0]===r.g[1]&&e[1]===.5);return x?x[3]+kfee(x[3]):null}
+function tdEdge(r){const o=(S[r.p.name]||{}).tdo;if(o==null||o===""||isNaN(+o)){const k=tdKal(r);return k==null?null:r.prob-k}return r.prob-impl(+o)}
+function tdRowHTML(r){
+  const o=(S[r.p.name]||{}).tdo??"";
+  if(r.out) return `<tr class="is-out" data-tdn="${esc(r.p.name)}"><td class="l name"><span class="pn">${esc(r.p.name)}</span><small>${r.p.tm} · ${r.p.pos}</small></td><td class="l">${r.home?"vs":"@"} ${r.opp}</td><td colspan="6" class="l">OUT</td><td></td></tr>`;
+  const e=tdEdge(r), pick=e==null?"":e>=MIN_EDGE?"OVER":e<=-MIN_EDGE?"UNDER":"PASS";
+  return `<tr data-tdn="${esc(r.p.name)}"><td class="l name"><span class="pn">${esc(r.p.name)}</span><small>${r.p.tm} · ${r.p.pos}${r.p.sp!=null?` · snaps últ. 3 ${Math.round(r.p.sp3*100)}%`:""}</small></td>
+    <td class="l">${r.home?"vs":"@"} ${r.opp}</td><td>${r.pr.pct!=null?Math.round(r.pr.pct*100)+"%":"—"}</td><td>${r.lam.toFixed(2)}</td>
+    <td class="v">${(r.prob*100).toFixed(1)}%</td><td>${fairOdds(r.prob)}</td>
+    <td><input type="number" step="5" placeholder="${tdKal(r)!=null?"Kalshi":"+150"}" value="${esc(o)}" data-a="tdo" aria-label="Cuota de anytime TD de ${esc(r.p.name)}">${tdKal(r)!=null&&o===""?`<small>Kalshi ${Math.round(tdKal(r)*100)}¢</small>`:""}</td>
+    <td data-c="edge">${e==null?"—":`<span class="${e>0?"up":"dn"}">${e>0?"+":""}${(e*100).toFixed(1)}%</span>`}</td><td data-c="pick">${pick?`<span class="pill ${pick==="OVER"?"OVER":pick==="UNDER"?"UNDER":"PASS"}">${pick==="OVER"?"SÍ":pick==="UNDER"?"NO":"PASS"}</span>`:""}</td></tr>`;
+}
+function renderTd(){
+  const rows=tdRows();
+  rows.sort((a,b)=>b.prob-a.prob);
+  let html="";
+  if(TD.group){
+    const games=NEXT.filter(g=>!TD.day||g[1]===TD.day);
+    games.forEach(g=>{const rs=rows.filter(r=>r.g===g);if(!rs.length)return;const sc=scoreFor(g[4],g[3],1);
+      html+=`<tr class="grp"><td colspan="9" class="l">${g[3]} @ ${g[4]} <span>${esc(dayName(g[1]))} ${locT(g[1],g[2])}${sc?` · proyectado ${g[3]} ${f1(sc.b)} – ${g[4]} ${f1(sc.a)}`:""}${g[6]!=null?` · total Las Vegas ${g[6]}`:""}</span></td></tr>`+rs.map(tdRowHTML).join("")});
+  }else html=rows.map(tdRowHTML).join("");
+  $("tdtb").innerHTML=html||`<tr><td colspan="9" class="l">Ningún jugador pasa la probabilidad mínima. Bájala o cambia los filtros.</td></tr>`;
+  $("tdcount").textContent=rows.filter(r=>!r.out).length+" jugadores";
+}
+$("tdday").addEventListener("change",e=>{TD.day=e.target.value;renderTd()});
+seg("tdpos",v=>{TD.pos=v;renderTd()}); seg("tdgroup",v=>{TD.group=+v;renderTd()});
+$("tdmin").addEventListener("input",e=>{const v=parseFloat(e.target.value);TD.min=isNaN(v)?0:v;renderTd()});
+$("tdq").addEventListener("input",e=>{TD.q=e.target.value;renderTd()});
+$("tdtb").addEventListener("input",e=>{const el=e.target;if(el.dataset.a!=="tdo")return;const tr=el.closest("tr"),n=tr.dataset.tdn;ov(n).tdo=el.value;save();
+  const r=tdRows().find(x=>x.p.name===n);if(!r||r.out)return;const tmp=document.createElement("tbody");tmp.innerHTML=tdRowHTML(r);
+  ["edge","pick"].forEach(c=>tr.querySelector(`[data-c="${c}"]`).replaceWith(tmp.querySelector(`[data-c="${c}"]`)))});
+$("tab-td").addEventListener("click",()=>showTab("td"));$("tab-rec").addEventListener("click",()=>showTab("rec"));$("tab-top").addEventListener("click",()=>showTab("top"));$("tab-par").addEventListener("click",()=>showTab("par"));$("tab-calc").addEventListener("click",()=>showTab("calc"));
+$("tab-proj").addEventListener("click",()=>showTab("proj"));$("tab-dvp").addEventListener("click",()=>showTab("dvp"));
+if(location.hash==="#defensa")showTab("dvp");
+if(location.hash==="#td")showTab("td");
+
+// ================= Récord de los Mejores props guardados =================
+const PK=(DATA.pk||[]).map(r=>({d:r[0],wk:r[1],n:r[2],tm:r[3],pos:r[4],opp:r[5],k:r[6],line:r[7],side:r[8],prob:r[9],edge:r[10],res:r[11],act:r[12],src:r[13]||"ref",odds:r[14]||-110,clv:r[15]??null}));
+const PKF={top:0,min:55,mk:"",pos:"",side:"",src:"ref"};
+const PKLAB={pyd:"Yds pase",cmp:"Pases completos",att:"Intentos de pase",ptd:"TD de pase",int:"Intercepciones",ryd:"Yds por tierra",car:"Acarreos",rec:"Recepciones",recyd:"Yds recibidas",rr:"Yds tierra+recep.",tgt:"Targets"};
+$("pkmk").innerHTML=`<option value="">Todos</option>`+Object.keys(PKLAB).map(k=>`<option value="${k}">${PKLAB[k]}</option>`).join("");
+function pkRows(){
+  let rs=PK.filter(r=>r.k!=="td"&&r.src===PKF.src&&r.prob*100>=PKF.min&&(!PKF.mk||r.k===PKF.mk)&&(!PKF.pos||r.pos===PKF.pos)&&(!PKF.side||r.side===PKF.side));
+  if(PKF.top){const by={};rs.forEach(r=>(by[r.wk]=by[r.wk]||[]).push(r));rs=[].concat(...Object.values(by).map(a=>a.sort((x,y)=>((x.edge>.12)-(y.edge>.12))||y.edge-x.edge).slice(0,PKF.top)))}
+  return rs;
+}
+// CLV: ¿el precio de cierre de Kalshi (justo antes del partido) quedó más caro que lo que pagamos? Esa es la prueba de que el modelo tiene ventaja
+function clvStats(rs){const x=rs.filter(r=>r.clv!=null);if(!x.length)return null;const beat=x.filter(r=>r.clv>0).length,eq=x.filter(r=>r.clv===0).length;
+  return {n:x.length,beat,eq,pct:beat/Math.max(1,x.length-eq),avg:x.reduce((s,r)=>s+r.clv,0)/x.length}}
+function clvTile(rs){const c=clvStats(rs);if(!c)return `<div class="tile"><div class="k">CLV</div><div class="v">—</div><div class="s">se mide con los picks de Kalshi cuando empiezan los partidos</div></div>`;
+  const good=c.pct>=.55;return `<div class="tile"><div class="k">CLV (le ganamos al cierre)</div><div class="v ${good?"up":c.pct<.5?"dn":""}">${Math.round(c.pct*100)}%</div><div class="s">${c.beat} de ${c.n-c.eq} picks · promedio ${c.avg>=0?"+":""}${(c.avg*100).toFixed(1)}¢ · la meta es 55%+</div></div>`}
+const payOf=o=>o>0?o/100:100/(-o);
+function pkStats(rs){const w=rs.filter(r=>r.res==="W").length,l=rs.filter(r=>r.res==="L").length,p=rs.length-w-l,u=rs.reduce((s,r)=>s+(r.res==="W"?payOf(r.odds):r.res==="L"?-1:0),0);
+  return {n:rs.length,w,l,p,hit:w+l?w/(w+l):0,u,roi:w+l?u/(w+l):0,exp:rs.length?rs.reduce((s,r)=>s+r.prob,0)/rs.length:0}}
+const pct1=x=>(x*100).toFixed(1)+"%",units=u=>(u>=0?"+":"")+u.toFixed(1);
+function pkTable(title,groups,first){
+  const rows=groups.filter(g=>g[1].length).map(([lab,rs])=>{const s=pkStats(rs);
+    return `<tr><td class="l">${lab}</td><td>${s.n}</td><td>${s.w}-${s.l}${s.p?"-"+s.p:""}</td><td class="${s.hit>=.524?"up":"dn"}"><b>${pct1(s.hit)}</b></td><td>${pct1(s.exp)}</td><td class="${s.u>=0?"up":"dn"}">${units(s.u)}</td><td class="${s.roi>=0?"up":"dn"}">${(s.roi*100).toFixed(1)}%</td></tr>`}).join("");
+  return `<section class="panel"><h3>${title}</h3><div style="overflow-x:auto"><table class="caltbl"><thead><tr><th class="l">${first}</th><th>Picks</th><th>G-P</th><th>Acierto</th><th>Esperado</th><th>Unidades</th><th>ROI</th></tr></thead><tbody>${rows||`<tr><td colspan="7" class="l">Sin picks con estos filtros.</td></tr>`}</tbody></table></div></section>`;
+}
+function renderPk(){
+  const box=$("pkbox");
+  if(!PK.length){box.innerHTML=`<p class="meta">Todavía no hay picks calificados. Se llenará solo con cada actualización.</p>`;return}
+  const rs0=pkRows();
+  if(!rs0.length&&PKF.src==="k"){box.innerHTML=`<p class="meta" style="margin-top:12px">Los picks con precios de Kalshi se guardan desde el 11 de noviembre (semana 10). Los primeros resultados salen cuando terminen esos partidos.</p>`;return}
+  const rs=rs0,s=pkStats(rs),wks=[...new Set(rs.map(r=>r.wk))].sort((a,b)=>a-b),lw=wks[wks.length-1];
+  const bucket=[[.55,.6],[.6,.65],[.65,.7],[.7,1.01]].map(([a,b])=>[`${Math.round(a*100)}–${b>1?"100":Math.round(b*100)}%`,rs.filter(r=>r.prob>=a&&r.prob<b)]);
+  const byMk=Object.keys(PKLAB).map(k=>[PKLAB[k],rs.filter(r=>r.k===k)]).sort((x,y)=>pkStats(y[1]).u-pkStats(x[1]).u);
+  const td=PK.filter(r=>r.k==="td"&&(!PKF.pos||r.pos===PKF.pos));
+  const tdRowsB=[[.25,.35],[.35,.45],[.45,1.01]].map(([a,b])=>{const x=td.filter(r=>r.prob>=a&&r.prob<b);if(!x.length)return "";const w=x.filter(r=>r.res==="W").length;
+    return `<tr><td class="l">${Math.round(a*100)}–${b>1?"100":Math.round(b*100)}%</td><td>${x.length}</td><td>${w}</td><td><b>${pct1(w/x.length)}</b></td><td>${pct1(x.reduce((s,r)=>s+r.prob,0)/x.length)}</td></tr>`}).join("");
+  const recent=rs.filter(r=>r.wk===lw).sort((x,y)=>y.edge-x.edge).slice(0,40);
+  box.innerHTML=`<div class="tiles">
+    <div class="tile"><div class="k">Récord</div><div class="v">${s.w}-${s.l}${s.p?"-"+s.p:""}</div><div class="s">${s.n} picks en ${wks.length} semana${wks.length===1?"":"s"}</div></div>
+    <div class="tile"><div class="k">Acierto</div><div class="v ${s.hit>=.524?"up":"dn"}">${pct1(s.hit)}</div><div class="s">el modelo esperaba ${pct1(s.exp)} · hace falta 52.4%</div></div>
+    <div class="tile"><div class="k">Ganancia</div><div class="v ${s.u>=0?"up":"dn"}">${units(s.u)} u</div><div class="s">1 unidad por pick a -110</div></div>
+    <div class="tile"><div class="k">ROI</div><div class="v ${s.roi>=0?"up":"dn"}">${(s.roi*100).toFixed(1)}%</div><div class="s">ganancia ÷ lo apostado</div></div>${PKF.src==="k"?clvTile(rs):""}
+    <div class="tile"><div class="k">Corrección</div><div class="v">${PKB<1?"−"+Math.round((1-PKB)*100)+"%":"ninguna"}</div><div class="s">${PKB<1?`el modelo exageraba: un 70% ahora sale como ${pct1(shrinkP(.7))}`:"todavía no hay suficientes picks para medirla"} · ${(DATA.pkcal||{}).n||0} picks</div></div></div>`+
+    pkTable("Por probabilidad del modelo (¿está bien calibrado?)",bucket,"Probabilidad")+
+    pkTable("Por mercado",byMk,"Mercado")+
+    pkTable("Por posición",["QB","RB","WR","TE"].map(p=>[p,rs.filter(r=>r.pos===p)]),"Posición")+
+    pkTable("Por lado",[["Over",rs.filter(r=>r.side==="O")],["Under",rs.filter(r=>r.side==="U")]],"Lado")+
+    pkTable("Por semana",wks.slice().reverse().map(w=>["Semana "+w,rs.filter(r=>r.wk===w)]),"Semana")+
+    `<section class="panel"><h3>Anotador TD: lo que dijo el modelo vs. lo que pasó</h3><p class="meta" style="margin:0 0 6px">Jugadores con 25% o más de probabilidad de anotar. Si el % real se parece al esperado, las probabilidades de la pestaña Anotador TD son confiables.</p><div style="overflow-x:auto"><table class="caltbl"><thead><tr><th class="l">Probabilidad</th><th>Jugadores</th><th>Anotaron</th><th>Real</th><th>Esperado</th></tr></thead><tbody>${tdRowsB||`<tr><td colspan="5" class="l">Todavía no hay datos.</td></tr>`}</tbody></table></div></section>`+
+    `<section class="panel"><h3>Picks de la semana ${lw??"—"}</h3><div style="overflow-x:auto"><table class="caltbl"><thead><tr><th class="l">Jugador</th><th class="l">Mercado</th><th>Pick</th><th>Prob.</th><th>Real</th><th>Resultado</th></tr></thead><tbody>`+
+    recent.map(r=>`<tr><td class="l">${esc(r.n)} <small>${r.tm} vs ${r.opp}</small></td><td class="l">${PKLAB[r.k]}</td><td>${r.side==="O"?"Over":"Under"} ${r.line}</td><td>${pct1(r.prob)}</td><td>${r.act}</td><td><span class="pill ${r.res==="W"?"OVER":r.res==="L"?"UNDER":"PASS"}">${r.res==="W"?"GANÓ":r.res==="L"?"PERDIÓ":"PUSH"}</span></td></tr>`).join("")+`</tbody></table></div></section>`;
+}
+[["pktop","top"],["pksd","side"],["pkpos","pos"],["pksrc","src"]].forEach(([id,key])=>$(id).addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+  $(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));PKF[key]=key==="top"?+b.dataset.v:b.dataset.v;renderPk()}));
+$("pkmin").addEventListener("change",e=>{PKF.min=+e.target.value;renderPk()});
+$("pkmk").addEventListener("change",e=>{PKF.mk=e.target.value;renderPk()});
+
+// ================= Mejores props del día (Over y Under, todos los mercados) =================
+const BP={day:DAYS[0]||"",pos:"",mk:"",side:"",minp:55,q:"",view:"tm",game:"",src:"k"};
+const MINAVG={pyd:120,cmp:10,att:15,ptd:0.8,int:0.4,ryd:15,car:6,rec:2,recyd:20,rr:35,tgt:3};
+const BMLAB={pyd:"Yds pase",cmp:"Pases completos",att:"Intentos de pase",ptd:"TD de pase",int:"Intercepciones",ryd:"Yds por tierra",car:"Acarreos",rec:"Recepciones",recyd:"Yds recibidas",rr:"Yds tierra+recep.",tgt:"Targets"};
+const avgOf=(p,k)=>k==="rr"?p.a[IDX.ryd]+p.a[IDX.recyd]:p.a[IDX[k]];
+const refLine=v=>{let x=Math.round(v*2)/2;if(x%1===0)x-=.5;return Math.max(.5,x)};
+// producción "normal": por snap × sus snaps habituales de la temporada (sin rival); si no hay snaps, su promedio
+// línea de referencia: su rol de hoy (snaps con los OUT, QB que va a lanzar) sin el ajuste por la defensa rival ni localía
+const normalOf=(p,k,s)=>{const n=project(p,{rival:s.opp,home:s.home,neutral:true});return n.ok?n[k]:avgOf(p,k)};
+const MINPCT={QB:.6,RB:.35,WR:.35,TE:.35};
+$("bday").innerHTML=DAYS.map(d=>`<option value="${d}">${fmtDay(d)} (${NEXT.filter(g=>g[1]===d).length} partido${NEXT.filter(g=>g[1]===d).length>1?"s":""})</option>`).join("");
+$("bday").value=BP.day;
+// ===== Kalshi: precios reales de los mercados de jugadores (escalones "15+ puntos") =====
+const KAL=(DATA.kalshi&&DATA.kalshi.p)||{},KALT=(DATA.kalshi&&DATA.kalshi.t)||"";
+const knorm=s=>String(s).normalize("NFKD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[.'’\-]/g,"").replace(/\b(jr|sr|ii|iii|iv|v)\b/g,"").replace(/\s+/g," ").trim();
+const kfee=c=>Math.ceil(0.07*c*(1-c)*100-1e-9)/100; // comisión de Kalshi por contrato
+const toAm=c=>c>=.5?-Math.round(c/(1-c)*100):Math.round((1-c)/c*100);
+// la probabilidad final mezcla el modelo (60%) con lo que dice el precio de Kalshi (40%): el mercado sabe cosas que el modelo no
+const KW=0.6;
+// línea principal de Kalshi (el escalón más cerca de 50/50, la que Kalshi muestra primero):
+// compara la prob. del modelo con el precio de SÍ (Over) y de NO (Under), más la comisión
+function kalMain(name,k,day){let m=null,dm=9;
+  ((KAL[knorm(name)]||{})[k]||[]).forEach(e=>{if(e[0]!==day)return;const mid=e[2]>0?(e[2]+e[3])/2:e[3]/2,dd=Math.abs(mid-.5);if(dd<dm){dm=dd;m=e}});
+  return m}
+function kalBest(name,k,day,pOver){
+  let best=null;const main=kalMain(name,k,day);
+  (main?[main]:[]).forEach(([d,line,bid,ask,tk])=>{
+    const pm=pOver(line),mkt=bid>0?(bid+ask)/2:ask,po=KW*pm+(1-KW)*mkt,opts=[["O",po,ask]];if(bid>0)opts.push(["U",1-po,+(1-bid).toFixed(2)]);
+    opts.forEach(([side,prob,c])=>{if(BP.side&&side!==BP.side)return;if(prob*100<BP.minp)return;const cost=c+kfee(c);if(cost>=1)return;
+      const edge=prob-cost;if(edge<=0)return;if(!best||edge>best.edge)best={line,side,po,pu:1-po,prob,edge,cost,c,yes:ask,no:+(1-bid).toFixed(2),pm,tk:tk||""}})});
+  return best;
+}
+// línea alterna MÁS SEGURA (como lo hace el usuario): el mismo lado del pick, subiendo la línea del UNDER (o bajando la del OVER)
+// hasta el escalón que pega ~80-92% de las veces y que el modelo todavía ve igual o más probable que su precio.
+// Dentro de ese rango se queda con el de mejor valor; si no hay, con el más probable que siga teniendo valor.
+function kalAlt(name,k,day,pOver,main){if(!main)return null;const cand=[];
+  ((KAL[knorm(name)]||{})[k]||[]).forEach(([d,line,bid,ask])=>{if(d!==day||line===main.line)return;
+    if(main.side==="U"?line<=main.line:line>=main.line)return;
+    const pm=pOver(line),mkt=bid>0?(bid+ask)/2:ask,po=KW*pm+(1-KW)*mkt;
+    const side=main.side,prob=side==="O"?po:1-po,c=side==="O"?ask:+(1-bid).toFixed(2);if(side==="U"&&!(bid>0))return;
+    const cost=c+kfee(c);if(cost>.95)return;const edge=prob-cost;if(edge<-.03||prob<=main.prob)return;
+    cand.push({line,side,prob,edge,cost,c})});
+  const inRange=cand.filter(x=>x.prob>=.78&&x.prob<=.93).sort((a,b)=>b.edge-a.edge);if(inRange[0])return inRange[0];
+  const pos=cand.filter(x=>x.edge>=0);
+  return pos.sort((a,b)=>b.prob-a.prob)[0]||null}
+const KALDAYS=new Set();Object.values(KAL).forEach(v=>Object.values(v).forEach(rs=>rs.forEach(r=>KALDAYS.add(r[0]))));const hasKal=d=>KALDAYS.has(d);
+// ===== Arbitraje dentro de Kalshi: en la escalera de un jugador, "15+" nunca debería costar menos que "20+".
+// Si SÍ en el escalón bajo + NO en el alto (más comisiones) cuesta menos de $1, se gana pase lo que pase.
+function findArbs(day){const out=[],nm={};P.forEach(p=>nm[knorm(p.name)]=p.name);
+  Object.entries(KAL).forEach(([n,mk])=>Object.entries(mk).forEach(([k,rows])=>{
+    const rs=rows.filter(r=>r[0]===day).sort((a,b)=>a[1]-b[1]);
+    for(let i=0;i<rs.length;i++)for(let j=i+1;j<rs.length;j++){const lo=rs[i],hi=rs[j];if(!(hi[2]>0))continue;
+      const no=+(1-hi[2]).toFixed(2),cost=lo[3]+kfee(lo[3])+no+kfee(no);
+      if(cost<1)out.push({name:nm[n]||n,k,lo:lo[1]+.5,hi:hi[1]+.5,yes:lo[3],no,cost,profit:1-cost})}
+    rs.forEach(r=>{if(r[2]>0){const no=+(1-r[2]).toFixed(2),cost=r[3]+kfee(r[3])+no+kfee(no);if(cost<1)out.push({name:nm[n]||n,k,lo:r[1]+.5,hi:r[1]+.5,yes:r[3],no,cost,profit:1-cost})}})}));
+  return out.sort((a,b)=>b.profit-a.profit)}
+function arbHTML(day,lab){if(!hasKal(day))return "";const a=findArbs(day);
+  if(!a.length)return `<p class="meta" style="margin:8px 0 0">💰 Arbitraje: ninguno en los precios de Kalshi de ${KALT} (es normal: son raros y duran poco).</p>`;
+  return `<section class="panel" style="margin-top:10px;border-color:var(--accent)"><h3>💰 Arbitraje en Kalshi (${a.length})</h3><p class="meta" style="margin:0 0 6px">Compra los dos lados: ganas pase lo que pase. Precios de ${KALT}: revísalos en Kalshi, estas oportunidades duran poco y puede que no haya volumen suficiente.</p>`+
+    a.slice(0,10).map(x=>`<div style="padding:6px 0;border-top:1px solid var(--line)"><b>${esc(x.name)}</b> · ${esc(lab[x.k]||x.k)}: compra <b>SÍ ${x.lo}+</b> a ${Math.round(x.yes*100)}¢ y <b>NO ${x.hi}+</b> a ${Math.round(x.no*100)}¢ → costo $${x.cost.toFixed(2)} (con comisión), cobras mínimo $1.00 · <span class="up">ganancia segura ${Math.round(x.profit*100)}¢ por par</span></div>`).join("")+`</section>`}
+// ===== Armador de parlay: de cada pick toma la opción más segura con valor (la principal o la alterna)
+// y junta las más probables. Probabilidad del parlay = producto (se asume que los juegos son independientes).
+function parlayLegs(rows){const legs=[],seen=new Set(),perGame={};
+  rows.forEach(r=>{if(r.warn||!r.kal||seen.has(r.p.name))return;
+    const opts=[{side:r.side,line:r.line,prob:r.prob,cost:r.kal.cost,edge:r.edge}];if(r.alt)opts.push(r.alt);
+    const o=opts.filter(x=>x.edge>.01&&x.cost<=.85).sort((a,b)=>b.prob-a.prob)[0];if(!o)return;
+    const gk=[r.p.tm,r.opp].sort().join("-");if((perGame[gk]||0)>=2)return;
+    seen.add(r.p.name);perGame[gk]=(perGame[gk]||0)+1;legs.push({r,...o})});
+  return legs.sort((a,b)=>b.prob-a.prob||b.edge-a.edge)}
+const amOf=c=>c>=.5?-Math.round(c/(1-c)*100):Math.round((1-c)/c*100);
+let PARLAYS=[];
+function parlayHTML(rows,canCopy){const legs=parlayLegs(rows);PARLAYS=[];
+  if(legs.length<2)return `<section class="panel" style="margin-top:12px"><h3>🎯 Parlay sugerido</h3><p class="meta">Hoy no hay suficientes patas seguras con valor en Kalshi.</p></section>`;
+  const sizes=[2,3,4].filter(n=>legs.length>=n);
+  return `<section class="panel" style="margin-top:12px"><h3>🎯 Parlays sugeridos (patas más seguras con valor)</h3>
+    <p class="meta" style="margin:0 0 6px">Cada pata usa la línea principal o la alterna, la que tenga más probabilidad sin perder el valor. Máximo 2 patas por juego. La probabilidad asume que las patas no dependen una de otra; el precio real del Combo en Kalshi puede ser distinto: compáralo con este.</p>`+
+    sizes.map(n=>{const L=legs.slice(0,n),prob=L.reduce((s,x)=>s*x.prob,1),price=L.reduce((s,x)=>s*x.cost,1),ev=prob/price-1;PARLAYS.push(L);
+      return `<div style="padding:8px 0;border-top:1px solid var(--line)"><b>Parlay de ${n}</b> · gana ${Math.round(prob*100)}% de las veces · precio justo ~${Math.round(price*100)}¢ (paga ${(1/price).toFixed(2)}x) · <span class="${ev>0?"up":"dn"}">valor ${ev>0?"+":""}${Math.round(ev*100)}%</span>
+        ${canCopy?` <button type="button" class="btn" data-pl="${n-2}" style="margin-left:6px">📲 Copiar a Live Bets</button>`:""}
+        <div class="meta" style="margin-top:4px">${L.map(x=>`${esc(x.r.p.name)} <b>${x.side==="O"?"OVER":"UNDER"} ${x.line}</b> ${esc((typeof MKLAB!=="undefined"?MKLAB:BMLAB)[x.r.k]||x.r.k)} (${Math.round(x.prob*100)}%, ${Math.round(x.cost*100)}¢)`).join(" · ")}</div></div>`}).join("")+`</section>`}
+const EDGE_CAP=0.12;
+function bestRows(){
+  const day=OPPD[BP.day]||{},q=BP.q.trim().toLowerCase(),out=[];
+  P.forEach(p=>{const s=day[p.tm];if(!s||(BP.pos&&p.pos!==BP.pos))return;
+    if(q&&!p.name.toLowerCase().includes(q)&&!p.tm.toLowerCase().includes(q))return;
+    const pr=project(p,{rival:s.opp,home:s.home});if(!pr.ok)return;
+    if(pr.pct!=null&&pr.pct<MINPCT[p.pos])return; // solo jugadores con rol real en el partido
+    const L=(S[p.name]||{}).l||{};
+    if(BP.src==="k"&&hasKal(BP.day)){PROPS[p.pos].filter(k=>!BP.mk||k===BP.mk).forEach(k=>{const kb=kalBest(p.name,k,BP.day,line=>probOverN(k,pr[k],line));if(!kb)return;const alt=kalAlt(p.name,k,BP.day,line=>probOverN(k,pr[k],line),kb);
+      out.push({p,k,line:kb.line,ref:false,kal:kb,alt,proj:pr[k],avg:avgOf(p,k),po:kb.po,pu:kb.pu,side:kb.side,prob:kb.prob,edge:kb.edge,odds:toAm(kb.cost),opp:s.opp,home:s.home,g:s.g})});return}
+    PROPS[p.pos].filter(k=>!BP.mk||k===BP.mk).forEach(k=>{const l=L[k]||{},own=l.line!=null&&l.line!=="",avg=avgOf(p,k),norm=normalOf(p,k,s);
+      if(!own&&norm<MINAVG[k])return; // las casas no ofrecen ese prop a jugadores con poco volumen
+      const line=own?+l.line:refLine(norm),po=probOverN(k,pr[k],line),pu=1-po;
+      const oo=l.oo!=null&&l.oo!==""?+l.oo:-110,ou=l.ou!=null&&l.ou!==""?+l.ou:-110,eo=po-impl(oo),eu=pu-impl(ou);
+      let side=eo>=eu?"O":"U";if(BP.side)side=BP.side;
+      const prob=side==="O"?po:pu,edge=side==="O"?eo:eu;if(prob*100<BP.minp)return;
+      out.push({p,k,line,ref:!own,proj:pr[k],avg,po,pu,side,prob,edge,odds:side==="O"?oo:ou,opp:s.opp,home:s.home,g:s.g})})});
+  // edge muy grande = casi siempre el mercado sabe algo (minutos, lesión): se marca y va al final
+  out.forEach(r=>r.warn=r.edge>EDGE_CAP);
+  out.sort((a,b)=>(a.warn-b.warn)||b.edge-a.edge||b.prob-a.prob);
+  return out;
+}
+let BROWS=[];
+// Vista de Mejores props: por equipo (cada jugador con sus props juntos), por mercado (los 10 mejores de cada uno), por jugador (todos sus props juntos) o todos juntos
+const GAMES_OF=d=>NEXT.filter(g=>g[1]===d).map(g=>[g[3],g[4],g[2],scoreFor(g[4],g[3],1)]);
+// tarjetas de los partidos del día: toca una para ver solo los props de ese partido
+function renderBestCards(all){
+  const games=GAMES_OF(BP.day),cnt={};all.forEach(r=>cnt[r.p.tm]=(cnt[r.p.tm]||0)+1);
+  $("bcards").innerHTML=!games.length?"":`<div class="dayhead"><b>${fmtDay(BP.day)}</b> · ${games.length} partido${games.length>1?"s":""}${BP.game?` · <button type="button" class="btn" id="ball">Ver todos los partidos</button>`:" · toca un partido para ver solo sus props"}</div><div class="cards">`+
+    games.map(([away,home,time,sc])=>{const k=away+"-"+home,n=(cnt[away]||0)+(cnt[home]||0);
+      return `<button type="button" class="gcard${BP.game===k?" on":""}" data-g="${k}">
+        <span class="gt">${locT(BP.day,time)}</span>
+        <span class="gr"><span>${away}</span><b>${sc?f1(sc.b):"—"}</b></span>
+        <span class="gr"><span>${home} <small>local</small></span><b>${sc?f1(sc.a):"—"}</b></span>
+        <span class="gt"><b>${n} props</b> · Total ${sc?f1(sc.total):"—"}</span></button>`}).join("")+`</div>`;
+}
+function groupedBest(rows,rowFn,ncol,order,labels){
+  rows.forEach((r,i)=>r._i=i);
+  const head=(t,s)=>`<tr class="grp"><td colspan="${ncol}" class="l">${t} <span>${s}</span></td></tr>`;
+  if(BP.view==="all") return rows.slice(0,150).map(r=>rowFn(r,r._i)).join("");
+  if(BP.view==="tm"){
+    const by=new Map();rows.forEach(r=>{if(!by.has(r.p.tm))by.set(r.p.tm,[]);by.get(r.p.tm).push(r)});
+    const gk=r=>[r.p.tm,r.opp].sort().join("-"),gb=new Map();
+    by.forEach(rs=>{const k=gk(rs[0]);gb.set(k,Math.min(gb.has(k)?gb.get(k):1e9,rows.indexOf(rs[0])))});
+    return [...by.values()].sort((a,b)=>gb.get(gk(a[0]))-gb.get(gk(b[0]))||(a[0].home-b[0].home)).map(rs=>{const r0=rs[0];
+      return head(`${r0.p.tm} <span>${r0.home?"vs":"@"}</span> ${r0.opp}`,`${rs.length} prop${rs.length>1?"s":""} · ${new Set(rs.map(r=>r.p.name)).size} jugadores`)+(()=>{const f=new Map();rs.forEach((r,i)=>{if(!f.has(r.p.name))f.set(r.p.name,i)});return rs.slice().sort((x,y)=>f.get(x.p.name)-f.get(y.p.name)||x._i-y._i)})().map(r=>rowFn(r,r._i)).join("")}).join("");
+  }
+  if(BP.view==="pl"){
+    const by=new Map();rows.forEach(r=>{if(!by.has(r.p.name))by.set(r.p.name,[]);by.get(r.p.name).push(r)});
+    return [...by.values()].slice(0,40).map(rs=>{const r0=rs[0];
+      return head(esc(r0.p.name),`${r0.p.tm} ${r0.home?"vs":"@"} ${r0.opp} · ${rs.length} prop${rs.length>1?"s":""} · mejor: ${labels[r0.k]} ${r0.side==="O"?"Over":"Under"} ${(r0.prob*100).toFixed(0)}%`)+rs.slice(0,8).map(r=>rowFn(r,r._i)).join("")}).join("");
+  }
+  return order.map(k=>{const rs=rows.filter(r=>r.k===k);if(!rs.length)return "";
+    return head(labels[k],`${rs.length} props · ${rs.length>10?"los 10 mejores":"todos"}`)+rs.slice(0,10).map(r=>rowFn(r,r._i)).join("")}).join("");
+}
+function renderBest(){
+  $("bsrcmsg").textContent=BP.src!=="k"?"":hasKal(BP.day)?`Precios de Kalshi de ${KALT}. Precio = lo que cuesta el contrato + la comisión de Kalshi; paga $1 si pega. Se usa la línea principal de Kalshi de cada jugador (la más cerca de 50/50) y solo salen los que tienen edge positivo. El precio cambia: revísalo en Kalshi antes de comprar. La probabilidad mezcla el modelo (60%) con el precio de Kalshi (40%). Si el edge pasa de 12% sale "⚠ revisar" y va al final: casi siempre el mercado sabe algo que el modelo no (lesión, minutos, rol).`:"Kalshi todavía no tiene mercados de jugadores para este día; abajo van con la línea de referencia.";
+  $("barb").innerHTML=arbHTML(BP.day,BMLAB);
+  const ALL=bestRows();renderBestCards(ALL);BROWS=BP.game?ALL.filter(r=>BP.game.split("-").includes(r.p.tm)):ALL;
+  const rowFn=(r,i)=>{const L=((S[r.p.name]||{}).l||{})[r.k]||{};
+    return `<tr data-bi="${i}"><td class="l name"><span class="pn">${esc(r.p.name)}</span>${injBadge(r.p)}<small>${r.p.tm} · ${r.p.pos} · ${r.home?"vs":"@"} ${r.opp}</small></td>
+    <td class="l">${esc(BMLAB[r.k])}</td>
+    ${r.kal?`<td title="En Kalshi: ${r.line+.5}+ · SÍ ${Math.round(r.kal.yes*100)}¢ / NO ${Math.round(r.kal.no*100)}¢"><b>${r.line}</b><small>Kalshi: ${r.side==="O"?"SÍ":"NO"} ${r.line+.5}+</small>${r.alt?`<small class="up">Alterna: ${r.alt.side==="O"?"OVER":"UNDER"} ${r.alt.line} a ${Math.round(r.alt.cost*100)}¢ (${Math.round(r.alt.prob*100)}%, +${(r.alt.edge*100).toFixed(1)}%)</small>`:""}</td>`:`<td><input type="number" step="0.5" value="${r.line}" data-a="bline" class="${r.ref?"refl":""}" title="${r.ref?"Línea de referencia (su promedio). Escribe la de tu casa.":"Tu línea"}" aria-label="Línea"></td>`}
+    <td class="v">${f1(r.proj)}</td><td>${f1(r.avg)}</td>
+    <td class="${r.side==="O"?"v":""}">${(r.po*100).toFixed(1)}%</td><td class="${r.side==="U"?"v":""}">${(r.pu*100).toFixed(1)}%</td>
+    <td><span class="pill ${r.side==="O"?"OVER":"UNDER"}">${r.side==="O"?"OVER":"UNDER"} ${(r.prob*100).toFixed(0)}%</span></td>
+    ${r.kal?`<td title="Precio ${Math.round(r.kal.c*100)}¢ + comisión ${Math.round(kfee(r.kal.c)*100)}¢ = cuota ${r.odds>0?"+":""}${r.odds}"><b>${Math.round(r.kal.cost*100)}¢</b></td>`:`<td><input type="number" step="5" placeholder="-110" value="${(r.side==="O"?L.oo:L.ou)??""}" data-a="bodds" aria-label="Cuota"></td>`}
+    <td class="${r.edge>0?"up":"dn"}">${r.edge>0?"+":""}${(r.edge*100).toFixed(1)}%${r.warn?`<small class="dn" title="Edge de más de 12%: casi siempre el mercado sabe algo que el modelo no. Revisa lesiones y rol antes.">⚠ revisar</small>`:""}</td></tr>`};
+  $("besttb").innerHTML=groupedBest(BROWS,rowFn,10,["pyd","cmp","att","ptd","int","ryd","car","rec","recyd","rr","tgt"],BMLAB)||`<tr><td colspan="10" class="l">Ningún prop pasa los filtros. Baja la probabilidad mínima o cambia el día.</td></tr>`;
+  $("bcount").textContent=`${BROWS.length} props`+(BP.view==="all"&&BROWS.length>150?" (mostrando los 150 mejores)":"");
+}
+$("bday").addEventListener("change",e=>{BP.day=e.target.value;BP.game="";renderBest()});
+$("bcards").addEventListener("click",e=>{
+  if(e.target.closest("#ball")){BP.game="";renderBest();return}
+  const c=e.target.closest(".gcard");if(!c)return;BP.game=BP.game===c.dataset.g?"":c.dataset.g;renderBest()});
+
+["bpos","bmk","bsd","bview","bsrc"].forEach(id=>$(id).addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;$(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));BP[{bpos:"pos",bmk:"mk",bsd:"side",bview:"view",bsrc:"src"}[id]]=b.dataset.v;renderBest()}));
+$("bminp").addEventListener("input",e=>{const v=parseFloat(e.target.value);BP.minp=isNaN(v)?0:v;renderBest()});
+$("bq").addEventListener("input",e=>{BP.q=e.target.value;renderBest()});
+$("besttb").addEventListener("change",e=>{const el=e.target,a=el.dataset.a;if(a!=="bline"&&a!=="bodds")return;const r=BROWS[+el.closest("tr").dataset.bi];if(!r)return;
+  const o=ov(r.p.name);o.l=o.l||{};const l=o.l[r.k]=o.l[r.k]||{};
+  if(a==="bline")l.line=el.value;else{if(r.side==="O")l.oo=el.value;else l.ou=el.value}
+  save();renderBest()});
+$("tab-best").addEventListener("click",()=>showTab("best"));
+if(location.hash==="#props")showTab("best");
+render();
+
+// Botón de actualizar: arranca la tarea "Actualizar stats NFL", que baja los datos y vuelve a publicar esta página
+const TRIGGER_ID="trig_01VQagaNRTytRAGd6aStL7n9", CCR="Claude Code Remote";
+(async()=>{
+  const mcp=window.claude&&window.claude.use?await window.claude.use("mcp"):null;
+  if(!mcp) return;
+  const btn=$("upd"),msg=$("updmsg"); btn.hidden=false;
+  btn.addEventListener("click",async()=>{
+    btn.disabled=true; msg.textContent="Iniciando la actualización…";
+    try{
+      await mcp.callTool(CCR,"fire_trigger",{trigger_id:TRIGGER_ID},{cache:false});
+      msg.textContent="Actualización en marcha. Tarda unos 4–5 minutos; luego cierra y vuelve a abrir la página para ver los datos nuevos.";
+    }catch(e){
+      btn.disabled=false; const c=e&&e.code;
+      msg.textContent=
+        c==="server_not_connected"?"Agrega Claude Code Remote en claude.ai → Settings → Connectors y vuelve a intentar.":
+        c==="needs_reauth"?"Vuelve a conectar Claude Code Remote en claude.ai → Settings → Connectors.":
+        c==="not_in_manifest"||c==="approval_required"||c==="consent_required"?"Hace falta tu permiso para actualizar. Toca el botón otra vez y elige Permitir.":
+        c==="blocked_by_policy"?"Tu organización no permite esta acción.":
+        c==="tool_error"?"La tarea no arrancó: "+(e.message||"error de la tarea")+". Pídele a Claude \"actualiza los stats NFL\".":
+        "No se pudo confirmar el inicio. Espera unos minutos antes de intentar de nuevo, por si ya arrancó.";
+    }
+  });
+})();
+// ================= Top 5 y Top 10: los mejores picks del día y su récord =================
+const TP={day:DAYS[0]||"",src:"k"};
+$("tday").innerHTML=$("bday").innerHTML;$("tday").value=TP.day;
+function topToday(){
+  const keep={...BP};Object.assign(BP,{day:TP.day,src:TP.src,mk:"",side:"",minp:55,q:"",game:"",pos:""});
+  const rows=bestRows();Object.keys(BP).forEach(k=>delete BP[k]);Object.assign(BP,keep);TOPALL=rows;return rows.slice(0,10)}
+let TOPALL=[];
+function topPickRow(r,i){const kal=!!r.kal;
+  return `<tr><td>${i+1}</td><td class="l name"><span class="pn">${esc(r.p.name)}</span>${injBadge(r.p)}<small>${r.p.tm} ${r.home?"vs":"@"} ${r.opp}</small></td><td class="l">${esc(PKLAB[r.k]||r.k)}</td>
+    <td><span class="pill ${r.side==="O"?"OVER":"UNDER"}">${r.side==="O"?"OVER":"UNDER"}</span></td><td class="v">${r.line}${kal?`<small>Kalshi: ${r.side==="O"?"SÍ":"NO"} ${r.line+.5}+</small>`:""}${r.alt?`<small class="up">Alterna: ${r.alt.side==="O"?"OVER":"UNDER"} ${r.alt.line} a ${Math.round(r.alt.cost*100)}¢</small>`:""}</td>
+    <td class="v">${(r.prob*100).toFixed(0)}%</td><td>${kal?Math.round(r.kal.cost*100)+"¢":(r.odds>0?"+":"")+r.odds}</td>
+    <td class="${r.edge>0?"up":"dn"}">${r.edge>0?"+":""}${(r.edge*100).toFixed(1)}%${r.warn?`<small class="dn">⚠ revisar</small>`:""}</td></tr>`}
+function topOf(rs,n){const by={};rs.forEach(r=>(by[r.wk]=by[r.wk]||[]).push(r));
+  return [].concat(...Object.values(by).map(a=>a.slice().sort((x,y)=>((x.edge>.12)-(y.edge>.12))||y.edge-x.edge).slice(0,n)))}
+function renderTop(){
+  const rows=topToday(),hk=TP.src==="k"&&hasKal(TP.day);
+  const head=`<thead><tr><th>#</th><th class="l">Jugador</th><th class="l">Mercado</th><th>Pick</th><th>Línea</th><th>Prob.</th><th>${hk?"Precio":"Cuota"}</th><th>Edge</th></tr></thead>`;
+  const tbl=(rs,off)=>rs.length?`<div style="overflow-x:auto"><table class="caltbl">${head}<tbody>${rs.map((r,i)=>topPickRow(r,i+off)).join("")}</tbody></table></div>`:`<p class="meta">No hay picks que pasen los filtros.</p>`;
+  const base=PK.filter(r=>r.src===(TP.src==="k"?"k":"ref")&&(r=>r.k!=="td")(r)),t10=topOf(base,10),t5=topOf(base,5),s10=pkStats(t10),s5=pkStats(t5);
+  const cell=rs=>{if(!rs.length)return `<td>—</td>`;const s=pkStats(rs);return `<td class="${s.u>=0?"up":"dn"}">${s.w}-${s.l} (${Math.round(s.hit*100)}%) ${units(s.u)}</td>`};
+  const grp=[["QB",r=>r.pos==="QB"],["RB",r=>r.pos==="RB"],["WR",r=>r.pos==="WR"],["TE",r=>r.pos==="TE"],["Over",r=>r.side==="O"],["Under",r=>r.side==="U"]].map(([lab,f])=>`<tr><td class="l">${lab}</td>${cell(t10.filter(f))}${cell(t5.filter(f))}</tr>`).join("");
+  const per=[...new Set(base.map(r=>r.wk))].sort().reverse().map(x=>`<tr><td class="l">${(x=>"Semana "+x)(x)}</td>${cell(t10.filter(r=>r.wk===x))}${cell(t5.filter(r=>r.wk===x))}</tr>`).join("");
+  $("topbox").innerHTML=arbHTML(TP.day,BMLAB)+(TP.src==="k"&&!hk?`<p class="meta" style="margin-top:10px">Kalshi todavía no tiene precios para este día: van con la línea de referencia.</p>`:"")+
+    `<section class="panel" style="margin-top:12px"><h3>Top 5 ${"del día"}</h3>${tbl(rows.slice(0,5),0)}</section>
+     <section class="panel" style="margin-top:12px"><h3>Top 6 al 10</h3>${tbl(rows.slice(5,10),5)}</section>
+     <h2 class="pkh">Récord del Top 5 y del Top 10</h2>
+     <p class="meta" style="margin:4px 0 0">${TP.src==="k"?"Con la línea principal y el precio de Kalshi (se guarda desde el 12 de noviembre).":"Con la línea de referencia a -110"+" (Top de cada semana)"+"."} Mismo orden que arriba: los de "⚠ revisar" (edge de más de 12%) van al final.</p>`+
+    (base.length?`<div class="tiles" style="margin-top:12px">
+      <div class="tile"><div class="k">Top 5</div><div class="v ${s5.u>=0?"up":"dn"}">${s5.w}-${s5.l}</div><div class="s">${pct1(s5.hit)} de acierto · ${units(s5.u)} u</div></div>
+      <div class="tile"><div class="k">Top 10</div><div class="v ${s10.u>=0?"up":"dn"}">${s10.w}-${s10.l}</div><div class="s">${pct1(s10.hit)} de acierto · ${units(s10.u)} u</div></div>${TP.src==="k"?clvTile(t10):""}</div>
+     <section class="panel"><h3>${"Por posición y lado"}</h3><div style="overflow-x:auto"><table class="caltbl"><thead><tr><th class="l"></th><th>Top 10</th><th>Top 5</th></tr></thead><tbody>${grp}</tbody></table></div></section>
+     <section class="panel" style="margin-top:12px"><h3>${"Por semana"}</h3><div style="overflow-x:auto"><table class="caltbl"><thead><tr><th class="l"></th><th>Top 10</th><th>Top 5</th></tr></thead><tbody>${per}</tbody></table></div></section>`
+     :`<p class="meta" style="margin-top:10px">Todavía no hay picks calificados con esta línea.</p>`);
+}
+$("tday").addEventListener("change",e=>{TP.day=e.target.value;renderTop()});
+$("tsrc").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;$("tsrc").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));TP.src=b.dataset.v;renderTop()});
+// ================= Parlay a la medida: todo Under o todo Over, con la línea más segura o la principal =================
+const PZ={day:DAYS[0]||"",side:"U",mode:"safe",n:3,sel:null,kc:"",kp:""};
+$("pzday").innerHTML=$("bday").innerHTML;$("pzday").value=PZ.day;
+function pzLegs(){
+  if(!hasKal(PZ.day))return [];
+  const keep={...BP};Object.assign(BP,{day:PZ.day,src:"k",mk:"",side:PZ.side,minp:50,q:"",game:"",pos:""});
+  const rows=bestRows();Object.keys(BP).forEach(k=>delete BP[k]);Object.assign(BP,keep);
+  const out=[],seen=new Set();
+  rows.forEach(r=>{if(!r.kal||r.side!==PZ.side)return;
+    const o=PZ.mode==="safe"&&r.alt?r.alt:{side:r.side,line:r.line,prob:r.prob,cost:r.kal.cost,edge:r.edge};
+    if(o.edge<(PZ.mode==="safe"&&r.alt?-.03:.01))return;const key=r.p.name+"|"+r.k;if(seen.has(key))return;seen.add(key);
+    out.push({key,r,...o,warn:r.warn})});
+  return out.sort((a,b)=>(a.warn-b.warn)||(PZ.mode==="safe"?((b.prob>=.78)-(a.prob>=.78))||b.edge-a.edge:b.prob-a.prob||b.edge-a.edge))}
+let PZL=[];
+// valor real con el precio que Kalshi te da por el Combo: probabilidad × pago ÷ costo − 1
+function pzReal(prob){const c=parseFloat(PZ.kc),p=parseFloat(PZ.kp);if(!(c>0&&p>c))return `<span class="meta">Pon lo que Kalshi te cobra y paga por el Combo para ver el valor real.</span>`;
+  const v=prob*p/c-1,be=c/p;return `<b class="${v>0?"up":"dn"}">Valor real ${v>0?"+":""}${Math.round(v*100)}%</b> <span class="meta">· Kalshi lo cobra como ${Math.round(be*100)}%; el modelo dice ${Math.round(prob*100)}% · ${v>0?"✅ vale la pena":"❌ no vale la pena"}</span>`}
+function pzAuto(L){const sel=new Set(),perGame={},players=new Set();
+  for(const x of L){if(sel.size>=PZ.n)break;if(x.warn||players.has(x.r.p.name))continue;const g=[x.r.p.tm,x.r.opp].sort().join("-");if((perGame[g]||0)>=2)continue;
+    sel.add(x.key);players.add(x.r.p.name);perGame[g]=(perGame[g]||0)+1}
+  return sel}
+function renderPz(){
+  PZL=pzLegs();if(!PZ.sel)PZ.sel=pzAuto(PZL);
+  const box=$("pzbox"),LAB=(typeof MKLAB!=="undefined"?MKLAB:BMLAB);
+  if(!hasKal(PZ.day)){box.innerHTML=`<p class="meta" style="margin-top:12px">Kalshi todavía no tiene precios de jugadores para este día.</p>`;return}
+  if(!PZL.length){box.innerHTML=`<p class="meta" style="margin-top:12px">No hay ${PZ.side==="U"?"Unders":"Overs"} con valor para este día.</p>`;return}
+  const S=PZL.filter(x=>PZ.sel.has(x.key)),prob=S.reduce((s,x)=>s*x.prob,1),price=S.reduce((s,x)=>s*x.cost,1),ev=S.length?prob/price-1:0;
+  const sameGame=(()=>{const c={};S.forEach(x=>{const g=[x.r.p.tm,x.r.opp].sort().join("-");c[g]=(c[g]||0)+1});return Object.values(c).some(v=>v>1)})();
+  box.innerHTML=`<section class="panel" style="margin-top:12px">
+    <h3>Tu parlay: ${S.length} pata${S.length===1?"":"s"} · todo ${PZ.side==="U"?"UNDER":"OVER"}</h3>
+    ${S.length>=2?`<div class="tiles" style="margin:8px 0">
+      <div class="tile"><div class="k">Gana</div><div class="v">${Math.round(prob*100)}%</div><div class="s">de las veces (según el modelo)</div></div>
+      <div class="tile"><div class="k">Precio justo</div><div class="v">${Math.round(price*100)}¢</div><div class="s">paga ${(1/price).toFixed(2)}x · cuota ${amOf(price)>0?"+":""}${amOf(price)}</div></div>
+      <div class="tile"><div class="k">Valor</div><div class="v ${ev>0?"up":"dn"}">${ev>0?"+":""}${Math.round(ev*100)}%</div><div class="s">lo que el modelo cree que vale más que el precio</div></div></div>
+      <div class="controls" style="border:0;padding:4px 0">
+        <div class="f"><label for="pzkc">Kalshi: Cost $</label><input id="pzkc" type="number" inputmode="decimal" step="0.01" value="${esc(PZ.kc)}" placeholder="10.00" style="width:90px"></div>
+        <div class="f"><label for="pzkp">Payout $</label><input id="pzkp" type="number" inputmode="decimal" step="0.01" value="${esc(PZ.kp)}" placeholder="15.00" style="width:90px"></div>
+        <div class="f" id="pzreal" style="align-self:end;font-size:.9rem">${pzReal(prob)}</div>
+      </div>
+      ${typeof copyLB==="function"?`<button type="button" class="btn upd-btn" id="pzcopy">📲 Copiar parlay a Live Bets</button>`:""}
+      ${sameGame?`<p class="meta" style="margin:8px 0 0">⚠ Hay patas del mismo juego: no son independientes, la probabilidad real puede ser distinta.</p>`:""}`
+      :`<p class="meta">Escoge al menos 2 patas abajo.</p>`}
+    <p class="meta" style="margin:8px 0 0">Compara el "precio justo" con lo que te cobra Kalshi por el Combo: si Kalshi cobra menos, tiene valor. ${PZ.mode==="safe"?"Más segura = como lo haces tú: el mismo lado subiendo la línea del UNDER (o bajando la del OVER) hasta un escalón que pega ~80-90%. Cada pata puede tener valor casi neutro: lo que importa es que Kalshi cobre el Combo más barato que lo que dice el modelo.":"Principal = la línea de Kalshi más cerca de 50/50."}</p>
+  </section>
+  <section class="panel" style="margin-top:12px"><h3>Escoge las patas (${PZL.length} ${PZ.side==="U"?"Unders":"Overs"} con valor)</h3>
+  <div style="overflow-x:auto"><table class="caltbl"><thead><tr><th></th><th class="l">Jugador</th><th class="l">Mercado</th><th>Pick</th><th>Prob.</th><th>Precio</th><th>Edge</th></tr></thead><tbody>`+
+  PZL.map(x=>`<tr><td><input type="checkbox" data-pz="${esc(x.key)}" ${PZ.sel.has(x.key)?"checked":""} style="width:18px;height:18px"></td>
+    <td class="l name">${esc(x.r.p.name)}${injBadge(x.r.p)}<small>${x.r.p.tm} ${x.r.home?"vs":"@"} ${x.r.opp}</small></td><td class="l">${esc(LAB[x.r.k]||x.r.k)}</td>
+    <td><span class="pill ${x.side==="O"?"OVER":"UNDER"}">${x.side==="O"?"OVER":"UNDER"} ${x.line}</span><small>Kalshi: ${x.side==="O"?"SÍ":"NO"} ${x.line+.5}+</small></td>
+    <td class="v">${Math.round(x.prob*100)}%</td><td>${Math.round(x.cost*100)}¢</td><td class="${x.edge>=0?"up":"dn"}">${x.edge>=0?"+":""}${(x.edge*100).toFixed(1)}%${x.warn?`<small class="dn">⚠ revisar</small>`:""}</td></tr>`).join("")+
+  `</tbody></table></div></section>`;
+}
+$("pzbox").addEventListener("input",e=>{if(e.target.id!=="pzkc"&&e.target.id!=="pzkp")return;PZ[e.target.id==="pzkc"?"kc":"kp"]=e.target.value;
+  const S=PZL.filter(x=>PZ.sel.has(x.key));$("pzreal").innerHTML=pzReal(S.reduce((s,x)=>s*x.prob,1))});
+$("pzbox").addEventListener("change",e=>{const c=e.target.closest("input[data-pz]");if(!c)return;if(c.checked)PZ.sel.add(c.dataset.pz);else PZ.sel.delete(c.dataset.pz);renderPz()});
+$("pzbox").addEventListener("click",e=>{if(!e.target.closest("#pzcopy"))return;const S=PZL.filter(x=>PZ.sel.has(x.key));
+  copyLB(S.map(x=>({p:x.r.p,opp:x.r.opp,k:x.r.k,side:x.side,line:x.line,odds:amOf(x.cost)})),e.target.closest("#pzcopy"))});
+$("pzday").addEventListener("change",e=>{PZ.day=e.target.value;PZ.sel=null;renderPz()});
+[["pzside","side"],["pzmode","mode"],["pzn","n"]].forEach(([id,key])=>$(id).addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+  $(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));PZ[key]=key==="n"?+b.dataset.v:b.dataset.v;PZ.sel=null;renderPz()}));
+// ================= Calculadora: un jugador, un prop y una línea → probabilidad =================
+const CL={day:null};
+$("cplist").innerHTML=P.filter(p=>(p.g>=1)).map(p=>`<option value="${esc(p.name)}">${esc(p.tm)}</option>`).join("");
+function calcMarkets(p){return [...(PROPS[p.pos]||[]),"td"]}
+function fillCalcMk(){const p=P.find(x=>x.name===$("cplayer").value.trim());const ks=p?calcMarkets(p):["pyd","cmp","att","ptd","int","ryd","car","rec","recyd","rr","tgt","td"];const cur=$("cmk").value;
+  $("cmk").innerHTML=ks.map(k=>`<option value="${k}">${{...BMLAB,td:"TD (tierra o recepción)"}[k]||k}</option>`).join("");if(ks.includes(cur))$("cmk").value=cur}
+function parsePrice(s){s=String(s||"").trim().replace("¢","");if(!s)return null;const v=parseFloat(s);if(isNaN(v))return null;
+  if(/^[+-]/.test(s)||Math.abs(v)>=100)return impl(v);if(v>1)return v/100;return v}
+function renderCalc(){
+  const box=$("cbox"),name=$("cplayer").value.trim(),k=$("cmk").value,line=parseFloat($("cline").value);
+  const p=P.find(x=>x.name===name)||P.find(x=>x.name.toLowerCase()===name.toLowerCase());
+  if(!p){box.innerHTML=name?`<p class="meta" style="margin-top:12px">No encuentro a "${esc(name)}". Escoge de la lista.</p>`:"";return}
+  const day=DAYS.find(d=>OPPD[d]&&OPPD[d][p.tm]);const s=day?OPPD[day][p.tm]:null;
+  if(!s){box.innerHTML=`<p class="meta" style="margin-top:12px">${esc(p.name)} (${p.tm}) no tiene partido en los próximos días.</p>`;return}
+  if(isOut(p)){box.innerHTML=`<p class="meta" style="margin-top:12px">⚠ ${esc(p.name)} está OUT.</p>`;return}
+  const res=(()=>{const pr=project(p,{rival:s.opp,home:s.home});if(!pr.ok)return null;if(k==="td"){const lam=pr.rtd+pr.rectd;return {proj:lam,pOver:l=>{let c=0,t=Math.exp(-lam);for(let i=0;i<=Math.floor(l);i++){c+=t;t*=lam/(i+1)}return shrinkP(1-c)},note:"TD esperados"}}if(pr[k]==null)return null;return {proj:pr[k],pOver:l=>probOverN(k,pr[k],l),note:pr.pct!=null?`${Math.round(pr.pct*100)}% de los snaps`:""}})();if(!res){box.innerHTML=`<p class="meta" style="margin-top:12px">No hay datos suficientes de ${esc(p.name)}.</p>`;return}
+  const proj=res.proj;
+  if(isNaN(line)){box.innerHTML=`<section class="panel" style="margin-top:12px"><h3>${esc(p.name)} · ${esc({...BMLAB,td:"TD (tierra o recepción)"}[k]||k)}</h3><p>Proyección: <b>${proj.toFixed(1)}</b> ${day?`· ${p.tm} ${s.home?"vs":"@"} ${s.opp} · ${fmtDay(day)}`:""}</p><p class="meta">Escribe una línea para ver el porcentaje.</p></section>`;return}
+  let po=res.pOver(line);
+  // si Kalshi tiene esa misma línea, mezcla con su precio (60% modelo / 40% mercado), igual que en Mejores props
+  const rung=((KAL[knorm(p.name)]||{})[k]||[]).find(e=>e[0]===day&&e[1]===line);
+  let kal=null;if(rung){const mkt=rung[2]>0?(rung[2]+rung[3])/2:rung[3];const pm=po;po=KW*pm+(1-KW)*mkt;
+    const yes=rung[3]+kfee(rung[3]),no=rung[2]>0?+(1-rung[2]).toFixed(2)+kfee(+(1-rung[2]).toFixed(2)):null;kal={yes,no,pm}}
+  const pu=1-po,h=typeof hitRate==="function"&&false?[hitRate(p.name,k,line,"O"),hitRate(p.name,k,line,"U")]:[null,null];
+  const my=parsePrice($("cprice").value);
+  const side=po>=pu?"O":"U",best=Math.max(po,pu);
+  const card=(lab,pr,hr,price,cls)=>`<div class="tile"><div class="k">${lab} ${line}</div><div class="v ${cls}">${Math.round(pr*100)}%</div><div class="s">${hr?`pegó ${hr[0]} de sus últimos ${hr[1]}`:""}${price!=null?`${hr?" · ":""}Kalshi ${Math.round(price*100)}¢ → <b class="${pr-price>0?"up":"dn"}">${pr-price>0?"+":""}${((pr-price)*100).toFixed(1)}%</b>`:""}</div></div>`;
+  box.innerHTML=`<section class="panel" style="margin-top:12px">
+    <h3>${esc(p.name)} ${injBadge(p)} · ${esc({...BMLAB,td:"TD (tierra o recepción)"}[k]||k)} ${line}</h3>
+    <p class="meta" style="margin:0 0 8px">${p.tm} ${s.home?"vs":"@"} ${s.opp} · ${fmtDay(day)} · proyección <b>${proj.toFixed(1)}</b>${res.note?` · ${res.note}`:""}${kal?" · mezclado con el precio de Kalshi":""}</p>
+    <div class="tiles">${card("OVER",po,h[0],kal?kal.yes:null,side==="O"?"up":"")}${card("UNDER",pu,h[1],kal&&kal.no!=null?kal.no:null,side==="U"?"up":"")}</div>
+    <p style="margin:6px 0 0">El modelo prefiere <b>${side==="O"?"OVER":"UNDER"} ${line}</b> (${Math.round(best*100)}%) · cuota justa ${amOf(best)>0?"+":""}${amOf(best)}${kal?` · en Kalshi: ${side==="O"?"SÍ":"NO"} ${line+.5}+`:""}</p>
+    ${my!=null?`<p style="margin:6px 0 0">Con tu precio (${Math.round(my*100)}%): Over <b class="${po-my>0?"up":"dn"}">${po-my>0?"+":""}${((po-my)*100).toFixed(1)}%</b> · Under <b class="${pu-my>0?"up":"dn"}">${pu-my>0?"+":""}${((pu-my)*100).toFixed(1)}%</b> · ${Math.max(po,pu)-my>0?"✅ tiene valor del lado "+(po>pu?"OVER":"UNDER"):"❌ sin valor"}</p>`:""}
+    ${!rung&&hasKal(day)?`<p class="meta" style="margin:6px 0 0">Kalshi no tiene esa línea exacta para este jugador hoy.</p>`:""}
+  </section>`;
+}
+$("cplayer").addEventListener("change",()=>{fillCalcMk();renderCalc()});
+$("cplayer").addEventListener("input",()=>{if(P.some(x=>x.name===$("cplayer").value.trim())){fillCalcMk();renderCalc()}});
+["cmk","cline","cprice"].forEach(id=>$(id).addEventListener("input",renderCalc));
+fillCalcMk();
+</script>
