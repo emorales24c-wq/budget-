@@ -137,6 +137,18 @@ TEAM_SNAPS = {tm: round(g.groupby("game_id").offense_snaps.max().mean(), 1) for 
 SNAP = {}
 for gid, d in sn[sn.offense_snaps > 0].sort_values("week").groupby("gsis"):
     SNAP[gid] = {"pct": d.offense_pct.mean(), "pct3": d.offense_pct.tail(3).mean(), "snaps": d.offense_snaps.sum()}
+# Rol actual de los QB: % de los snaps del EQUIPO en sus últimas 3 partidas (no el promedio de sus partidas jugadas:
+# un suplente que jugó cuando el titular se lesionó no debe aparecer como titular)
+RECENT_QB = {}
+_tg = sn.groupby(["team", "game_id"]).agg(week=("week", "first"), tsn=("offense_snaps", "max")).reset_index()
+for tm, g in _tg.groupby("team"):
+    last = g.sort_values("week").tail(3)
+    tot = last.tsn.sum()
+    if not tot:
+        continue
+    pl = sn[(sn.team == tm) & sn.game_id.isin(last.game_id)].groupby("gsis").offense_snaps.sum()
+    for gsis, s in pl.items():
+        RECENT_QB[(tm, gsis)] = round(float(s) / tot, 3)
 
 # Jugadores: promedio por partido jugado; equipo = el de su último partido.
 # Con snaps: producción por snap (total del stat ÷ snaps ofensivos jugados).
@@ -148,7 +160,10 @@ for pid, d in st.sort_values("week").groupby("player_id"):
     avg = [round(d[col].sum() / n, 2) for _, col in STATS]
     sp = SNAP.get(pid)
     if sp and sp["snaps"]:
-        snap = [round(sp["pct"], 3), round(sp["pct3"], 3)] + [round(d[col].sum() / sp["snaps"], 5) for _, col in STATS] + [int(sp["snaps"])]
+        pct = round(sp["pct"], 3)
+        if last.pos == "QB":
+            pct = RECENT_QB.get((last.team, pid), 0.0)  # rol actual, no promedio histórico
+        snap = [pct, round(sp["pct3"], 3)] + [round(d[col].sum() / sp["snaps"], 5) for _, col in STATS] + [int(sp["snaps"])]
         TOT.setdefault(last.pos, [0.0] * (len(STATS) + 1))
         TOT[last.pos] = [a + b for a, b in zip(TOT[last.pos], [d[col].sum() for _, col in STATS] + [sp["snaps"]])]
     else:
