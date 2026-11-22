@@ -405,13 +405,16 @@ const isOut=p=>{const o=S[p.name]||{};return o.out===true||(o.out!==false&&injOu
 const spreads=p=>{const o=S[p.name]||{};if(o.out===true)return true;const j=INJ[p.name];return !!(j&&j.nuevo)};
 const baseX=p=>{const o=S[p.name]||{};return o.x!=null?o.x:Math.round(baseMin(p)*2)/2};
 let EXTRA={}, OUTS={}, USG={};
+let SCALE={};
 function computeBoost(){
-  EXTRA={};OUTS={};USG={};const by={};
+  EXTRA={};OUTS={};USG={};SCALE={};const by={};
   P.forEach(p=>{const b=by[p.tm]||(by[p.tm]={out:0,act:[],outPts:0,totPts:0});const m=PL[p.name],pr=m&&m.r?m.r[0]*baseX(p):0;
     if(baseMin(p)>=ROT_MIN)b.totPts+=pr;
     if(isOut(p)){(OUTS[p.tm]||(OUTS[p.tm]=[])).push(p.name);if(spreads(p)){b.out+=baseX(p);b.outPts+=pr}}
     else if(baseMin(p)>=ROT_MIN&&(S[p.name]||{}).x==null)b.act.push(p)});
   Object.entries(by).forEach(([tm,b])=>{
+    const act=P.filter(p=>p.tm===tm&&!isOut(p)).reduce((s,p)=>s+baseMin(p)+(EXTRA[p.name]||0),0);
+    SCALE[tm]=act>240?240/act:1;
     if(b.outPts>0&&b.totPts>0)USG[tm]=Math.min(1.25,1+(MDL?MDL.usage:0.3)*b.outPts/b.totPts);
     if(!b.out||!b.act.length)return;
     const tot=b.act.reduce((s,p)=>s+baseMin(p),0);
@@ -431,7 +434,7 @@ function ctxOf(p){
   return s?{rival:s.opp,home:s.home,b2b:b2bOf(p.tm)}:{rival:G.rival,home:G.home,b2b:0};
 }
 function rowState(p){const o=S[p.name]||{};const ex=o.x==null?(EXTRA[p.name]||0):0;const c=ctxOf(p);
-  return {xmp:o.x!=null?o.x:Math.round((baseMin(p)+ex)*2)/2, extra:ex, out:isOut(p), rival:o.r||c.rival, home:o.h!=null?o.h:c.home, b2b:c.b2b}}
+  return {xmp:o.x!=null?o.x:Math.round((baseMin(p)+ex)*(SCALE[p.tm]||1)*2)/2, extra:ex, out:isOut(p), rival:o.r||c.rival, home:o.h!=null?o.h:c.home, b2b:c.b2b}}
 function project(p){
   const st=rowState(p);
   if(st.out) return {st,ok:false,out:true};

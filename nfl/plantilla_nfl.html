@@ -395,7 +395,12 @@ function project(p,ctxOverride){
   if(snaps){pr.snaps=pct*TSN[p.tm];SK.forEach((k,i)=>pr[k]=p.rate[i]*pr.snaps*fac(rival,p.pos,k)*h)}
   else SK.forEach((k,i)=>pr[k]=p.a[i]*uso*fac(rival,p.pos,k)*h);
   if(p.pos==="QB"&&TEAMATT[p.tm]&&(snaps||uso!=null)){ // pase por intento
-    const r=qbRates(p),share=snaps?pct:Math.min(1,uso);const att=TEAMATT[p.tm]*share*((QBF[p.tm]&&QBF[p.tm].att)||1);
+    const r=qbRates(p);
+    // el pase del equipo se reparte entre sus QB: la suma de las partes es 100% (si no, cada QB se llevaba el total)
+    const mates=P.filter(q=>q.pos==="QB"&&q.tm===p.tm&&!isOut(q)&&hasSnaps(q)).map(q=>expPct(q));
+    const wsum=Math.max(1,mates.reduce((s,x)=>s+x,0));
+    const share=snaps?pct/wsum:Math.min(1,uso);
+    const att=TEAMATT[p.tm]*share*((QBF[p.tm]&&QBF[p.tm].att)||1);
     pr.att=att*fac(rival,"QB","att")*h;["cmp","pyd","ptd","int"].forEach(k=>pr[k]=att*r[k]*fac(rival,"QB",k)*h);
   }else if(p.pos!=="QB"&&QBF[p.tm]){const q=QBF[p.tm];pr.rec*=q.rec;pr.recyd*=q.recyd;pr.rectd*=q.rectd;pr.tgt*=q.tgt||1;pr.qbf=q}
   pr.rr=pr.ryd+pr.recyd;
