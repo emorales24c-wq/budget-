@@ -940,7 +940,8 @@ function parlayHTML(rows,canCopy){const legs=parlayLegs(rows);PARLAYS=[];
         ${canCopy?` <button type="button" class="btn" data-pl="${n-2}" style="margin-left:6px">📲 Copiar a Live Bets</button>`:""}
         <div class="meta" style="margin-top:4px">${L.map(x=>`${esc(x.r.p.name)} <b>${x.side==="O"?"OVER":"UNDER"} ${x.line}</b> ${esc((typeof MKLAB!=="undefined"?MKLAB:BMLAB)[x.r.k]||x.r.k)} (${Math.round(x.prob*100)}%, ${Math.round(x.cost*100)}¢)`).join(" · ")}</div></div>`}).join("")+`</section>`}
 const EDGE_CAP=0.12;
-const NO_PICK=(k,side)=>k==="pra"||(k==="tpm"&&side==="O");
+// Over que no rinden en el registro (<50% con 300+ picks): puntos, puntos+rebotes, puntos+asistencias, tapones
+const NO_PICK=(k,side)=>k==="pra"||(k==="tpm"&&side==="O")||(side==="O"&&["pts","pr","pa","blk"].includes(k));
 function bestRows(){
   const day=OPPD[BP.day]||{}, q=BP.q.trim().toLowerCase(), out=[];
   P.forEach(p=>{const s=day[p.tm];if(!s||isOut(p)||baseMin(p)<BP.minm)return;
