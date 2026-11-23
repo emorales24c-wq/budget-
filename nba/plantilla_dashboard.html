@@ -941,7 +941,9 @@ function parlayHTML(rows,canCopy){const legs=parlayLegs(rows);PARLAYS=[];
         <div class="meta" style="margin-top:4px">${L.map(x=>`${esc(x.r.p.name)} <b>${x.side==="O"?"OVER":"UNDER"} ${x.line}</b> ${esc((typeof MKLAB!=="undefined"?MKLAB:BMLAB)[x.r.k]||x.r.k)} (${Math.round(x.prob*100)}%, ${Math.round(x.cost*100)}¢)`).join(" · ")}</div></div>`}).join("")+`</section>`}
 const EDGE_CAP=0.12;
 // Over que no rinden en el registro (<50% con 300+ picks): puntos, puntos+rebotes, puntos+asistencias, tapones
-const NO_PICK=(k,side)=>k==="pra"||(k==="tpm"&&side==="O")||(side==="O"&&["pts","pr","pa","blk"].includes(k));
+// Over de triples: 57% en la referencia (+52u a −110 simulado), pero en Kalshi hay solo 9 picks y van negativos,
+// así que solo se bloquea en Kalshi (kal=true), donde es dinero real.
+const NO_PICK=(k,side,kal)=>k==="pra"||(kal&&k==="tpm"&&side==="O")||(side==="O"&&["pts","pr","pa","blk"].includes(k));
 function bestRows(){
   const day=OPPD[BP.day]||{}, q=BP.q.trim().toLowerCase(), out=[];
   P.forEach(p=>{const s=day[p.tm];if(!s||isOut(p)||baseMin(p)<BP.minm)return;
@@ -949,14 +951,14 @@ function bestRows(){
     const st=rowState(p);const c=core(p,st.xmp,s.opp,s.home,{b2b:(s.home?s.g[5]:s.g[4])?1:0});if(!c)return;
     const L=(S[p.name]||{}).l||{};
     if(BP.src==="k"&&hasKal(BP.day)){(BP.mk?[BP.mk]:BMK).forEach(k=>{const kb=kalBest(p.name,k,BP.day,line=>probOver(k,c[k],line));if(!kb)return;const alt=kalAlt(p.name,k,BP.day,line=>probOver(k,c[k],line),kb);
-      if(!NO_PICK(k,kb.side))out.push({p,k,line:kb.line,ref:false,kal:kb,alt,proj:c[k],avg:seasonVal2(p,k),po:kb.po,pu:kb.pu,side:kb.side,prob:kb.prob,edge:kb.edge,odds:toAm(kb.cost),opp:s.opp,home:s.home})});return}
+      if(!NO_PICK(k,kb.side,true))out.push({p,k,line:kb.line,ref:false,kal:kb,alt,proj:c[k],avg:seasonVal2(p,k),po:kb.po,pu:kb.pu,side:kb.side,prob:kb.prob,edge:kb.edge,odds:toAm(kb.cost),opp:s.opp,home:s.home})});return}
     (BP.mk?[BP.mk]:BMK).forEach(k=>{const l=L[k]||{},own=l.line!=null&&l.line!=="";
       if(!own&&(seasonVal2(p,k)||0)<MINAVG[k])return; // las casas no ofrecen ese prop a jugadores que casi no lo producen
       const line=own?+l.line:refLine(p,k);if(line==null)return;
       const po=probOver(k,c[k],line),pu=1-po,oo=l.oo!=null&&l.oo!==""?+l.oo:-110,ou=l.ou!=null&&l.ou!==""?+l.ou:-110;
       const eo=po-impl(oo),eu=pu-impl(ou);let side=eo>=eu?"O":"U";if(BP.side)side=BP.side;
       const prob=side==="O"?po:pu,edge=side==="O"?eo:eu;if(prob*100<BP.minp)return;
-      if(!NO_PICK(k,side))out.push({p,k,line,ref:!(l.line!=null&&l.line!==""),proj:c[k],avg:seasonVal2(p,k),po,pu,side,prob,edge,odds:side==="O"?oo:ou,opp:s.opp,home:s.home})})});
+      if(!NO_PICK(k,side,false))out.push({p,k,line,ref:!(l.line!=null&&l.line!==""),proj:c[k],avg:seasonVal2(p,k),po,pu,side,prob,edge,odds:side==="O"?oo:ou,opp:s.opp,home:s.home})})});
   // edge muy grande = casi siempre el mercado sabe algo (minutos, lesión): se marca y va al final
   out.forEach(r=>r.warn=r.edge>EDGE_CAP);
   out.sort((a,b)=>(a.warn-b.warn)||b.edge-a.edge||b.prob-a.prob);

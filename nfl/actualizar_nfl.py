@@ -161,8 +161,8 @@ for pid, d in st.sort_values("week").groupby("player_id"):
     sp = SNAP.get(pid)
     if sp and sp["snaps"]:
         pct = round(sp["pct"], 3)
-        if last.pos == "QB":
-            pct = RECENT_QB.get((last.team, pid), 0.0)  # rol actual, no promedio histórico
+        # rol actual para todos (QB, RB, WR, TE): % de snaps del equipo en sus últimas 3 partidas
+        pct = RECENT_QB.get((last.team, pid), 0.0)
         snap = [pct, round(sp["pct3"], 3)] + [round(d[col].sum() / sp["snaps"], 5) for _, col in STATS] + [int(sp["snaps"])]
         TOT.setdefault(last.pos, [0.0] * (len(STATS) + 1))
         TOT[last.pos] = [a + b for a, b in zip(TOT[last.pos], [d[col].sum() for _, col in STATS] + [sp["snaps"]])]
