@@ -847,6 +847,8 @@ function parlayHTML(rows,canCopy){const legs=parlayLegs(rows);PARLAYS=[];
         ${canCopy?` <button type="button" class="btn" data-pl="${n-2}" style="margin-left:6px">📲 Copiar a Live Bets</button>`:""}
         <div class="meta" style="margin-top:4px">${L.map(x=>`${esc(x.r.p.name)} <b>${x.side==="O"?"OVER":"UNDER"} ${x.line}</b> ${esc((typeof MKLAB!=="undefined"?MKLAB:BMLAB)[x.r.k]||x.r.k)} (${Math.round(x.prob*100)}%, ${Math.round(x.cost*100)}¢)`).join(" · ")}</div></div>`}).join("")+`</section>`}
 const EDGE_CAP=0.12;
+// Over de TD y Over de yardas recibidas: en el registro son los que más pierden (no se recomiendan)
+const NO_PICK=(k,side)=>side==="O"&&(k==="td"||k==="recyd");
 function bestRows(){
   const day=OPPD[BP.day]||{},q=BP.q.trim().toLowerCase(),out=[];
   P.forEach(p=>{const s=day[p.tm];if(!s||(BP.pos&&p.pos!==BP.pos))return;
@@ -854,14 +856,14 @@ function bestRows(){
     const pr=project(p,{rival:s.opp,home:s.home});if(!pr.ok)return;
     if(pr.pct!=null&&pr.pct<MINPCT[p.pos])return; // solo jugadores con rol real en el partido
     const L=(S[p.name]||{}).l||{};
-    if(BP.src==="k"&&hasKal(BP.day)){PROPS[p.pos].filter(k=>!BP.mk||k===BP.mk).forEach(k=>{const kb=kalBest(p.name,k,BP.day,line=>probOverN(k,pr[k],line));if(!kb)return;const alt=kalAlt(p.name,k,BP.day,line=>probOverN(k,pr[k],line),kb);
+    if(BP.src==="k"&&hasKal(BP.day)){PROPS[p.pos].filter(k=>!BP.mk||k===BP.mk).forEach(k=>{const kb=kalBest(p.name,k,BP.day,line=>probOverN(k,pr[k],line));if(!kb||NO_PICK(k,kb.side))return;const alt=kalAlt(p.name,k,BP.day,line=>probOverN(k,pr[k],line),kb);
       out.push({p,k,line:kb.line,ref:false,kal:kb,alt,proj:pr[k],avg:avgOf(p,k),po:kb.po,pu:kb.pu,side:kb.side,prob:kb.prob,edge:kb.edge,odds:toAm(kb.cost),opp:s.opp,home:s.home,g:s.g})});return}
     PROPS[p.pos].filter(k=>!BP.mk||k===BP.mk).forEach(k=>{const l=L[k]||{},own=l.line!=null&&l.line!=="",avg=avgOf(p,k),norm=normalOf(p,k,s);
       if(!own&&norm<MINAVG[k])return; // las casas no ofrecen ese prop a jugadores con poco volumen
       const line=own?+l.line:refLine(norm),po=probOverN(k,pr[k],line),pu=1-po;
       const oo=l.oo!=null&&l.oo!==""?+l.oo:-110,ou=l.ou!=null&&l.ou!==""?+l.ou:-110,eo=po-impl(oo),eu=pu-impl(ou);
       let side=eo>=eu?"O":"U";if(BP.side)side=BP.side;
-      const prob=side==="O"?po:pu,edge=side==="O"?eo:eu;if(prob*100<BP.minp)return;
+      const prob=side==="O"?po:pu,edge=side==="O"?eo:eu;if(prob*100<BP.minp||NO_PICK(k,side))return;
       out.push({p,k,line,ref:!own,proj:pr[k],avg,po,pu,side,prob,edge,odds:side==="O"?oo:ou,opp:s.opp,home:s.home,g:s.g})})});
   // edge muy grande = casi siempre el mercado sabe algo (minutos, lesión): se marca y va al final
   out.forEach(r=>r.warn=r.edge>EDGE_CAP);
