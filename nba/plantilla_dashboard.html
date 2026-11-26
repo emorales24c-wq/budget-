@@ -192,6 +192,7 @@ tr.grp td span{font-family:var(--body);font-weight:400;text-transform:none;lette
   <button type="button" role="tab" id="tab-best" aria-selected="false" aria-controls="view-best"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg><span>Mejores props</span></button>
   <button type="button" role="tab" id="tab-dvp" aria-selected="false" aria-controls="view-dvp"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Defensa</span></button>
   <button type="button" role="tab" id="tab-bets" aria-selected="false" aria-controls="view-bets"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 4h14v16l-3-2-2 2-2-2-2 2-2-2-3 2V4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 9h6M9 13h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Apuestas</span></button>
+  <button type="button" role="tab" id="tab-sim" aria-selected="false" aria-controls="view-sim"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 18l5-5 4 4 7-8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 21h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Simulados</span></button>
   <button type="button" role="tab" id="tab-cal" aria-selected="false" aria-controls="view-cal"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Récord</span></button>
 </nav>
 
@@ -326,6 +327,9 @@ tr.grp td span{font-family:var(--body);font-weight:400;text-transform:none;lette
   <div id="topbox"></div>
 </div>
 
+<div id="view-sim" role="tabpanel" aria-labelledby="tab-sim" hidden>
+  <section id="simwrap"></section>
+</div>
 <div id="view-cal" role="tabpanel" aria-labelledby="tab-cal" hidden>
   <section id="pkwrap">
     <h2 class="pkh">Récord de los Mejores props</h2>
@@ -770,11 +774,11 @@ function segPick(id,fn){$(id).addEventListener("click",e=>{const b=e.target.clos
 segPick("dstat",v=>D.stat=+v); segPick("dmode",v=>D.mode=v); segPick("drole",v=>D.role=v);
 $("dtbl").querySelector("thead").addEventListener("click",e=>{const th=e.target.closest("th[data-k]");if(!th)return;const k=th.dataset.k;
   if(D.sort===k)D.dir*=-1;else{D.sort=k;D.dir=k==="name"?1:-1}renderDvp()});
-function showTab(which){["proj","best","dvp","bets","cal","top","par","calc"].forEach(k=>{$("view-"+k).hidden=k!==which;$("tab-"+k).setAttribute("aria-selected",String(k===which))});
-  if(which==="dvp")renderDvp();if(which==="bets")renderBets();if(which==="cal")renderCal();if(which==="best")renderBest();if(which==="top")renderTop();if(which==="par")renderPz();if(which==="calc")renderCalc();window.scrollTo(0,0)}
+function showTab(which){["proj","best","dvp","bets","sim","cal","top","par","calc"].forEach(k=>{$("view-"+k).hidden=k!==which;$("tab-"+k).setAttribute("aria-selected",String(k===which))});
+  if(which==="dvp")renderDvp();if(which==="bets")renderBets();if(which==="sim")renderSim();if(which==="cal")renderCal();if(which==="best")renderBest();if(which==="top")renderTop();if(which==="par")renderPz();if(which==="calc")renderCalc();window.scrollTo(0,0)}
 $("tab-best").addEventListener("click",()=>showTab("best"));$("tab-top").addEventListener("click",()=>showTab("top"));$("tab-par").addEventListener("click",()=>showTab("par"));$("tab-calc").addEventListener("click",()=>showTab("calc"));
 $("tab-proj").addEventListener("click",()=>showTab("proj"));$("tab-dvp").addEventListener("click",()=>showTab("dvp"));
-$("tab-bets").addEventListener("click",()=>showTab("bets"));$("tab-cal").addEventListener("click",()=>showTab("cal"));
+$("tab-bets").addEventListener("click",()=>showTab("bets"));$("tab-cal").addEventListener("click",()=>showTab("cal"));$("tab-sim").addEventListener("click",()=>showTab("sim"));
 if(location.hash==="#apuestas")showTab("bets");if(location.hash==="#precision")showTab("cal");
 if(location.hash==="#defensa")showTab("dvp");
 
@@ -1079,6 +1083,27 @@ function pkTable(title,groups,first){
   const rows=groups.filter(g=>g[1].length).map(([lab,rs])=>{const s=pkStats(rs);
     return `<tr><td class="l">${lab}</td><td>${s.n}</td><td>${s.w}-${s.l}${s.p?"-"+s.p:""}</td><td class="${s.hit>=.524?"up":"dn"}"><b>${pct1(s.hit)}</b></td><td>${pct1(s.exp)}</td><td class="${s.u>=0?"up":"dn"}">${units(s.u)}</td><td class="${s.roi>=0?"up":"dn"}">${(s.roi*100).toFixed(1)}%</td></tr>`}).join("");
   return `<section class="panel" style="margin-top:12px"><h3>${title}</h3><div style="overflow-x:auto"><table class="caltbl"><thead><tr><th class="l">${first}</th><th>Picks</th><th>G-P</th><th>Acierto</th><th>Esperado</th><th>Unidades</th><th>ROI</th></tr></thead><tbody>${rows||`<tr><td colspan="7" class="l">Sin picks con estos filtros.</td></tr>`}</tbody></table></div></section>`;
+}
+// Picks simulados: los de referencia, apostando 1 a su cuota (−110 si no hay cuota). Ganar suma 100/110, perder −1.
+function simUnits(r){const o=r[15]||-110;return r[9]==="W"?(o>0?o/100:100/-o):r[9]==="L"?-1:0}
+function renderSim(){
+  const rows=(DATA.pk||[]).filter(r=>(r[14]||"ref")==="ref"&&["W","L","P"].includes(r[9]));
+  const days={};rows.forEach(r=>{(days[r[0]]=days[r[0]]||[]).push(r)});
+  const dks=Object.keys(days).sort().reverse();
+  const tot={w:0,l:0,u:0};rows.forEach(r=>{if(r[9]==="W")tot.w++;else if(r[9]==="L")tot.l++;tot.u+=simUnits(r)});
+  const fmt=u=>(u>=0?"+":"")+u.toFixed(1)+"u";
+  let h=`<h2 class="pkh">Picks simulados (a −110)</h2>
+    <p class="meta" style="margin:4px 0 12px">Cada pick cuenta como si apostaras 1 a −110: ganar suma +0.91u, perder −1u. Es una medida del modelo, no dinero real.</p>
+    <div class="tiles"><div class="tile"><div class="k">Total</div><div class="v ${tot.u>=0?"up":"dn"}">${fmt(tot.u)}</div><div class="s">${tot.w} ganados · ${tot.l} perdidos · ${tot.w+tot.l?Math.round(tot.w/(tot.w+tot.l)*100):0}%</div></div></div>`;
+  h+=`<table class="simt" style="width:100%;margin-top:12px"><tr><th style="text-align:left">Día</th><th>Gana</th><th>Pierde</th><th>Acierto</th><th>Unidades</th></tr>`;
+  dks.forEach(d=>{const S=days[d],w=S.filter(r=>r[9]==="W").length,l=S.filter(r=>r[9]==="L").length,u=S.reduce((s,r)=>s+simUnits(r),0);
+    h+=`<tr><td>${esc(d)}</td><td>${w}</td><td>${l}</td><td>${w+l?Math.round(w/(w+l)*100):0}%</td><td class="${u>=0?"up":"dn"}">${fmt(u)}</td></tr>`});
+  h+=`</table>`;
+  dks.forEach((d,i)=>{const S=days[d];
+    h+=`<details ${i===0?"open":""} style="margin-top:10px"><summary>${esc(d)} · detalle de ${S.length} picks</summary><table class="simt" style="width:100%">`+
+      S.map(r=>`<tr><td style="text-align:left">${esc(r[1])} <small>(${esc(r[2])} vs ${esc(r[3])})</small></td><td>${esc(r[4])} ${r[6]==="O"?"Over":"Under"} ${r[5]}</td><td>real ${r[10]==null?"—":r[10]}</td><td class="${r[9]==="W"?"up":"dn"}">${r[9]==="W"?"GANÓ":"PERDIÓ"}</td></tr>`).join("")+
+      `</table></details>`});
+  $("simwrap").innerHTML=h;
 }
 function renderPk(){
   const box=$("pkbox");
