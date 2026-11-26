@@ -868,7 +868,7 @@ $("btb").addEventListener("click",async e=>{const d=e.target.closest("[data-del]
   if(PENDDEL===id){PENDDEL=null;try{await delBet(id)}catch(err){}}else{PENDDEL=id;d.textContent="¿Seguro?";setTimeout(()=>{if(PENDDEL===id){PENDDEL=null;d.textContent="Borrar"}},3000)}});
 
 // ================= Mejores props del día (todos los mercados, Over y Under) =================
-const BP={day:DAYS[0]||"",mk:"",side:"",minp:55,minm:20,q:"",view:"tm",game:"",src:"k"};
+const BP={day:DAYS[0]||"",mk:"",side:"",minp:55,minm:20,q:"",view:"tm",game:"",src:"ref"};
 const BMK=["pts","reb","ast","tpm"]; // sin PRA y sin Over de triples: pierden // solo los mercados que se apuestan: puntos, rebotes, asistencias, PRA y triples
 const MINAVG={pts:8,reb:3,ast:2,tpm:1,stl:0.8,blk:0.8,pra:12,pr:10,pa:10,ra:5};
 const refLine=(p,k)=>{const v=seasonVal2(p,k);if(v==null)return null;let x=Math.round(v*2)/2;if(x%1===0)x-=.5;return Math.max(.5,x)}; // como las casas: el .5 más cercano al promedio, abajo si cae en entero
@@ -954,7 +954,7 @@ function bestRows(){
     if(q&&!p.name.toLowerCase().includes(q)&&!p.tm.toLowerCase().includes(q))return;
     const st=rowState(p);const c=core(p,st.xmp,s.opp,s.home,{b2b:(s.home?s.g[5]:s.g[4])?1:0});if(!c)return;
     const L=(S[p.name]||{}).l||{};
-    if(BP.src==="k"&&hasKal(BP.day)){(BP.mk?[BP.mk]:BMK).forEach(k=>{const kb=kalBest(p.name,k,BP.day,line=>probOver(k,c[k],line));if(!kb)return;const alt=kalAlt(p.name,k,BP.day,line=>probOver(k,c[k],line),kb);
+    if(BP.src==="k"&&hasKal(BP.day)){(BP.mk?[BP.mk]:BMK).forEach(k=>{const kb=kalBest(p.name,k,BP.day,line=>probOver(k,c[k],line));if(!kb||kb.side!=="U"||kb.line<=refLine(p,k))return; // Kalshi solo para Under alternadosconst alt=kalAlt(p.name,k,BP.day,line=>probOver(k,c[k],line),kb);
       if(!NO_PICK(k,kb.side,true))out.push({p,k,line:kb.line,ref:false,kal:kb,alt,proj:c[k],avg:seasonVal2(p,k),po:kb.po,pu:kb.pu,side:kb.side,prob:kb.prob,edge:kb.edge,odds:toAm(kb.cost),opp:s.opp,home:s.home})});return}
     (BP.mk?[BP.mk]:BMK).forEach(k=>{const l=L[k]||{},own=l.line!=null&&l.line!=="";
       if(!own&&(seasonVal2(p,k)||0)<MINAVG[k])return; // las casas no ofrecen ese prop a jugadores que casi no lo producen

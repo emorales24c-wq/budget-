@@ -793,7 +793,7 @@ $("pkmin").addEventListener("change",e=>{PKF.min=+e.target.value;renderPk()});
 $("pkmk").addEventListener("change",e=>{PKF.mk=e.target.value;renderPk()});
 
 // ================= Mejores props del día (Over y Under, todos los mercados) =================
-const BP={day:DAYS[0]||"",pos:"",mk:"",side:"",minp:55,q:"",view:"tm",game:"",src:"k"};
+const BP={day:DAYS[0]||"",pos:"",mk:"",side:"",minp:55,q:"",view:"tm",game:"",src:"ref"};
 const MINAVG={pyd:120,cmp:10,att:15,ptd:0.8,int:0.4,ryd:15,car:6,rec:2,recyd:20,rr:35,tgt:3};
 const BMLAB={pyd:"Yds pase",cmp:"Pases completos",att:"Intentos de pase",ptd:"TD de pase",int:"Intercepciones",ryd:"Yds por tierra",car:"Acarreos",rec:"Recepciones",recyd:"Yds recibidas",rr:"Yds tierra+recep.",tgt:"Targets"};
 const avgOf=(p,k)=>k==="rr"?p.a[IDX.ryd]+p.a[IDX.recyd]:p.a[IDX[k]];
@@ -882,7 +882,7 @@ function bestRows(){
     const pr=project(p,{rival:s.opp,home:s.home});if(!pr.ok)return;
     if(pr.pct!=null&&pr.pct<MINPCT[p.pos])return; // solo jugadores con rol real en el partido
     const L=(S[p.name]||{}).l||{};
-    if(BP.src==="k"&&hasKal(BP.day)){PROPS[p.pos].filter(k=>!BP.mk||k===BP.mk).forEach(k=>{const kb=kalBest(p.name,k,BP.day,line=>probOverN(k,pr[k],line));if(!kb||NO_PICK(k,kb.side))return;const alt=kalAlt(p.name,k,BP.day,line=>probOverN(k,pr[k],line),kb);
+    if(BP.src==="k"&&hasKal(BP.day)){PROPS[p.pos].filter(k=>!BP.mk||k===BP.mk).forEach(k=>{const kb=kalBest(p.name,k,BP.day,line=>probOverN(k,pr[k],line));if(!kb||kb.side!=="U"||kb.line<=refLine(normalOf(p,k,s))||NO_PICK(k,kb.side))return; // Kalshi solo para Under alternadosconst alt=kalAlt(p.name,k,BP.day,line=>probOverN(k,pr[k],line),kb);
       out.push({p,k,line:kb.line,ref:false,kal:kb,alt,proj:pr[k],avg:avgOf(p,k),po:kb.po,pu:kb.pu,side:kb.side,prob:kb.prob,edge:kb.edge,odds:toAm(kb.cost),opp:s.opp,home:s.home,g:s.g})});return}
     PROPS[p.pos].filter(k=>!BP.mk||k===BP.mk).forEach(k=>{const l=L[k]||{},own=l.line!=null&&l.line!=="",avg=avgOf(p,k),norm=normalOf(p,k,s);
       if(!own&&norm<MINAVG[k])return; // las casas no ofrecen ese prop a jugadores con poco volumen
