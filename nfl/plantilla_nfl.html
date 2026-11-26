@@ -154,6 +154,7 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
 <nav class="rail" role="tablist" aria-label="Secciones">
   <button type="button" role="tab" id="tab-proj" aria-selected="true" aria-controls="view-proj"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15l3-4 3 3 5-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Proyecciones</span></button>
   <button type="button" role="tab" id="tab-top" aria-selected="false" aria-controls="view-top"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Top 5 / 10</span></button>
+  <button type="button" role="tab" id="tab-sim" aria-selected="false" aria-controls="view-sim"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 18l5-5 4 4 7-8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 21h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Simulados</span></button>
   <button type="button" role="tab" id="tab-calc" aria-selected="false" aria-controls="view-calc"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 7h8M8 11h2M12 11h2M16 11h0M8 15h2M12 15h2M8 18h2M12 18h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Calcular</span></button>
   <button type="button" role="tab" id="tab-par" aria-selected="false" aria-controls="view-par"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="19" cy="18" r="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><span>Parlay</span></button>
   <button type="button" role="tab" id="tab-best" aria-selected="false" aria-controls="view-best"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg><span>Mejores props</span></button>
@@ -216,6 +217,9 @@ tr.detail td{background:var(--sunk);text-align:left;white-space:normal}
   <div class="tablebox"><table id="besttbl"><thead><tr><th class="l">Jugador</th><th class="l">Mercado</th><th>Línea</th><th>Proyección</th><th>Prom.</th><th>Over</th><th>Under</th><th>Pick</th><th>Cuota / precio</th><th>Edge</th></tr></thead><tbody id="besttb"></tbody></table></div>
 </div>
 
+<div id="view-sim" role="tabpanel" aria-labelledby="tab-sim" hidden>
+  <section id="simwrap"></section>
+</div>
 <div id="view-calc" role="tabpanel" aria-labelledby="tab-calc" hidden>
   <div class="controls">
     <div class="f" style="flex:1;min-width:200px"><label for="cplayer">Jugador</label><input id="cplayer" list="cplist" type="text" placeholder="Escribe el nombre" autocomplete="off"><datalist id="cplist"></datalist></div>
@@ -655,7 +659,7 @@ function renderDvp(){
 }
 seg("dpos",v=>{D.pos=v;D.sort=DCOLS[v][v==="QB"?2:v==="RB"?1:2];renderDvp()}); seg("dmode",v=>{D.mode=v;renderDvp()});
 $("dth").addEventListener("click",e=>{const th=e.target.closest("th[data-k]");if(!th)return;const k=th.dataset.k;if(D.sort===k)D.dir*=-1;else{D.sort=k;D.dir=k==="name"?1:-1}renderDvp()});
-function showTab(w){["proj","best","dvp","td","rec","top","par","calc"].forEach(k=>{$("view-"+k).hidden=k!==w;$("tab-"+k).setAttribute("aria-selected",String(k===w))});if(w==="dvp")renderDvp();if(w==="td")renderTd();if(w==="best")renderBest();if(w==="rec")renderPk();if(w==="top")renderTop();if(w==="par")renderPz();if(w==="calc")renderCalc();window.scrollTo(0,0)}
+function showTab(w){["proj","best","dvp","td","rec","sim","top","par","calc"].forEach(k=>{$("view-"+k).hidden=k!==w;$("tab-"+k).setAttribute("aria-selected",String(k===w))});if(w==="sim")renderSim();if(w==="dvp")renderDvp();if(w==="td")renderTd();if(w==="best")renderBest();if(w==="rec")renderPk();if(w==="top")renderTop();if(w==="par")renderPz();if(w==="calc")renderCalc();window.scrollTo(0,0)}
 // Anotador de TD: probabilidad de anotar al menos un TD (tierra o recepción) en cada partido
 const TD={day:DAYS[0]||"",pos:"",group:1,min:10,q:""};
 const fairOdds=p=>p<=0||p>=1?"—":p>=.5?String(-Math.round(p/(1-p)*100)):"+"+Math.round((1-p)/p*100);
@@ -705,7 +709,7 @@ $("tdq").addEventListener("input",e=>{TD.q=e.target.value;renderTd()});
 $("tdtb").addEventListener("input",e=>{const el=e.target;if(el.dataset.a!=="tdo")return;const tr=el.closest("tr"),n=tr.dataset.tdn;ov(n).tdo=el.value;save();
   const r=tdRows().find(x=>x.p.name===n);if(!r||r.out)return;const tmp=document.createElement("tbody");tmp.innerHTML=tdRowHTML(r);
   ["edge","pick"].forEach(c=>tr.querySelector(`[data-c="${c}"]`).replaceWith(tmp.querySelector(`[data-c="${c}"]`)))});
-$("tab-td").addEventListener("click",()=>showTab("td"));$("tab-rec").addEventListener("click",()=>showTab("rec"));$("tab-top").addEventListener("click",()=>showTab("top"));$("tab-par").addEventListener("click",()=>showTab("par"));$("tab-calc").addEventListener("click",()=>showTab("calc"));
+$("tab-td").addEventListener("click",()=>showTab("td"));$("tab-sim").addEventListener("click",()=>showTab("sim"));$("tab-rec").addEventListener("click",()=>showTab("rec"));$("tab-top").addEventListener("click",()=>showTab("top"));$("tab-par").addEventListener("click",()=>showTab("par"));$("tab-calc").addEventListener("click",()=>showTab("calc"));
 $("tab-proj").addEventListener("click",()=>showTab("proj"));$("tab-dvp").addEventListener("click",()=>showTab("dvp"));
 if(location.hash==="#defensa")showTab("dvp");
 if(location.hash==="#td")showTab("td");
@@ -733,6 +737,28 @@ function pkTable(title,groups,first){
   const rows=groups.filter(g=>g[1].length).map(([lab,rs])=>{const s=pkStats(rs);
     return `<tr><td class="l">${lab}</td><td>${s.n}</td><td>${s.w}-${s.l}${s.p?"-"+s.p:""}</td><td class="${s.hit>=.524?"up":"dn"}"><b>${pct1(s.hit)}</b></td><td>${pct1(s.exp)}</td><td class="${s.u>=0?"up":"dn"}">${units(s.u)}</td><td class="${s.roi>=0?"up":"dn"}">${(s.roi*100).toFixed(1)}%</td></tr>`}).join("");
   return `<section class="panel"><h3>${title}</h3><div style="overflow-x:auto"><table class="caltbl"><thead><tr><th class="l">${first}</th><th>Picks</th><th>G-P</th><th>Acierto</th><th>Esperado</th><th>Unidades</th><th>ROI</th></tr></thead><tbody>${rows||`<tr><td colspan="7" class="l">Sin picks con estos filtros.</td></tr>`}</tbody></table></div></section>`;
+}
+// Picks simulados (referencia): apostando 1 a su cuota (−110 si no hay). Ganar suma 100/110, perder −1.
+// Fila: [fecha, semana, jugador, equipo, pos, rival, prop, línea, lado, prob, ventaja, resultado, real, fuente, cuota, cierre]
+function simUnits(r){const o=r[14]||-110;return r[11]==="W"?(o>0?o/100:100/-o):r[11]==="L"?-1:0}
+function renderSim(){
+  const rows=(DATA.pk||[]).filter(r=>(r[13]||"ref")==="ref"&&["W","L","P"].includes(r[11]));
+  const days={};rows.forEach(r=>{(days[r[0]]=days[r[0]]||[]).push(r)});
+  const dks=Object.keys(days).sort().reverse();
+  const tot={w:0,l:0,u:0};rows.forEach(r=>{if(r[11]==="W")tot.w++;else if(r[11]==="L")tot.l++;tot.u+=simUnits(r)});
+  const fmt=u=>(u>=0?"+":"")+u.toFixed(1)+"u";
+  let h=`<h2 class="pkh">Picks simulados (a −110)</h2>
+    <p class="meta" style="margin:4px 0 12px">Cada pick cuenta como si apostaras 1 a −110: ganar suma +0.91u, perder −1u. Es una medida del modelo, no dinero real.</p>
+    <div class="tiles"><div class="tile"><div class="k">Total</div><div class="v ${tot.u>=0?"up":"dn"}">${fmt(tot.u)}</div><div class="s">${tot.w} ganados · ${tot.l} perdidos · ${tot.w+tot.l?Math.round(tot.w/(tot.w+tot.l)*100):0}%</div></div></div>`;
+  h+=`<table class="simt" style="width:100%;margin-top:12px"><tr><th style="text-align:left">Día</th><th>Gana</th><th>Pierde</th><th>Acierto</th><th>Unidades</th></tr>`;
+  dks.forEach(d=>{const S=days[d],w=S.filter(r=>r[11]==="W").length,l=S.filter(r=>r[11]==="L").length,u=S.reduce((s,r)=>s+simUnits(r),0);
+    h+=`<tr><td>${esc(d)}</td><td>${w}</td><td>${l}</td><td>${w+l?Math.round(w/(w+l)*100):0}%</td><td class="${u>=0?"up":"dn"}">${fmt(u)}</td></tr>`});
+  h+=`</table>`;
+  dks.forEach((d,i)=>{const S=days[d];
+    h+=`<details ${i===0?"open":""} style="margin-top:10px"><summary>${esc(d)} · detalle de ${S.length} picks</summary><table class="simt" style="width:100%">`+
+      S.map(r=>`<tr><td style="text-align:left">${esc(r[2])} <small>(${esc(r[3])} vs ${esc(r[5])})</small></td><td>${esc(r[6])} ${r[8]==="O"?"Over":"Under"} ${r[7]}</td><td>real ${r[12]==null?"—":r[12]}</td><td class="${r[11]==="W"?"up":"dn"}">${r[11]==="W"?"GANÓ":"PERDIÓ"}</td></tr>`).join("")+
+      `</table></details>`});
+  $("simwrap").innerHTML=h;
 }
 function renderPk(){
   const box=$("pkbox");
