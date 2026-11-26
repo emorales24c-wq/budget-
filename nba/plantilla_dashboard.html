@@ -947,7 +947,7 @@ const EDGE_CAP=0.12;
 // Over que no rinden en el registro (<50% con 300+ picks): puntos, puntos+rebotes, puntos+asistencias, tapones
 // Over de triples: 57% en la referencia (+52u a −110 simulado), pero en Kalshi hay solo 9 picks y van negativos,
 // así que solo se bloquea en Kalshi (kal=true), donde es dinero real.
-const NO_PICK=(k,side,kal)=>k==="pra"||(kal&&k==="tpm"&&side==="O")||(side==="O"&&["pts","pr","pa","blk"].includes(k));
+const NO_PICK=(k,side,kal)=>k==="pra"||(kal&&k==="tpm"&&side==="O")||(kal&&side==="U"&&(k==="ast"||k==="tpm"))||(side==="O"&&["pts","pr","pa","blk"].includes(k));
 function bestRows(){
   const day=OPPD[BP.day]||{}, q=BP.q.trim().toLowerCase(), out=[];
   P.forEach(p=>{const s=day[p.tm];if(!s||isOut(p)||baseMin(p)<BP.minm)return;
