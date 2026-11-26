@@ -388,6 +388,12 @@ function computeQB(){
 }
 const expPct=p=>{const m=manualPct(p);return m!=null?m:(p.sp||0)+(EXTRA[p.name]||0)};
 const usoOf=p=>{const o=S[p.name]||{};return (o.u!=null?o.u:100)/100};
+// Ajuste por TeamRankings (equipo): pases contra la defensa aérea rival, acarreos contra la defensa de carrera rival,
+// y todo el volumen según el ritmo del equipo (jugadas por partido). Raíz cuadrada y límite ±20% para que sea suave.
+const TRF=(tm,rv,k)=>{const a=TRD[tm],b=TRD[rv],L=LGT;if(!a||!b||!L)return 1;const r=(x,y)=>(x&&y)?Math.pow(x/y,.5):1;
+  let f=1;const pass=["att","cmp","pyd","ptd","rec","recyd","tgt"],rush=["car","ryd"];
+  if(pass.includes(k))f*=r(b.opass,L.opass);if(rush.includes(k))f*=r(b.orush,L.orush);f*=r(a.plays,L.plays);
+  return Math.max(.8,Math.min(1.2,f))};
 function project(p,ctxOverride){
   const o=S[p.name]||{}, snaps=hasSnaps(p), pct=snaps?expPct(p):null, uso=snaps?null:usoOf(p);
   if(isOut(p)) return {ok:false,out:true,pct,uso};
@@ -407,6 +413,7 @@ function project(p,ctxOverride){
     const att=TEAMATT[p.tm]*share*((QBF[p.tm]&&QBF[p.tm].att)||1);
     pr.att=att*fac(rival,"QB","att")*h;["cmp","pyd","ptd","int"].forEach(k=>pr[k]=att*r[k]*fac(rival,"QB",k)*h);
   }else if(p.pos!=="QB"&&QBF[p.tm]){const q=QBF[p.tm];pr.rec*=q.rec;pr.recyd*=q.recyd;pr.rectd*=q.rectd;pr.tgt*=q.tgt||1;pr.qbf=q}
+  SK.forEach(k=>{if(pr[k]!=null)pr[k]*=TRF(p.tm,rival,k)});
   pr.rr=pr.ryd+pr.recyd;
   pr.td=1-Math.exp(-(pr.rtd+pr.rectd));
   return pr;
