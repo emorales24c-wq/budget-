@@ -1,0 +1,565 @@
+<title>Mesa MNQ y Oro</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&display=swap">
+<style>
+/* Layout: terminal-style desk — header, two tabs (calendar / journal), dense rows with tabular figures; dark-first */
+:root{
+  --bg:#0d1114; --surface:#141a1f; --sunk:#1a2228; --ink:#e3e8ec; --muted:#8b98a3; --line:#25303a;
+  --accent:#e0a83a; --accent-ink:#1a1204; --nq:#5aa7ff; --gold:#e0a83a;
+  --up:#3fbf7f; --up-bg:#11301f; --dn:#f06a5f; --dn-bg:#3a1714; --warn:#e0a83a; --warn-bg:#352711;
+  --hot:63,191,127; --cold:240,106,95;
+  --display:"IBM Plex Sans Condensed","Arial Narrow",Arial,sans-serif; --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Arial,sans-serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){
+  --bg:#f3f4f2; --surface:#ffffff; --sunk:#e9ece8; --ink:#14191d; --muted:#5b6670; --line:#d6dbd8;
+  --accent:#a8710f; --accent-ink:#ffffff; --nq:#1f63c4; --gold:#a8710f;
+  --up:#1d7a46; --up-bg:#dcf1e4; --dn:#b3261e; --dn-bg:#f8dedb; --warn:#8a5a00; --warn-bg:#f7ead0;
+  --hot:29,122,70; --cold:179,38,30; color-scheme:light}}
+:root[data-theme="light"]{
+  --bg:#f3f4f2; --surface:#ffffff; --sunk:#e9ece8; --ink:#14191d; --muted:#5b6670; --line:#d6dbd8;
+  --accent:#a8710f; --accent-ink:#ffffff; --nq:#1f63c4; --gold:#a8710f;
+  --up:#1d7a46; --up-bg:#dcf1e4; --dn:#b3261e; --dn-bg:#f8dedb; --warn:#8a5a00; --warn-bg:#f7ead0;
+  --hot:29,122,70; --cold:179,38,30; color-scheme:light}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:10px 24px;margin-bottom:14px}
+h1{font-family:var(--display);font-weight:700;font-size:2rem;margin:0;line-height:1;letter-spacing:.01em}
+h1 .nq{color:var(--nq)} h1 .au{color:var(--gold)}
+h2{font-family:var(--display);font-weight:700;font-size:1.25rem;margin:0 0 8px;letter-spacing:.02em}
+.meta{color:var(--muted);font-size:.85rem;max-width:68ch;margin:0}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.tabs{display:flex;gap:4px;border-bottom:2px solid var(--line);margin-bottom:14px}
+.tabs button{border:0;background:transparent;padding:8px 14px;font-family:var(--display);font-weight:600;font-size:1.05rem;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}
+.tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent)}
+input,select,button,textarea{font:inherit;color:var(--ink)}
+input,select,textarea{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-height:34px}
+input:focus-visible,select:focus-visible,button:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:6px 12px;min-height:34px;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn[disabled]{opacity:.55;cursor:default}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:transparent;padding:6px 12px;min-height:34px;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+.f{display:flex;flex-direction:column;gap:3px;min-width:0}
+.f label,.k{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.stack{display:grid;gap:14px}
+.status{font-size:.85rem;padding:8px 12px;border-radius:8px;background:var(--sunk);color:var(--muted)}
+.status.err{background:var(--dn-bg);color:var(--dn)}
+.status.ok{color:var(--muted)}
+/* calendar */
+.next{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;align-items:center}
+.next .cd{font-family:var(--mono);font-size:1.9rem;font-weight:600;color:var(--accent);line-height:1}
+.dayh{font-family:var(--display);font-weight:700;font-size:1.05rem;letter-spacing:.03em;text-transform:uppercase;padding:10px 0 4px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:8px}
+.dayh span{font-family:var(--body);font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-size:.8rem}
+.ev{display:grid;grid-template-columns:92px 64px minmax(0,1fr) minmax(0,auto);gap:4px 12px;padding:9px 0;border-bottom:1px solid var(--line);align-items:start}
+.ev.past{opacity:.6}
+.ev .t{font-family:var(--mono);font-size:.9rem}
+.ev .t small{display:block;color:var(--muted);font-size:.72rem}
+.ev .nm{font-weight:600}
+.ev .nm small{display:block;font-weight:400;color:var(--muted);font-size:.78rem}
+.ev .vals{font-family:var(--mono);font-size:.78rem;color:var(--muted)}
+.ev .mv{font-family:var(--mono);font-size:.82rem;text-align:right;white-space:nowrap}
+.ev .mv .n{color:var(--nq)} .ev .mv .g{color:var(--gold)}
+.ev .mv small{display:block;color:var(--muted);font-size:.7rem}
+.pill{display:inline-block;border-radius:999px;padding:1px 8px;font-size:.7rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.pill.alta{background:var(--dn-bg);color:var(--dn)} .pill.media{background:var(--warn-bg);color:var(--warn)} .pill.baja{background:var(--sunk);color:var(--muted)}
+.pause{font-size:.72rem;color:var(--dn);margin-top:2px}
+@media (max-width:640px){.ev{grid-template-columns:70px minmax(0,1fr)}.ev .imp{grid-column:1}.ev .nm{grid-column:2;grid-row:1/3}.ev .mv{grid-column:1/-1;text-align:left}}
+.tablebox{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th{font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;background:var(--sunk)}
+th.l,td.l{text-align:left}
+td.mono{font-family:var(--mono)}
+.up{color:var(--up)} .dn{color:var(--dn)}
+/* journal */
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.tile .v{font-family:var(--mono);font-size:1.35rem;font-weight:600;margin-top:2px}
+.tile .s{font-size:.72rem;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:14px}
+@media (max-width:860px){.grid2{grid-template-columns:1fr}}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.cal .dow{font-size:.68rem;color:var(--muted);text-align:center;text-transform:uppercase;letter-spacing:.06em}
+.cal .d{min-height:54px;border-radius:6px;background:var(--sunk);padding:4px 5px;font-size:.72rem;display:flex;flex-direction:column;justify-content:space-between}
+.cal .d.out{background:transparent}
+.cal .d .dn2{color:var(--muted)}
+.cal .d .p{font-family:var(--mono);font-weight:600;font-size:.74rem;text-align:right}
+.calnav{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.calnav b{font-family:var(--display);font-size:1.05rem;letter-spacing:.03em;text-transform:uppercase}
+form.trade{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+form.trade .wide{grid-column:1/-1}
+form.trade textarea{min-height:60px;resize:vertical}
+.calc{font-family:var(--mono);font-size:.85rem;color:var(--muted)}
+.calc b{color:var(--ink)}
+.acts button{border:0;background:transparent;cursor:pointer;color:var(--muted);padding:2px 6px}
+.acts button:hover{color:var(--accent)}
+.tag{display:inline-block;border:1px solid var(--line);border-radius:4px;padding:0 5px;font-size:.7rem;color:var(--muted)}
+.tag.news{border-color:var(--dn);color:var(--dn)}
+.foot{color:var(--muted);font-size:.78rem;max-width:80ch;display:grid;gap:6px;margin-top:18px}
+svg text{fill:var(--muted);font-family:var(--mono);font-size:10px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+<header>
+  <div>
+    <h1>Mesa <span class="nq">MNQ</span> y <span class="au">Oro</span></h1>
+    <p class="meta" style="margin-top:6px">Calendario de noticias de EE.UU. con lo que suelen mover MNQ y el oro, y tu diario de operaciones.</p>
+  </div>
+  <p class="meta mono" id="clock"></p>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button type="button" role="tab" id="tab-cal" aria-selected="true" aria-controls="view-cal">Calendario</button>
+  <button type="button" role="tab" id="tab-jr" aria-selected="false" aria-controls="view-jr">Journal</button>
+</nav>
+
+<!-- ================= CALENDARIO ================= -->
+<div id="view-cal" role="tabpanel" aria-labelledby="tab-cal" class="stack">
+  <div class="status" id="calstatus">Conectando con Webull…</div>
+  <section class="panel next" id="nextbox" hidden></section>
+  <div class="row">
+    <div class="f"><label>Importancia</label><div class="seg" id="imp"><button type="button" data-v="alta" aria-pressed="false">Alta</button><button type="button" data-v="media" aria-pressed="true">Alta y media</button><button type="button" data-v="baja" aria-pressed="false">Todas</button></div></div>
+    <div class="f"><label for="pxnq">Precio MNQ</label><input id="pxnq" type="number" step="0.25" style="width:110px"></div>
+    <div class="f"><label for="pxau">Precio oro ($/oz)</label><input id="pxau" type="number" step="0.1" style="width:110px"></div>
+    <button type="button" class="btn" id="measure">Medir reacciones</button>
+    <span class="meta" id="measuremsg"></span>
+  </div>
+  <section id="days"></section>
+  <section class="panel" id="reactbox">
+    <h2>Reacción histórica (15 min después de cada noticia)</h2>
+    <p class="meta" id="reactnote">Toca <b>Medir reacciones</b> para medir las noticias importantes de las últimas 3 semanas. Se guarda y se va sumando cada día.</p>
+    <div class="tablebox"><table><thead><tr><th class="l">Fecha</th><th class="l">Noticia</th><th>MNQ rango</th><th>MNQ al minuto 15</th><th>Oro rango</th><th>Oro al minuto 15</th></tr></thead><tbody id="reacttb"></tbody></table></div>
+  </section>
+</div>
+
+<!-- ================= JOURNAL ================= -->
+<div id="view-jr" role="tabpanel" aria-labelledby="tab-jr" class="stack" hidden>
+  <div class="status" id="jrstatus">Cargando tu journal…</div>
+  <div class="row">
+    <div class="f"><label>Instrumento</label><div class="seg" id="jfilt"><button type="button" data-v="" aria-pressed="true">Todos</button><button type="button" data-v="NQ" aria-pressed="false">MNQ / NQ</button><button type="button" data-v="GC" aria-pressed="false">MGC / GC</button></div></div>
+    <div class="f"><label>Periodo</label><div class="seg" id="jper"><button type="button" data-v="all" aria-pressed="true">Todo</button><button type="button" data-v="month" aria-pressed="false">Este mes</button><button type="button" data-v="week" aria-pressed="false">Esta semana</button></div></div>
+  </div>
+  <section class="tiles" id="tiles"></section>
+  <div class="grid2">
+    <section class="panel"><h2>Curva de capital</h2><div id="equity"></div></section>
+    <section class="panel"><div class="calnav"><button type="button" class="btn" id="mprev" aria-label="Mes anterior">‹</button><b id="mlabel"></b><button type="button" class="btn" id="mnext" aria-label="Mes siguiente">›</button></div><div class="cal" id="mcal"></div></section>
+  </div>
+  <section class="panel">
+    <h2 id="formtitle">Nueva operación</h2>
+    <form class="trade" id="tform" autocomplete="off">
+      <div class="f"><label for="t_when">Fecha y hora de entrada</label><input id="t_when" type="datetime-local" required></div>
+      <div class="f"><label for="t_ins">Instrumento</label><select id="t_ins"><option value="MNQ">MNQ ($2/pt)</option><option value="NQ">NQ ($20/pt)</option><option value="MGC">MGC ($10/$1)</option><option value="GC">GC ($100/$1)</option></select></div>
+      <div class="f"><label>Dirección</label><div class="seg" id="t_dir"><button type="button" data-v="1" aria-pressed="true">Long</button><button type="button" data-v="-1" aria-pressed="false">Short</button></div></div>
+      <div class="f"><label for="t_qty">Contratos</label><input id="t_qty" type="number" min="1" step="1" value="1" required></div>
+      <div class="f"><label for="t_in">Entrada</label><input id="t_in" type="number" step="any" required></div>
+      <div class="f"><label for="t_out">Salida</label><input id="t_out" type="number" step="any" required></div>
+      <div class="f"><label for="t_sl">Stop (para el R)</label><input id="t_sl" type="number" step="any"></div>
+      <div class="f"><label for="t_fee">Comisiones ($)</label><input id="t_fee" type="number" step="0.01" min="0"></div>
+      <div class="f"><label for="t_setup">Setup</label><input id="t_setup" type="text" list="setups" placeholder="Ej. ruptura NY"><datalist id="setups"></datalist></div>
+      <div class="f wide"><label for="t_notes">Notas</label><textarea id="t_notes" placeholder="Por qué entraste, qué hiciste bien o mal"></textarea></div>
+      <div class="wide row" style="justify-content:space-between">
+        <span class="calc" id="tcalc">Llena entrada y salida para ver el resultado.</span>
+        <span class="row"><button type="button" class="btn" id="tcancel" hidden>Cancelar edición</button><button type="submit" class="btn pri" id="tsave">Guardar operación</button></span>
+      </div>
+    </form>
+  </section>
+  <div class="grid2">
+    <section class="panel"><h2>Por sesión y por día</h2><div class="tablebox" id="bysess"></div></section>
+    <section class="panel"><h2>Por setup y noticias</h2><div class="tablebox" id="bysetup"></div></section>
+  </div>
+  <section class="panel">
+    <div class="row" style="justify-content:space-between;margin-bottom:8px"><h2 style="margin:0">Operaciones</h2><button type="button" class="btn" id="csv">Copiar como CSV</button></div>
+    <div class="tablebox"><table><thead><tr><th class="l">Fecha</th><th class="l">Inst.</th><th class="l">Dir.</th><th>Cont.</th><th>Entrada</th><th>Salida</th><th>Puntos</th><th>P&amp;L $</th><th>R</th><th class="l">Sesión</th><th class="l">Setup</th><th></th></tr></thead><tbody id="ttb"></tbody></table></div>
+  </section>
+</div>
+
+<div class="foot">
+  <div><b>Calendario:</b> noticias de EE.UU. desde tu conexión de Webull, en tu hora local (y hora de Nueva York, ET). Importancia asignada por tipo de noticia: alta = CPI, empleo (NFP), Fed/FOMC, PCE, PPI, PIB, ventas minoristas, ISM; media = solicitudes de desempleo, JOLTS, ADP, confianza del consumidor, discursos de la Fed.</div>
+  <div><b>Movimiento típico:</b> tu cuenta de Webull no tiene datos de futuros, así que se mide con QQQ (sigue al Nasdaq-100 como MNQ) y GLD (sigue al oro como MGC): rango entre el máximo y el mínimo en los 15 minutos después de la noticia, en %, convertido con el precio de MNQ y del oro que pongas arriba. Es la mediana de las veces medidas. Aproximación: el pre-mercado de GLD tiene poco volumen.</div>
+  <div><b>Journal:</b> se guarda en tu cuenta (solo tú lo ves). P&amp;L = puntos × valor del punto × contratos − comisiones. R = P&amp;L ÷ riesgo hasta el stop. Sesiones en hora de Nueva York: Asia 18:00–03:00, Londres 03:00–08:00, NY mañana 08:00–12:00, NY tarde 12:00–17:00.</div>
+  <div>Herramienta de registro y análisis: no es consejo financiero. Operar futuros tiene alto riesgo.</div>
+</div>
+</div>
+
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmt=(x,d=2)=>x==null||isNaN(x)?"—":Number(x).toLocaleString("es",{minimumFractionDigits:d,maximumFractionDigits:d});
+const money=x=>x==null||isNaN(x)?"—":(x<0?"−$":"$")+Math.abs(x).toLocaleString("es",{minimumFractionDigits:2,maximumFractionDigits:2});
+const sgn=x=>x>0?"up":x<0?"dn":"";
+const SERVER="Webull";
+const ET="America/New_York";
+const tzLocal=Intl.DateTimeFormat().resolvedOptions().timeZone;
+const DAYMS=86400000;
+const isoDay=d=>{const x=new Date(d);return x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0")};
+const etParts=d=>{const p=new Intl.DateTimeFormat("en-US",{timeZone:ET,hour12:false,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",weekday:"short"}).formatToParts(d);const o={};p.forEach(x=>o[x.type]=x.value);o.hour=+o.hour%24;o.minute=+o.minute;return o};
+const tLocal=d=>d.toLocaleTimeString("es",{hour:"numeric",minute:"2-digit"});
+const tET=d=>{const p=etParts(d);return String(p.hour).padStart(2,"0")+":"+String(p.minute).padStart(2,"0")+" ET"};
+const dayLabel=d=>d.toLocaleDateString("es",{weekday:"long",day:"numeric",month:"short"});
+
+// ---------- storage: db (private per viewer) with localStorage fallback ----------
+const LS={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const Store={mode:"local",uid:null,db:null,trades:[],settings:{},reactions:{items:{},through:null},listeners:[]};
+async function initStore(){
+  try{
+    const [db,user]=await Promise.all([window.claude?.use?window.claude.use("db"):null,window.claude?.use?window.claude.use("user"):null]);
+    const uid=user?await user.id():null;
+    if(db&&uid){Store.mode="db";Store.db=db;Store.uid=uid}
+  }catch(e){}
+  if(Store.mode==="db"){
+    const base="data/users/"+Store.uid;
+    try{const s=await Store.db.doc(base+"/settings").get();Store.settings=s.exists?Object.assign({},s.data()):{}}catch(e){}
+    try{const r=await Store.db.doc(base+"/reactions").get();if(r.exists)Store.reactions=JSON.parse(JSON.stringify(r.data()))}catch(e){}
+    if(!Store.reactions.items)Store.reactions.items={};
+    Store.db.doc(base+"/journal").collection("trades").onSnapshot(snap=>{Store.trades=snap.docs.map(d=>Object.assign({id:d.id},d.data()));fire()},err=>{$("jrstatus").className="status err";$("jrstatus").textContent="No se pudo leer tu journal ("+err.code+"). Recarga la página."});
+    $("jrstatus").className="status ok";$("jrstatus").textContent="Tu journal se guarda en tu cuenta. Solo tú lo ves.";
+  }else{
+    Store.settings=LS.get("mesa.settings",{});Store.reactions=LS.get("mesa.reactions",{items:{},through:null});Store.trades=LS.get("mesa.trades",[]);
+    $("jrstatus").className="status";$("jrstatus").textContent="Sin almacenamiento en tu cuenta en esta vista: las operaciones se guardan solo en este navegador.";
+    fire();
+  }
+}
+function fire(){Store.listeners.forEach(f=>f())}
+async function saveSettings(){if(Store.mode==="db"){try{await Store.db.doc("data/users/"+Store.uid+"/settings").set(Store.settings)}catch(e){}}else LS.set("mesa.settings",Store.settings)}
+let reactSaving=Promise.resolve();
+function saveReactions(){reactSaving=reactSaving.then(async()=>{if(Store.mode==="db"){try{await Store.db.doc("data/users/"+Store.uid+"/reactions").set(Store.reactions)}catch(e){}}else LS.set("mesa.reactions",Store.reactions)})}
+async function saveTrade(t){
+  if(Store.mode==="db"){const col=Store.db.doc("data/users/"+Store.uid+"/journal").collection("trades");const {id,...body}=t;await (id?col.doc(id).set(body):col.add(body))}
+  else{if(!t.id)t.id="t"+Date.now()+Math.random().toString(36).slice(2,6);const i=Store.trades.findIndex(x=>x.id===t.id);if(i>=0)Store.trades[i]=t;else Store.trades.push(t);LS.set("mesa.trades",Store.trades);fire()}
+}
+async function deleteTrade(id){
+  if(Store.mode==="db") await Store.db.doc("data/users/"+Store.uid+"/journal").collection("trades").doc(id).delete();
+  else{Store.trades=Store.trades.filter(x=>x.id!==id);LS.set("mesa.trades",Store.trades);fire()}
+}
+
+// ---------- event classification ----------
+const FAM=[
+ ["fomc","Decisión de tasas de la Fed (FOMC)","alta",/FOMC|Fed Funds|Rate Decision|Interest Rate Dec/i],
+ ["powell","Discurso del presidente de la Fed","alta",(n,e)=>e.is_fed_related&&/Powell|\bChair\b/i.test(n)&&!/Vice Chair/i.test(n)],
+ ["cpi","Inflación CPI","alta",/\bCPI\b/],
+ ["nfp","Empleo (NFP, desempleo, salarios)","alta",/Non-?Farm|Nonfarm|Unemployment Rate|Average Earnings|Private Payrolls/i],
+ ["pce","Inflación PCE","alta",/\bPCE\b/],
+ ["ppi","Inflación al productor (PPI)","alta",/\bPPI\b/],
+ ["gdp","PIB (GDP)","alta",/\bGDP\b/],
+ ["retail","Ventas minoristas","alta",/Retail Sales/i],
+ ["ismm","ISM manufacturero","alta",/ISM (Manuf|Mfg|Manufacturing)[^,]*PMI|ISM Mfg$|ISM Manufacturing$/i],
+ ["isms","ISM servicios","alta",/ISM N-?Mfg PMI|ISM Services PMI|ISM Non-?Manuf/i],
+ ["claims","Solicitudes de desempleo","media",/Jobless|Initial Claim|Init.*Cl(ai)?m|Continuing Claim|Cont.*Cl(ai)?m/i],
+ ["jolts","Vacantes JOLTS","media",/JOLTS/i],
+ ["adp","Empleo ADP","media",/\bADP\b/],
+ ["conf","Confianza del consumidor","media",/Consumer Conf|Cons(umer)? Confidence|Conf\. Board/i],
+ ["umich","Sentimiento U. Michigan","media",/U\.? ?Mich|Michigan|UMich/i],
+ ["fed","Discurso de la Fed","media",(n,e)=>!!e.is_fed_related],
+];
+const RANKI={alta:0,media:1,baja:2};
+function classify(e){
+  const n=e.event_name||"";
+  for(const [k,lab,imp,test] of FAM){const ok=typeof test==="function"?test(n,e):test.test(n);if(ok)return {k,lab,imp}}
+  return {k:"x:"+n.trim(),lab:n.trim(),imp:"baja"};
+}
+function group(events){
+  const g={};
+  events.forEach(e=>{const c=classify(e);const key=c.k+"|"+e.publish_time;
+    const x=g[key]||(g[key]={key,fam:c.k,lab:c.lab,imp:c.imp,time:new Date(e.publish_time.replace("+0000","Z")),items:[]});x.items.push(e)});
+  return Object.values(g).sort((a,b)=>a.time-b.time||RANKI[a.imp]-RANKI[b.imp]);
+}
+
+// ---------- Webull calls ----------
+let MCP=null;
+async function call(tool,input,cacheMs){
+  if(!MCP) throw {code:"no_mcp"};
+  const r=await MCP.callTool(SERVER,tool,input,cacheMs?{cache:{staleTime:cacheMs,gcTime:Math.max(cacheMs,300000)}}:{cache:false});
+  return r.payload;
+}
+async function calendarRange(start,end,cacheMs){
+  const out=[];let key;let guard=0;
+  do{const inp={start_date:start,end_date:end};if(key)inp.pagination_key=key;
+    const p=await call("get_macroeconomic_calendar",inp,cacheMs);
+    (p&&p.data||[]).forEach(e=>out.push(e));key=p&&p.pagination_key&&(p.data||[]).length?p.pagination_key:null}while(key&&++guard<60);
+  return out;
+}
+function errText(e){
+  const c=e&&e.code;
+  if(c==="no_mcp") return "Esta vista no puede conectarse a Webull. Abre la página en claude.ai con tu cuenta.";
+  if(c==="server_not_connected") return "Conecta Webull en claude.ai → Settings → Connectors y recarga la página.";
+  if(c==="needs_reauth") return "Vuelve a conectar Webull en claude.ai → Settings → Connectors.";
+  if(c==="not_in_manifest"||c==="approval_required"||c==="consent_required") return "Hace falta tu permiso para usar Webull en esta página. Recarga y elige Permitir.";
+  if(c==="blocked_by_policy") return "Tu organización no permite usar Webull aquí.";
+  if(c==="selection_required") return "Tienes más de una conexión de Webull: elige una en el aviso de claude.ai.";
+  if(c==="server_unavailable") return "Webull no respondió. Intenta de nuevo en un momento.";
+  if(c==="tool_error") return "Webull devolvió un error: "+(e.message||"sin detalle")+".";
+  return "No se pudo cargar de Webull ("+(c||"error")+"). Intenta de nuevo en un momento.";
+}
+
+// ---------- calendar state ----------
+const C={groups:[],imp:"media",loaded:false};
+function pricesNow(){return {nq:+Store.settings.pxnq||0,au:+Store.settings.pxau||0}}
+function famStats(fam){
+  const xs=Object.values(Store.reactions.items||{}).filter(r=>r.fam===fam);
+  const med=a=>{const v=a.filter(x=>x!=null&&!isNaN(x)).sort((x,y)=>x-y);if(!v.length)return null;const m=v.length>>1;return v.length%2?v[m]:(v[m-1]+v[m])/2};
+  return {n:xs.length,qr:med(xs.map(x=>x.qr)),gr:med(xs.map(x=>x.gr))};
+}
+function moveHTML(fam){
+  const s=famStats(fam),px=pricesNow();
+  if(!s.n) return `<small>sin medir</small>`;
+  const nq=s.qr!=null&&px.nq?s.qr*px.nq:null, au=s.gr!=null&&px.au?s.gr*px.au:null;
+  if(nq==null&&au==null) return `<span class="n">MNQ ±${fmt(s.qr*100,2)}%</span> <small>pon el precio de MNQ arriba para verlo en puntos</small><span class="g">Oro ±${fmt(s.gr*100,2)}%</span> <small>${s.n} ${s.n>1?"veces":"vez"}</small>`;
+  return `<span class="n">MNQ ±${fmt(nq,0)} pts</span> <small>≈ ${money(nq!=null?nq*2:null)} por contrato</small>`+
+         `<span class="g">Oro ±$${fmt(au,1)}</span> <small>≈ ${money(au!=null?au*10:null)} por MGC · ${s.n} ${s.n>1?"veces":"vez"}</small>`;
+}
+function renderCal(){
+  const box=$("days");
+  if(!C.loaded){box.innerHTML="";return}
+  const now=new Date(), show=C.groups.filter(g=>RANKI[g.imp]<=RANKI[C.imp]&&g.time>=new Date(now.getTime()-12*3600000));
+  if(!show.length){box.innerHTML=`<p class="meta">No hay noticias de esta importancia en los próximos 7 días.</p>`}
+  else{
+    let html="",cur="";
+    show.forEach(g=>{const d=isoDay(g.time);
+      if(d!==cur){cur=d;const n=show.filter(x=>isoDay(x.time)===d&&x.imp==="alta").length;html+=`<div class="dayh">${esc(dayLabel(g.time))}<span>${n?n+" de alta importancia":""}</span></div>`}
+      const it=g.items, first=it[0], names=g.fam.startsWith("x:")?"":it.map(e=>e.event_name.trim()).slice(0,4).join(" · ")+(it.length>4?` · +${it.length-4}`:"");
+      const vals=it.length===1||g.fam!=="fed"?(()=>{const e=it.find(e=>e.forecast_value||e.prior_value||e.actual_value)||first;const p=[];
+        if(e.actual_value!=null)p.push("Real "+e.actual_value);if(e.forecast_value!=null)p.push("Esperado "+e.forecast_value);if(e.prior_value!=null)p.push("Anterior "+e.prior_value);return p.join(" · ")})():"";
+      html+=`<div class="ev${g.time<now?" past":""}">
+        <div class="t">${esc(tLocal(g.time))}<small>${esc(tET(g.time))}</small></div>
+        <div class="imp"><span class="pill ${g.imp}">${g.imp}</span></div>
+        <div class="nm">${esc(g.fam==="fed"&&it.length===1?trimFed(first.event_name):g.lab)}${names&&g.fam!=="fed"?`<small>${esc(names)}</small>`:""}${vals?`<small class="vals">${esc(vals)}</small>`:""}${g.imp==="alta"?`<div class="pause">No abrir operaciones 15 min antes y después</div>`:""}</div>
+        <div class="mv">${g.imp==="baja"?"":moveHTML(g.fam)}</div></div>`});
+    box.innerHTML=html;
+  }
+  renderNext();renderReact();
+}
+const trimFed=n=>{const m=n.match(/^(Federal Reserve[^,]*?(President|Governor|Chair)[^,]*?[A-Z][a-z]+ [A-Z][a-z]+)/);return m?m[1]:n.slice(0,90)+(n.length>90?"…":"")};
+function renderNext(){
+  const box=$("nextbox"),now=Date.now(),g=C.groups.find(x=>x.imp==="alta"&&x.time.getTime()>now);
+  if(!g){box.hidden=true;return}
+  box.hidden=false;
+  const ms=g.time.getTime()-now,h=Math.floor(ms/3600000),m=Math.floor(ms%3600000/60000),s=Math.floor(ms%60000/1000);
+  const cd=h>=24?`${Math.floor(h/24)}d ${h%24}h`:`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+  box.innerHTML=`<div class="cd">${cd}</div><div><div class="k">Próxima noticia de alta importancia</div><b>${esc(g.lab)}</b> · ${esc(dayLabel(g.time))}, ${esc(tLocal(g.time))} (${esc(tET(g.time))})<div class="ev" style="border:0;padding:4px 0 0;grid-template-columns:1fr"><div class="mv" style="text-align:left">${moveHTML(g.fam)}</div></div></div>`;
+}
+function renderReact(){
+  const items=Object.values(Store.reactions.items||{}).sort((a,b)=>b.t-a.t), px=pricesNow();
+  $("reacttb").innerHTML=items.map(r=>{const d=new Date(r.t);
+    const c=(v,mult,dec,pre)=>{if(v==null)return "—";const x=v*mult,r=Math.abs(x)<Math.pow(10,-dec)/2?0:x;return `<span class="${pre?sgn(r):""}">${pre&&r>0?"+":""}${fmt(r,dec)}</span>`};
+    return `<tr><td class="l mono">${esc(d.toLocaleDateString("es",{day:"numeric",month:"short"}))} ${esc(tET(d))}</td><td class="l">${esc(r.lab)}</td>
+      <td class="mono">${px.nq?c(r.qr,px.nq,0)+" pts":fmt(r.qr*100,2)+"%"}</td><td class="mono">${px.nq?c(r.qm,px.nq,0,1)+" pts":fmt(r.qm*100,2)+"%"}</td>
+      <td class="mono">${px.au?"$"+c(r.gr,px.au,1):fmt(r.gr*100,2)+"%"}</td><td class="mono">${px.au?c(r.gm,px.au,1,1):fmt(r.gm*100,2)+"%"}</td></tr>`}).join("")||`<tr><td colspan="6" class="l meta">Todavía no hay mediciones.</td></tr>`;
+  $("reactnote").innerHTML=items.length?`${items.length} noticias medidas${Store.reactions.through?` hasta el ${esc(Store.reactions.through)}`:""}. El movimiento típico del calendario es la mediana de estas mediciones.`:`Toca <b>Medir reacciones</b> para medir las noticias importantes de las últimas 3 semanas. Se guarda y se va sumando cada día.`;
+}
+async function loadCalendar(){
+  const st=$("calstatus");
+  try{
+    const today=isoDay(Date.now()),end=isoDay(Date.now()+7*DAYMS);
+    const evs=await calendarRange(today,end,30*60000);
+    C.groups=group(evs);C.loaded=true;
+    st.className="status ok";st.textContent=`Calendario de Webull · ${evs.length} publicaciones en los próximos 7 días · horas en tu zona (${tzLocal}) y en Nueva York.`;
+    renderCal();
+    if(Store.reactions.through&&Store.reactions.through<isoDay(Date.now()-DAYMS)) measure(false);
+  }catch(e){st.className="status err";st.textContent=errText(e)}
+}
+// reaction measurement: QQQ/GLD 1-min bars from 1 minute before to 15 minutes after each high/medium release
+async function measureGroup(g){
+  const t=g.time.getTime();
+  const p=await call("get_stock_bars",{symbols:["QQQ","GLD"],category:"US_ETF",timespan:"M1",start_time:t-120000,end_time:t+16*60000,count:30,trading_sessions:"PRE,RTH,ATH,OVN"},7*DAYMS);
+  const res={};
+  (p&&p.result||[]).forEach(s=>{
+    const bars=(s.result||[]).map(b=>({t:new Date(b.time.replace("+0000","Z")).getTime(),o:+b.open,h:+b.high,l:+b.low,c:+b.close})).sort((a,b)=>a.t-b.t);
+    const before=bars.filter(b=>b.t<t), after=bars.filter(b=>b.t>=t&&b.t<t+15*60000);
+    if(!after.length) return;
+    const base=before.length?before[before.length-1].c:after[0].o;
+    const hi=Math.max(...after.map(b=>b.h)),lo=Math.min(...after.map(b=>b.l)),last=after[after.length-1].c;
+    res[s.symbol]={range:(hi-lo)/base,move:(last-base)/base};
+  });
+  return res;
+}
+let measuring=false;
+async function measure(manual){
+  if(measuring)return;measuring=true;const btn=$("measure"),msg=$("measuremsg");btn.disabled=true;
+  try{
+    const startDay=Store.reactions.through&&!manual?isoDay(new Date(Store.reactions.through+"T12:00:00").getTime()+DAYMS):isoDay(Date.now()-21*DAYMS);
+    const endDay=isoDay(Date.now());
+    msg.textContent="Buscando noticias pasadas en Webull…";
+    const evs=await calendarRange(startDay,endDay,6*3600000);
+    const gs=group(evs).filter(g=>g.imp!=="baja"&&g.time.getTime()<Date.now()-16*60000&&!Store.reactions.items[g.key]);
+    let i=0;
+    for(const g of gs){i++;msg.textContent=`Midiendo ${i} de ${gs.length}: ${g.lab}…`;
+      try{const r=await measureGroup(g);
+        if(r.QQQ||r.GLD){Store.reactions.items[g.key]={fam:g.fam,lab:g.lab,imp:g.imp,t:g.time.getTime(),qr:r.QQQ?r.QQQ.range:null,qm:r.QQQ?r.QQQ.move:null,gr:r.GLD?r.GLD.range:null,gm:r.GLD?r.GLD.move:null}}
+      }catch(e){if(e&&(e.code==="not_in_manifest"||e.code==="server_not_connected"||e.code==="needs_reauth"))throw e}
+    }
+    Store.reactions.through=isoDay(Date.now()-DAYMS);saveReactions();
+    msg.textContent=gs.length?`Listo: ${gs.length} noticias medidas.`:"No había noticias nuevas que medir.";
+    renderCal();
+  }catch(e){msg.textContent=errText(e)}
+  finally{measuring=false;btn.disabled=false}
+}
+
+// ---------- journal ----------
+const INS={MNQ:{mult:2,grp:"NQ",tick:.25},NQ:{mult:20,grp:"NQ",tick:.25},MGC:{mult:10,grp:"GC",tick:.1},GC:{mult:100,grp:"GC",tick:.1}};
+function sessionOf(d){const h=etParts(d).hour+etParts(d).minute/60;return h>=18||h<3?"Asia":h<8?"Londres":h<12?"NY mañana":h<17?"NY tarde":"Cierre"}
+function calcTrade(t){
+  const ins=INS[t.ins]||INS.MNQ, pts=(t.exit-t.entry)*t.dir, gross=pts*ins.mult*t.qty, pnl=gross-(+t.fee||0);
+  const risk=t.stop!=null&&t.stop!==""&&!isNaN(t.stop)?Math.abs(t.entry-t.stop)*ins.mult*t.qty:null;
+  return {pts,pnl,r:risk?pnl/risk:null,risk};
+}
+function newsNear(d){const t=d.getTime();const all=[...C.groups.map(g=>({fam:g.fam,lab:g.lab,imp:g.imp,t:g.time.getTime()})),...Object.values(Store.reactions.items||{}).map(r=>({fam:r.fam,lab:r.lab,imp:r.imp||"media",t:r.t}))];
+  const hit=all.find(x=>(x.imp==="alta")&&Math.abs(x.t-t)<=15*60000);return hit?hit.lab:""}
+const J={filt:"",per:"all",editing:null,dir:1,month:null};
+function visibleTrades(){
+  const now=new Date(),som=new Date(now.getFullYear(),now.getMonth(),1).getTime(),sow=(()=>{const d=new Date(now);d.setHours(0,0,0,0);d.setDate(d.getDate()-((d.getDay()+6)%7));return d.getTime()})();
+  return Store.trades.filter(t=>(!J.filt||(INS[t.ins]||{}).grp===J.filt)&&(J.per==="all"||(J.per==="month"?t.ts>=som:t.ts>=sow))).sort((a,b)=>a.ts-b.ts);
+}
+function statsOf(ts){
+  const cs=ts.map(t=>Object.assign({t},calcTrade(t)));
+  const wins=cs.filter(c=>c.pnl>0),loss=cs.filter(c=>c.pnl<0),gw=wins.reduce((s,c)=>s+c.pnl,0),gl=-loss.reduce((s,c)=>s+c.pnl,0),net=gw-gl;
+  let eq=0,peak=0,dd=0;cs.forEach(c=>{eq+=c.pnl;peak=Math.max(peak,eq);dd=Math.max(dd,peak-eq)});
+  const rs=cs.filter(c=>c.r!=null);
+  return {n:cs.length,net,wr:cs.length?wins.length/cs.length:null,pf:gl?gw/gl:(gw?Infinity:null),exp:cs.length?net/cs.length:null,avgW:wins.length?gw/wins.length:null,avgL:loss.length?-gl/loss.length:null,avgR:rs.length?rs.reduce((s,c)=>s+c.r,0)/rs.length:null,dd,cs};
+}
+function renderTiles(s){
+  const tile=(k,v,sub,cls)=>`<div class="tile"><div class="k">${k}</div><div class="v ${cls||""}">${v}</div><div class="s">${sub||""}</div></div>`;
+  $("tiles").innerHTML=tile("P&L neto",money(s.net),`${s.n} operaciones`,sgn(s.net))+
+    tile("% de acierto",s.wr==null?"—":fmt(s.wr*100,1)+"%",s.n?`${s.cs.filter(c=>c.pnl>0).length} ganadas · ${s.cs.filter(c=>c.pnl<0).length} perdidas`:"")+
+    tile("Profit factor",s.pf==null?"—":s.pf===Infinity?"∞":fmt(s.pf,2),"ganancias ÷ pérdidas",s.pf!=null?(s.pf>=1?"up":"dn"):"")+
+    tile("Por operación",money(s.exp),`ganada ${money(s.avgW)} · perdida ${money(s.avgL)}`,sgn(s.exp))+
+    tile("R promedio",s.avgR==null?"—":(s.avgR>0?"+":"")+fmt(s.avgR,2)+"R","de las que tienen stop",sgn(s.avgR))+
+    tile("Caída máxima",money(-s.dd),"desde el punto más alto",s.dd?"dn":"");
+}
+function renderEquity(s){
+  const box=$("equity");
+  if(s.n<2){box.innerHTML=`<p class="meta">La curva aparece con 2 o más operaciones.</p>`;return}
+  const W=640,H=200,P={l:52,r:10,t:10,b:20};let eq=0;const pts=[0,...s.cs.map(c=>eq+=c.pnl)];
+  const mn=Math.min(0,...pts),mx=Math.max(0,...pts),rg=mx-mn||1;
+  const x=i=>P.l+i*(W-P.l-P.r)/(pts.length-1),y=v=>P.t+(mx-v)*(H-P.t-P.b)/rg;
+  const line=pts.map((v,i)=>`${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const col=pts[pts.length-1]>=0?"var(--up)":"var(--dn)";
+  const ticks=[mx,(mx+mn)/2,mn].map(v=>`<line x1="${P.l}" x2="${W-P.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${P.l-6}" y="${y(v)+3}" text-anchor="end">${(v<0?"−$":"$")+Math.abs(Math.round(v)).toLocaleString("es")}</text>`).join("");
+  box.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Curva de capital">${ticks}
+    <line x1="${P.l}" x2="${W-P.r}" y1="${y(0)}" y2="${y(0)}" stroke="var(--muted)" stroke-dasharray="3 3"/>
+    <polygon points="${x(0)},${y(0)} ${line} ${x(pts.length-1)},${y(0)}" fill="${col}" opacity=".12"/>
+    <polyline points="${line}" fill="none" stroke="${col}" stroke-width="2"/>
+    <circle cx="${x(pts.length-1)}" cy="${y(pts[pts.length-1])}" r="3.5" fill="${col}"/>
+    <text x="${P.l}" y="${H-4}">op. 1</text><text x="${W-P.r}" y="${H-4}" text-anchor="end">op. ${pts.length-1}</text></svg>`;
+}
+function renderMonth(ts){
+  const now=new Date();if(!J.month)J.month=new Date(now.getFullYear(),now.getMonth(),1);
+  const m=J.month,y=m.getFullYear(),mo=m.getMonth();
+  $("mlabel").textContent=m.toLocaleDateString("es",{month:"long",year:"numeric"});
+  const byDay={};ts.forEach(t=>{const d=isoDay(t.ts);const c=calcTrade(t);(byDay[d]||(byDay[d]={p:0,n:0})).p+=c.pnl;byDay[d].n++});
+  const first=new Date(y,mo,1),offset=(first.getDay()+6)%7,days=new Date(y,mo+1,0).getDate();
+  const mxAbs=Math.max(1,...Object.entries(byDay).filter(([d])=>d.startsWith(y+"-"+String(mo+1).padStart(2,"0"))).map(([,v])=>Math.abs(v.p)));
+  let html=["lun","mar","mié","jue","vie","sáb","dom"].map(d=>`<div class="dow">${d}</div>`).join("");
+  for(let i=0;i<offset;i++)html+=`<div class="d out"></div>`;
+  let tot=0;
+  for(let d=1;d<=days;d++){const key=y+"-"+String(mo+1).padStart(2,"0")+"-"+String(d).padStart(2,"0"),v=byDay[key];
+    let bg="";if(v){tot+=v.p;const a=Math.min(1,Math.abs(v.p)/mxAbs);bg=`background:rgba(var(${v.p>=0?"--hot":"--cold"}),${(.18+a*.5).toFixed(2)})`}
+    html+=`<div class="d" style="${bg}" title="${v?v.n+" operación"+(v.n>1?"es":""):""}"><span class="dn2">${d}</span>${v?`<span class="p">${money(v.p).replace(".00","")}</span>`:""}</div>`}
+  $("mcal").innerHTML=html;
+  $("mlabel").textContent+=` · ${money(tot)}`;
+}
+function groupTable(rows,label){
+  if(!rows.length)return `<p class="meta">Sin operaciones.</p>`;
+  return `<table><thead><tr><th class="l">${label}</th><th>Op.</th><th>% acierto</th><th>P&amp;L</th><th>R prom.</th></tr></thead><tbody>`+
+    rows.map(([k,s])=>`<tr><td class="l">${esc(k)}</td><td>${s.n}</td><td>${s.wr==null?"—":fmt(s.wr*100,0)+"%"}</td><td class="mono ${sgn(s.net)}">${money(s.net)}</td><td class="mono">${s.avgR==null?"—":fmt(s.avgR,2)}</td></tr>`).join("")+`</tbody></table>`;
+}
+function by(ts,keyf,order){const m={};ts.forEach(t=>{const k=keyf(t);(m[k]||(m[k]=[])).push(t)});let e=Object.entries(m).map(([k,v])=>[k,statsOf(v)]);
+  if(order)e.sort((a,b)=>order.indexOf(a[0])-order.indexOf(b[0]));else e.sort((a,b)=>b[1].n-a[1].n);return e}
+const SESS=["Asia","Londres","NY mañana","NY tarde","Cierre"], DOW=["lun","mar","mié","jue","vie","sáb","dom"];
+function renderBreakdowns(ts){
+  $("bysess").innerHTML=groupTable(by(ts,t=>sessionOf(new Date(t.ts)),SESS),"Sesión (hora NY)")+`<div style="height:10px"></div>`+groupTable(by(ts,t=>DOW[(new Date(t.ts).getDay()+6)%7],DOW),"Día");
+  $("bysetup").innerHTML=groupTable(by(ts,t=>t.setup||"(sin setup)"),"Setup")+`<div style="height:10px"></div>`+groupTable(by(ts,t=>t.news?"Cerca de noticia":"Sin noticia cerca",["Cerca de noticia","Sin noticia cerca"]),"Noticias ±15 min");
+}
+function renderTrades(ts){
+  $("ttb").innerHTML=ts.slice().reverse().map(t=>{const c=calcTrade(t),d=new Date(t.ts);
+    return `<tr><td class="l mono">${esc(d.toLocaleDateString("es",{day:"2-digit",month:"short"}))} ${esc(tLocal(d))}</td><td class="l">${esc(t.ins)}</td><td class="l">${t.dir>0?"Long":"Short"}</td><td>${t.qty}</td>
+      <td class="mono">${fmt(t.entry,2)}</td><td class="mono">${fmt(t.exit,2)}</td><td class="mono ${sgn(c.pts)}">${c.pts>0?"+":""}${fmt(c.pts,2)}</td><td class="mono ${sgn(c.pnl)}">${money(c.pnl)}</td>
+      <td class="mono ${sgn(c.r)}">${c.r==null?"—":(c.r>0?"+":"")+fmt(c.r,2)}</td><td class="l">${esc(sessionOf(d))}${t.news?` <span class="tag news" title="${esc(t.news)}">noticia</span>`:""}</td>
+      <td class="l">${esc(t.setup||"")}</td><td class="acts"><button type="button" data-ed="${esc(t.id)}" aria-label="Editar">Editar</button><button type="button" data-del="${esc(t.id)}" aria-label="Borrar">Borrar</button></td></tr>`}).join("")||`<tr><td colspan="12" class="l meta">Todavía no hay operaciones. Agrega la primera arriba.</td></tr>`;
+  const setups=[...new Set(Store.trades.map(t=>t.setup).filter(Boolean))];$("setups").innerHTML=setups.map(s=>`<option value="${esc(s)}">`).join("");
+}
+function renderJournal(){const ts=visibleTrades(),s=statsOf(ts);renderTiles(s);renderEquity(s);renderMonth(ts);renderBreakdowns(ts);renderTrades(ts)}
+
+// form
+function localInput(d){const x=new Date(d.getTime()-d.getTimezoneOffset()*60000);return x.toISOString().slice(0,16)}
+function readForm(){
+  const v=id=>$(id).value, num=id=>v(id)===""?null:+v(id);
+  const when=v("t_when")?new Date(v("t_when")):null;
+  return {ts:when?when.getTime():null,ins:v("t_ins"),dir:J.dir,qty:num("t_qty")||1,entry:num("t_in"),exit:num("t_out"),stop:num("t_sl"),fee:num("t_fee")||0,setup:v("t_setup").trim(),notes:v("t_notes").trim()};
+}
+function updateCalc(){
+  const t=readForm();if(t.entry==null||t.exit==null){$("tcalc").textContent="Llena entrada y salida para ver el resultado.";return}
+  const c=calcTrade(t);$("tcalc").innerHTML=`Puntos <b class="${sgn(c.pts)}">${c.pts>0?"+":""}${fmt(c.pts,2)}</b> · P&amp;L <b class="${sgn(c.pnl)}">${money(c.pnl)}</b>${c.r!=null?` · <b class="${sgn(c.r)}">${c.r>0?"+":""}${fmt(c.r,2)}R</b> (riesgo ${money(c.risk)})`:""}${t.ts?` · ${esc(sessionOf(new Date(t.ts)))}`:""}`;
+}
+function setDir(v){J.dir=+v;$("t_dir").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",String(+b.dataset.v===J.dir)))}
+function resetForm(){$("tform").reset();$("t_when").value=localInput(new Date());$("t_qty").value=1;$("t_fee").value=Store.settings.fee!=null?Store.settings.fee:"";setDir(1);J.editing=null;$("formtitle").textContent="Nueva operación";$("tsave").textContent="Guardar operación";$("tcancel").hidden=true;updateCalc()}
+$("tform").addEventListener("input",updateCalc);
+$("t_dir").addEventListener("click",e=>{const b=e.target.closest("button");if(b){setDir(b.dataset.v);updateCalc()}});
+$("tform").addEventListener("submit",async e=>{e.preventDefault();const t=readForm();
+  if(!t.ts||t.entry==null||t.exit==null){$("tcalc").textContent="Falta la fecha, la entrada o la salida.";return}
+  t.news=newsNear(new Date(t.ts));if(J.editing)t.id=J.editing;
+  $("tsave").disabled=true;
+  try{await saveTrade(t);if(t.fee!=null&&!J.editing&&t.fee!==Store.settings.fee){Store.settings.fee=t.fee;saveSettings()}resetForm();$("tcalc").textContent="Guardada."}
+  catch(err){$("tcalc").textContent=err&&err.code==="quota_exceeded"?"Tu journal llegó al límite de almacenamiento. Borra operaciones viejas.":"No se pudo guardar ("+(err&&err.code||"error")+"). Intenta de nuevo."}
+  finally{$("tsave").disabled=false}});
+$("tcancel").addEventListener("click",resetForm);
+let pendingDel=null;
+$("ttb").addEventListener("click",async e=>{
+  const ed=e.target.closest("[data-ed]"),del=e.target.closest("[data-del]");
+  if(ed){const t=Store.trades.find(x=>x.id===ed.dataset.ed);if(!t)return;J.editing=t.id;$("t_when").value=localInput(new Date(t.ts));$("t_ins").value=t.ins;setDir(t.dir);$("t_qty").value=t.qty;$("t_in").value=t.entry;$("t_out").value=t.exit;$("t_sl").value=t.stop==null?"":t.stop;$("t_fee").value=t.fee||"";$("t_setup").value=t.setup||"";$("t_notes").value=t.notes||"";
+    $("formtitle").textContent="Editar operación";$("tsave").textContent="Guardar cambios";$("tcancel").hidden=false;updateCalc();$("tform").scrollIntoView({behavior:"smooth",block:"center"})}
+  if(del){const id=del.dataset.del;if(pendingDel===id){pendingDel=null;try{await deleteTrade(id)}catch(err){}}else{pendingDel=id;del.textContent="¿Seguro?";setTimeout(()=>{if(pendingDel===id){pendingDel=null;del.textContent="Borrar"}},3000)}}
+});
+$("csv").addEventListener("click",async()=>{
+  const rows=[["fecha","instrumento","direccion","contratos","entrada","salida","stop","comisiones","puntos","pnl","r","sesion","setup","noticia","notas"]];
+  visibleTrades().forEach(t=>{const c=calcTrade(t);rows.push([new Date(t.ts).toISOString(),t.ins,t.dir>0?"long":"short",t.qty,t.entry,t.exit,t.stop??"",t.fee||0,c.pts.toFixed(2),c.pnl.toFixed(2),c.r==null?"":c.r.toFixed(2),sessionOf(new Date(t.ts)),t.setup||"",t.news||"",(t.notes||"").replace(/\s+/g," ")])});
+  const txt=rows.map(r=>r.map(v=>/[",]/.test(String(v))?`"${String(v).replace(/"/g,'""')}"`:v).join(",")).join("\n");
+  try{await navigator.clipboard.writeText(txt);$("csv").textContent="Copiado"}catch(e){$("csv").textContent="No se pudo copiar"}
+  setTimeout(()=>$("csv").textContent="Copiar como CSV",2000)});
+function seg(id,fn){$(id).addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;$(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));fn(b.dataset.v)})}
+seg("jfilt",v=>{J.filt=v;renderJournal()});seg("jper",v=>{J.per=v;renderJournal()});
+seg("imp",v=>{C.imp=v;renderCal()});
+$("mprev").addEventListener("click",()=>{J.month=new Date(J.month.getFullYear(),J.month.getMonth()-1,1);renderJournal()});
+$("mnext").addEventListener("click",()=>{J.month=new Date(J.month.getFullYear(),J.month.getMonth()+1,1);renderJournal()});
+["pxnq","pxau"].forEach(id=>$(id).addEventListener("change",e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){Store.settings[id]=v;saveSettings();renderCal()}}));
+$("measure").addEventListener("click",()=>measure(true));
+
+// tabs
+function showTab(w){const jr=w==="journal";$("view-cal").hidden=jr;$("view-jr").hidden=!jr;$("tab-cal").setAttribute("aria-selected",String(!jr));$("tab-jr").setAttribute("aria-selected",String(jr));if(jr)renderJournal()}
+$("tab-cal").addEventListener("click",()=>showTab("cal"));$("tab-jr").addEventListener("click",()=>showTab("journal"));
+if(location.hash==="#journal")showTab("journal");
+
+// clock
+function tick(){const d=new Date();$("clock").textContent=`${tLocal(d)} tu hora · ${tET(d)} · ${sessionOf(d)}`;if(C.loaded)renderNext()}
+setInterval(tick,1000);tick();
+
+// boot
+resetForm();
+Store.listeners.push(()=>{if(!$("view-jr").hidden)renderJournal()});
+(async()=>{
+  await initStore();
+  if(!Store.settings.pxnq)Store.settings.pxnq=null; if(!Store.settings.pxau)Store.settings.pxau=null;
+  try{MCP=window.claude&&window.claude.use?await window.claude.use("mcp"):null}catch(e){MCP=null}
+  if(!MCP){$("calstatus").className="status err";$("calstatus").textContent=errText({code:"no_mcp"});return}
+  // precios por defecto: último QQQ y GLD de Webull convertidos (aprox. Nasdaq-100 ≈ QQQ × 41.1; oro ≈ GLD × 10.75)
+  if(!Store.settings.pxnq||!Store.settings.pxau){
+    try{const p=await call("get_stock_bars",{symbols:["QQQ","GLD"],category:"US_ETF",timespan:"D",count:1},3600000);
+      (p&&p.result||[]).forEach(s=>{const c=s.result&&s.result[0]&&+s.result[0].close;if(!c)return;
+        if(s.symbol==="QQQ"&&!Store.settings.pxnq)Store.settings.pxnq=Math.round(c*41.1/0.25)*0.25;
+        if(s.symbol==="GLD"&&!Store.settings.pxau)Store.settings.pxau=Math.round(c*10.75*10)/10});
+      saveSettings()}catch(e){}
+  }
+  $("pxnq").value=Store.settings.pxnq||"";$("pxau").value=Store.settings.pxau||"";
+  renderReact();
+  loadCalendar();
+})();
+})();
+</script>
