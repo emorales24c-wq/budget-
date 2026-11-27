@@ -1002,6 +1002,8 @@ function renderBestCards(all){
 }
 function groupedBest(rows,rowFn,ncol,order,labels){
   rows.forEach((r,i)=>r._i=i);
+  // Over o Under elegido: lista plana ordenada de mayor a menor probabilidad
+  if(BP.side){rows=[...rows].sort((a,b)=>(a.warn-b.warn)||b.prob-a.prob);return rows.slice(0,150).map(r=>rowFn(r,r._i)).join("")}
   const head=(t,s)=>`<tr class="grp"><td colspan="${ncol}" class="l">${t} <span>${s}</span></td></tr>`;
   if(BP.view==="all") return rows.slice(0,150).map(r=>rowFn(r,r._i)).join("");
   if(BP.view==="tm"){
